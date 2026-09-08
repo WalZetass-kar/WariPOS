@@ -5,13 +5,14 @@ import {
   RefreshCw, Plus, Search, Pin, MessageSquare,
   Bookmark, ArrowDown, Paperclip, Mic, Cpu,
   ShieldCheck, PieChart, Layers, X, CheckCircle2, RotateCcw,
-  PanelLeftClose, PanelLeftOpen, Info
+  PanelLeftClose, PanelLeftOpen, Info, Zap, ArrowRight
 } from 'lucide-react'
 import Button from '../components/Button'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { useNavigate } from 'react-router-dom'
 import { buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
+import { AiActionEngine, type AiActionResult } from '../utils/aiActionEngine'
 import type { DashboardSummary } from '../../shared/types'
 
 interface AiConfig {
@@ -31,6 +32,7 @@ interface Message {
   online?: boolean
   bookmarked?: boolean
   liked?: boolean | null
+  actionResult?: AiActionResult
 }
 
 interface ChatSession {
@@ -57,6 +59,13 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 const QUICK_ACTIONS = [
   {
+    id: 'auto-restock',
+    title: '⚡ Restock Otomatis Semua Stok Kosong',
+    desc: 'Isi otomatis stok produk yang habis (+20 pcs)',
+    icon: Zap,
+    prompt: 'Restock semua produk yang habis masing-masing 20 pcs',
+  },
+  {
     id: 'sales-analysis',
     title: 'Analisis Penjualan & Omset',
     desc: 'Tinjau omzet dan tren transaksi toko',
@@ -78,6 +87,13 @@ const QUICK_ACTIONS = [
     prompt: 'Bagaimana cara menghitung dan mengoptimalkan HPP produk di toko saya?',
   },
   {
+    id: 'backup-now',
+    title: '💾 Backup Database Instan',
+    desc: 'Amankan database lokal POS ke SQLite backup',
+    icon: ShieldCheck,
+    prompt: 'Backup database sekarang',
+  },
+  {
     id: 'monthly-summary',
     title: 'Ringkasan Laporan Bisnis',
     desc: 'Estimasi performa laba rugi',
@@ -89,7 +105,7 @@ const QUICK_ACTIONS = [
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   sender: 'assistant',
-  text: 'Halo! Saya **Asisten AI WariPOS**.\n\nSaya siap membantu Anda menganalisis performa toko, memeriksa stok kritis, hingga menghitung estimasi profit.\n\nSilakan ketik pertanyaan Anda atau pilih topik cepat di bawah.',
+  text: 'Halo! Saya **Wari AI Autonomous Assistant** 🤖⚡.\n\nSaya memegang kendali operasional penuh untuk mengeksekusi aksi di WariPOS:\n- **⚡ Restock Otomatis**: Ketik *"Restock semua produk yang habis masing-masing 20 pcs"* atau sebut nama produk.\n- **📦 Tambah Produk / Promo**: Buat produk atau kupon diskon baru langsung dari chat.\n- **💾 Backup Database**: Ketik *"Backup database sekarang"*.\n- **🧭 Navigasi Cepat**: Ketik *"Buka kasir"*, *"Buka produk"*, atau *"Buka laporan"*.\n\nSilakan ketik perintah aksi atau pilih menu cepat di bawah!',
   timestamp: new Date(),
 }
 
@@ -166,14 +182,18 @@ export default function Assistant() {
   }, [])
 
   // Load AI config & summary
-  useEffect(() => {
-    api<AiConfig>('integrations:get').then(r => {
-      if (r.success && r.data) setAiConfig(r.data)
-    })
+  const loadSummary = useCallback(() => {
     api<DashboardSummary>('dashboard:getSummary').then(r => {
       if (r.success && r.data) setSummary(r.data)
     }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    api<AiConfig>('integrations:get').then(r => {
+      if (r.success && r.data) setAiConfig(r.data)
+    })
+    loadSummary()
+  }, [loadSummary])
 
   // Save sessions & active ID
   useEffect(() => {
@@ -287,6 +307,40 @@ export default function Assistant() {
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
     setIsGenerating(true)
+    setThinkingStep('Memeriksa perintah kontrol...')
+
+    // 1. Eksekusi Autonomous Action Engine jika merupakan perintah operasional (Restock, Backup, Produk, Navigasi)
+    try {
+      const actionRes = await AiActionEngine.parseAndExecute(promptText)
+      if (actionRes.executed) {
+        setThinkingStep(null)
+        setIsGenerating(false)
+
+        addMessageToActiveSession({
+          sender: 'assistant',
+          text: `**${actionRes.title}**\n\n${actionRes.message}`,
+          provider: '⚡ Wari Agentic Controller',
+          online: false,
+          actionResult: actionRes,
+        })
+
+        if (actionRes.success) {
+          toast(actionRes.title, 'success')
+          loadSummary()
+          if (actionRes.actionType === 'NAVIGATE' && actionRes.navigateRoute) {
+            setTimeout(() => {
+              navigate(actionRes.navigateRoute!)
+            }, 1000)
+          }
+        } else {
+          toast(actionRes.message || 'Perintah aksi tidak dapat diselesaikan', 'error')
+        }
+        return
+      }
+    } catch (actionErr) {
+      console.error('Agentic action execution error:', actionErr)
+    }
+
     setThinkingStep('Menganalisis data POS...')
 
     try {
@@ -402,10 +456,14 @@ export default function Assistant() {
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
                 Wari AI Asisten
               </h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/50">
+                <Zap size={10} className="text-indigo-500 fill-indigo-500 animate-pulse" />
+                Agentic Controller Aktif
+              </span>
               <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
                 aiOnlineReady ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
               }`}>
@@ -413,7 +471,7 @@ export default function Assistant() {
                 {aiOnlineReady ? `Online (${aiProviderLabel})` : 'Lokal Offline'}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">Analisis penjualan, prediksi stok, dan konsultasi HPP toko</p>
+            <p className="text-[11px] text-slate-400 hidden sm:block">Kontrol penuh operasional toko, restock otomatis, dan asisten bisnis</p>
           </div>
         </div>
 
@@ -553,15 +611,79 @@ export default function Assistant() {
                     }`}
                   >
                     {msg.sender === 'assistant' ? (
-                      <div
-                        className="space-y-2"
-                        dangerouslySetInnerHTML={{
-                          __html: msg.text
-                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                            .replace(/`(.*?)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[11px] text-red-600 dark:text-red-400">$1</code>')
-                            .replace(/\n/g, '<br/>'),
-                        }}
-                      />
+                      <div className="space-y-3">
+                        <div
+                          className="space-y-2"
+                          dangerouslySetInnerHTML={{
+                            __html: msg.text
+                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/`(.*?)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[11px] text-red-600 dark:text-red-400">$1</code>')
+                              .replace(/\n/g, '<br/>'),
+                          }}
+                        />
+
+                        {/* Action Result Card if executed by Agentic Engine */}
+                        {msg.actionResult && (
+                          <div className={`p-3.5 rounded-xl border ${
+                            msg.actionResult.success 
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-200' 
+                              : 'bg-red-500/10 border-red-500/30 text-red-950 dark:text-red-200'
+                          } space-y-2.5 mt-2`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold flex items-center gap-1.5 text-xs">
+                                <Zap size={14} className={msg.actionResult.success ? 'text-emerald-500' : 'text-red-500'} />
+                                {msg.actionResult.title}
+                              </span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                                msg.actionResult.success ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                              }`}>
+                                {msg.actionResult.success ? 'Berhasil' : 'Gagal'}
+                              </span>
+                            </div>
+
+                            {msg.actionResult.details && msg.actionResult.details.length > 0 && (
+                              <div className="space-y-1 text-xs border-t border-emerald-500/20 dark:border-emerald-400/20 pt-2">
+                                {msg.actionResult.details.map((d, i) => (
+                                  <div key={i} className="flex justify-between gap-2">
+                                    <span className="opacity-75">{d.label}:</span>
+                                    <span className="font-semibold">{d.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {msg.actionResult.navigateRoute && (
+                              <button
+                                onClick={() => navigate(msg.actionResult!.navigateRoute!)}
+                                className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all active:scale-95"
+                              >
+                                <span>{msg.actionResult.navigateLabel || 'Buka Halaman'}</span>
+                                <ArrowRight size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 1-Click Action Chip for Low Stock Warnings */}
+                        {msg.text && (msg.text.includes('menipis') || msg.text.includes('Prioritas restock')) && (
+                          <div className="pt-2 flex flex-wrap gap-2 border-t border-slate-100 dark:border-slate-800">
+                            <button
+                              onClick={() => handleSendMessage('Restock semua produk yang habis masing-masing 20 pcs')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-bold text-xs transition-all active:scale-95 shadow-xs"
+                            >
+                              <Zap size={13} className="text-amber-600" />
+                              <span>⚡ Restock Semua Produk Habis (+20 pcs)</span>
+                            </button>
+                            <button
+                              onClick={() => navigate('/produk')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs transition-all"
+                            >
+                              <span>📦 Buka Halaman Produk</span>
+                              <ArrowRight size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <span className="whitespace-pre-wrap">{msg.text}</span>
                     )}

@@ -134,6 +134,10 @@ function formatAiError(error: unknown, settings?: IndustrySettings) {
   const cause = error && typeof error === 'object' ? (error as any).cause : undefined
   const details = [message, cause?.message, cause?.code].filter(Boolean).join(' ')
 
+  if (/resourceexhausted|request limit reached|rate limit|quota|429/i.test(details)) {
+    return 'Kuota server AI online sedang mencapai batas sementara (Resource Exhausted). Asisten AI otomatis beralih ke Mode Cerdas Lokal agar perintah operasional Anda tetap dapat dijalankan secara langsung.'
+  }
+
   if (/abort|timeout/i.test(details)) {
     return 'Koneksi AI timeout (60 detik). Server AI lambat merespons. Coba model yang lebih cepat (contoh: blackbox, google/gemma-3n-e4b-it) atau periksa koneksi internet.'
   }

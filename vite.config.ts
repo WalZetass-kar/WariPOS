@@ -85,5 +85,11 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    watch: {
+      ignored: ['**/android/**', '**/ios/**', '**/dist-electron/**', '**/release/**', '**/packages/**'],
+    },
+  },
+  optimizeDeps: {
+    entries: ['./index.html', './src/renderer/**/*.tsx', './src/renderer/**/*.ts'],
   },
 })
