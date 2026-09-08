@@ -179,7 +179,7 @@ export default function QueueDisplay() {
       {/* ─── Main Queue Display: 2 Cards Pembatas Berdampingan ────────── */}
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 min-h-0 z-10">
         
-        {/* ─── CARD PEMBATAS 1: 🟡 SEDANG DISIAPKAN (PREPARING) ───────── */}
+        {/* ─── CARD PEMBATAS 1: SEDANG DISIAPKAN (PREPARING) ───────── */}
         <section className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5 shrink-0">
             <div className="flex items-center gap-3">
@@ -232,7 +232,7 @@ export default function QueueDisplay() {
           </div>
         </section>
 
-        {/* ─── CARD PEMBATAS 2: 🟢 SIAP DIAMBIL (READY FOR PICKUP) ────── */}
+        {/* ─── CARD PEMBATAS 2: SIAP DIAMBIL (READY FOR PICKUP) ────── */}
         <section className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5 shrink-0">
             <div className="flex items-center gap-3">

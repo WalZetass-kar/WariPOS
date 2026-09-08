@@ -295,7 +295,7 @@ export default function CustomerDisplayPage() {
                 </div>
                 <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1">Layar TV Antrian Publik (Queue Display)</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mb-6 font-medium leading-relaxed">
-                  Layar tampilan rasio 16:9 untuk Smart TV atau monitor ruang tunggu pelanggan. Terbagi menjadi 2 kolom: <strong className="text-amber-500">🟡 Sedang Disiapkan</strong> dan <strong className="text-emerald-500">🟢 Siap Diambil</strong> dilengkapi dengan audio lonceng dan suara panggilan otomatis.
+                  Layar tampilan rasio 16:9 untuk Smart TV atau monitor ruang tunggu pelanggan. Terbagi menjadi 2 kolom: <strong className="text-amber-500">Sedang Disiapkan</strong> dan <strong className="text-emerald-500">Siap Diambil</strong> dilengkapi dengan audio lonceng dan suara panggilan otomatis.
                 </p>
                 <div className="flex flex-wrap gap-2.5 justify-center">
                   <Button

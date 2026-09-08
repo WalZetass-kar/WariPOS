@@ -78,7 +78,7 @@ function runMigrations() {
     const hasPasswordHashType = columns.some(col => col.name === 'password_hash_type')
     
     if (!hasPasswordHashType) {
-      console.log('️  CRITICAL: password_hash_type column is missing!')
+      console.log('CRITICAL: password_hash_type column is missing!')
       console.log('Adding password_hash_type column...')
       try {
         sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN password_hash_type TEXT DEFAULT 'sha1';`)

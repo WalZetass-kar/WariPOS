@@ -215,7 +215,7 @@ Terima kasih atas kunjungan Anda!
     const productList = products.map(p => `• ${p.name} (Stok: ${p.stock})`).join('\n')
     
     const message = `
-️ *PERINGATAN STOK MENIPIS*
+*PERINGATAN STOK MENIPIS*
 
 Produk berikut memerlukan restock:
 ${productList}

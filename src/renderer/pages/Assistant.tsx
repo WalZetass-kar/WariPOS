@@ -60,7 +60,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 const QUICK_ACTIONS = [
   {
     id: 'auto-restock',
-    title: '⚡ Restock Otomatis Semua Stok Kosong',
+    title: 'Restock Otomatis Semua Stok Kosong',
     desc: 'Isi otomatis stok produk yang habis (+20 pcs)',
     icon: Zap,
     prompt: 'Restock semua produk yang habis masing-masing 20 pcs',
@@ -88,7 +88,7 @@ const QUICK_ACTIONS = [
   },
   {
     id: 'backup-now',
-    title: '💾 Backup Database Instan',
+    title: 'Backup Database Instan',
     desc: 'Amankan database lokal POS ke SQLite backup',
     icon: ShieldCheck,
     prompt: 'Backup database sekarang',
@@ -105,7 +105,7 @@ const QUICK_ACTIONS = [
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   sender: 'assistant',
-  text: 'Halo! Saya **Wari AI Autonomous Assistant** 🤖⚡.\n\nSaya memegang kendali operasional penuh untuk mengeksekusi aksi di WariPOS:\n- **⚡ Restock Otomatis**: Ketik *"Restock semua produk yang habis masing-masing 20 pcs"* atau sebut nama produk.\n- **📦 Tambah Produk / Promo**: Buat produk atau kupon diskon baru langsung dari chat.\n- **💾 Backup Database**: Ketik *"Backup database sekarang"*.\n- **🧭 Navigasi Cepat**: Ketik *"Buka kasir"*, *"Buka produk"*, atau *"Buka laporan"*.\n\nSilakan ketik perintah aksi atau pilih menu cepat di bawah!',
+  text: 'Halo! Saya **Wari AI Autonomous Assistant**.\n\nSaya memegang kendali operasional penuh untuk mengeksekusi aksi di WariPOS:\n- **Restock Otomatis**: Ketik *"Restock semua produk yang habis masing-masing 20 pcs"* atau sebut nama produk.\n- **Tambah Produk / Promo**: Buat produk atau kupon diskon baru langsung dari chat.\n- **Backup Database**: Ketik *"Backup database sekarang"*.\n- **Navigasi Cepat**: Ketik *"Buka kasir"*, *"Buka produk"*, atau *"Buka laporan"*.\n\nSilakan ketik perintah aksi atau pilih menu cepat di bawah.',
   timestamp: new Date(),
 }
 
@@ -319,7 +319,7 @@ export default function Assistant() {
         addMessageToActiveSession({
           sender: 'assistant',
           text: `**${actionRes.title}**\n\n${actionRes.message}`,
-          provider: '⚡ Wari Agentic Controller',
+          provider: 'Wari Agentic Controller',
           online: false,
           actionResult: actionRes,
         })
@@ -672,13 +672,13 @@ export default function Assistant() {
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-bold text-xs transition-all active:scale-95 shadow-xs"
                             >
                               <Zap size={13} className="text-amber-600" />
-                              <span>⚡ Restock Semua Produk Habis (+20 pcs)</span>
+                              <span>Restock Semua Produk Habis (+20 pcs)</span>
                             </button>
                             <button
                               onClick={() => navigate('/produk')}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs transition-all"
                             >
-                              <span>📦 Buka Halaman Produk</span>
+                              <span>Buka Halaman Produk</span>
                               <ArrowRight size={12} />
                             </button>
                           </div>

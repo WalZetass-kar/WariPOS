@@ -69,7 +69,7 @@ export class AiActionEngine {
         executed: true,
         success: true,
         actionType: 'RESTOCK_ALL',
-        title: `⚡ Restock Berhasil (${updatedNames.length} Produk)`,
+        title: `Restock Berhasil (${updatedNames.length} Produk)`,
         message: `Berhasil menambahkan stok masing-masing +${targetQty} pcs untuk ${updatedNames.length} produk yang sebelumnya kosong.`,
         details: updatedNames.slice(0, 5).map(name => ({
           label: name,
@@ -150,7 +150,7 @@ export class AiActionEngine {
         executed: true,
         success: true,
         actionType: 'RESTOCK',
-        title: `✅ Restock Berhasil: ${match.nama_barang}`,
+        title: `Restock Berhasil: ${match.nama_barang}`,
         message: `Stok produk "${match.nama_barang}" berhasil diperbarui dari ${oldStock} pcs menjadi ${newStock} pcs.`,
         details: [
           { label: 'Kode Produk', value: match.kd_barang },
@@ -207,7 +207,7 @@ export class AiActionEngine {
         executed: true,
         success: true,
         actionType: 'CREATE_PRODUCT',
-        title: `✨ Produk Berhasil Didaftarkan: ${data.nama}`,
+        title: `Produk Berhasil Didaftarkan: ${data.nama}`,
         message: `Produk baru "${data.nama}" telah berhasil ditambahkan ke katalog inventori WariPOS.`,
         details: [
           { label: 'Kode Produk', value: kdBarang },
@@ -264,7 +264,7 @@ export class AiActionEngine {
         executed: true,
         success: true,
         actionType: 'CREATE_PROMO',
-        title: `🎉 Kupon Promo Aktif: ${data.kode.toUpperCase()}`,
+        title: `Kupon Promo Aktif: ${data.kode.toUpperCase()}`,
         message: `Kupon promo ${data.kode.toUpperCase()} dengan diskon ${data.diskon}% telah aktif dan siap digunakan di kasir.`,
         details: [
           { label: 'Kode Promo', value: data.kode.toUpperCase() },
@@ -305,7 +305,7 @@ export class AiActionEngine {
         executed: true,
         success: true,
         actionType: 'BACKUP',
-        title: '💾 Backup Database Sukses!',
+        title: 'Backup Database Sukses',
         message: 'Cadangan database sistem POS berhasil dibuat dengan aman dan terenkripsi.',
         details: [
           { label: 'Waktu Backup', value: new Date().toLocaleTimeString('id-ID') },
@@ -423,7 +423,7 @@ export class AiActionEngine {
             executed: true,
             success: true,
             actionType: 'NAVIGATE',
-            title: `🧭 Navigasi Cepat: ${val.label}`,
+            title: `Navigasi Cepat: ${val.label}`,
             message: `Mengalihkan layar Anda ke ${val.label}...`,
             navigateRoute: val.route,
             navigateLabel: val.label,

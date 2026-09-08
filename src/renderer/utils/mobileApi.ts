@@ -2145,7 +2145,7 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error)
     return ok({
-      answer: `⚠️ *Kendala AI Online: ${errMsg}*\n\n${localAnswer}`,
+      answer: `*Kendala AI Online: ${errMsg}*\n\n${localAnswer}`,
       provider: `${settings.aiProvider} (Fallback)`,
       online: false,
     })
