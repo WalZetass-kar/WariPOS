@@ -3,13 +3,14 @@ import type { Barang } from '../../shared/types'
 
 export interface AiActionResult {
   executed: boolean
-  actionType: 'RESTOCK' | 'RESTOCK_ALL' | 'CREATE_PRODUCT' | 'UPDATE_PRICE' | 'CREATE_PROMO' | 'BACKUP' | 'NAVIGATE' | 'NONE'
+  actionType: 'RESTOCK' | 'RESTOCK_ALL' | 'CREATE_PRODUCT' | 'UPDATE_PRICE' | 'CREATE_PROMO' | 'BACKUP' | 'NAVIGATE' | 'NAVIGATE_LIST' | 'NONE'
   title: string
   message: string
   details?: Array<{ label: string; value: string }>
   navigateRoute?: string
   navigateLabel?: string
   success: boolean
+  availableTabs?: Array<{ route: string; label: string; group: string }>
 }
 
 export interface QuickActionOption {
@@ -22,6 +23,437 @@ export interface QuickActionOption {
 
 function cleanStr(s: string) {
   return s.trim().toLowerCase()
+}
+
+export interface NavDestination {
+  route: string
+  label: string
+  group: string
+  keywords: string[]
+}
+
+export const ALL_APP_TABS: NavDestination[] = [
+  // Utama
+  {
+    route: '/',
+    label: 'Dashboard Utama',
+    group: 'Utama',
+    keywords: ['dashboard utama', 'dashboard', 'beranda', 'home', 'halaman utama', 'ringkasan toko', 'menu utama'],
+  },
+  {
+    route: '/assistant',
+    label: 'Asisten AI',
+    group: 'Utama',
+    keywords: ['asisten ai', 'asisten', 'ai', 'bot', 'chat ai', 'konsultasi ai'],
+  },
+  {
+    route: '/transaksi',
+    label: 'Kasir POS',
+    group: 'Utama',
+    keywords: ['kasir pos', 'kasir', 'pos', 'transaksi', 'penjualan', 'jual', 'order', 'bayar', 'pesanan', 'point of sale'],
+  },
+  {
+    route: '/shifts',
+    label: 'Shift Kasir',
+    group: 'Utama',
+    keywords: ['shift kasir', 'shift', 'tutup shift', 'buka shift', 'ganti shift', 'rekap shift', 'jam kerja kasir'],
+  },
+  {
+    route: '/riwayat',
+    label: 'Riwayat Transaksi',
+    group: 'Utama',
+    keywords: ['riwayat transaksi', 'riwayat', 'history', 'struk lama', 'daftar transaksi', 'nota lama', 'rekam transaksi'],
+  },
+  {
+    route: '/customer-display-page',
+    label: 'Display & Antrian Pelanggan',
+    group: 'Utama',
+    keywords: ['display dan antrian', 'display antrian', 'antrian', 'antrean', 'nomor antrian', 'layar antrian', 'panggil antrian'],
+  },
+  {
+    route: '/daily-notes',
+    label: 'Catatan Harian',
+    group: 'Utama',
+    keywords: ['catatan harian', 'daily notes', 'memo', 'buku catatan', 'catatan toko'],
+  },
+  {
+    route: '/queue-display',
+    label: 'Layar TV Antrean Publik',
+    group: 'Utama',
+    keywords: ['queue display', 'tv antrean', 'layar tv antrian', 'layar antrean publik', 'tv display'],
+  },
+  {
+    route: '/customer-display',
+    label: 'Layar Hadap Pelanggan',
+    group: 'Utama',
+    keywords: ['customer display', 'layar hadap pelanggan', 'layar kedua', 'dual monitor'],
+  },
+
+  // Inventaris & Stok
+  {
+    route: '/produk',
+    label: 'Katalog Produk & Stok',
+    group: 'Inventaris & Stok',
+    keywords: ['katalog produk', 'produk', 'barang', 'daftar barang', 'inventori', 'inventory', 'stok barang', 'item'],
+  },
+  {
+    route: '/kategori',
+    label: 'Kategori Produk',
+    group: 'Inventaris & Stok',
+    keywords: ['kategori produk', 'kategori barang', 'kategori', 'kelompok barang', 'golongan barang'],
+  },
+  {
+    route: '/satuan',
+    label: 'Satuan Unit',
+    group: 'Inventaris & Stok',
+    keywords: ['satuan unit', 'satuan barang', 'satuan', 'unit barang', 'unit', 'pcs'],
+  },
+  {
+    route: '/pembelian',
+    label: 'Pembelian Stok & Kulakan',
+    group: 'Inventaris & Stok',
+    keywords: ['pembelian stok', 'pembelian', 'kulakan', 'beli stok', 'purchase', 'po', 'order supplier', 'faktur beli'],
+  },
+  {
+    route: '/stock-opname',
+    label: 'Stok Opname Fisik',
+    group: 'Inventaris & Stok',
+    keywords: ['stock opname', 'stok opname', 'opname', 'audit stok', 'cek fisik stok', 'penyesuaian stok'],
+  },
+  {
+    route: '/branch',
+    label: 'Cabang & Transfer Stok',
+    group: 'Inventaris & Stok',
+    keywords: ['cabang dan transfer', 'transfer stok', 'cabang', 'multi cabang', 'outlet', 'toko cabang', 'kirim cabang'],
+  },
+  {
+    route: '/price-list',
+    label: 'Daftar Harga Produk',
+    group: 'Inventaris & Stok',
+    keywords: ['daftar harga', 'price list', 'pricelist', 'tabel harga', 'harga jual'],
+  },
+  {
+    route: '/stock-history',
+    label: 'Kartu Mutasi & Riwayat Stok',
+    group: 'Inventaris & Stok',
+    keywords: ['riwayat stok', 'mutasi stok', 'kartu stok', 'stock history', 'keluar masuk barang'],
+  },
+  {
+    route: '/label-print',
+    label: 'Cetak Label & Barcode',
+    group: 'Inventaris & Stok',
+    keywords: ['cetak label', 'print barcode', 'cetak barcode', 'barcode barang', 'label harga', 'label barcode'],
+  },
+
+  // Keuangan & Laporan
+  {
+    route: '/laporan',
+    label: 'Laporan Penjualan & Keuangan',
+    group: 'Keuangan & Laporan',
+    keywords: ['laporan keuangan', 'laporan penjualan', 'laporan omzet', 'laporan', 'omzet', 'omset', 'laba rugi', 'profit', 'keuangan toko'],
+  },
+  {
+    route: '/kas',
+    label: 'Arus Kas & Petty Cash',
+    group: 'Keuangan & Laporan',
+    keywords: ['arus kas', 'petty cash', 'kas kecil', 'kas toko', 'uang kas', 'buku kas', 'kas masuk', 'kas keluar', 'kas'],
+  },
+  {
+    route: '/debts',
+    label: 'Manajemen Hutang & Piutang',
+    group: 'Keuangan & Laporan',
+    keywords: ['hutang piutang', 'hutang', 'piutang', 'debts', 'kasbon', 'bon', 'tempo', 'tagihan pelanggan'],
+  },
+  {
+    route: '/accounting',
+    label: 'Buku Akuntansi & Jurnal',
+    group: 'Keuangan & Laporan',
+    keywords: ['buku akuntansi', 'akuntansi', 'accounting', 'jurnal', 'buku besar', 'neraca', 'pembukuan'],
+  },
+  {
+    route: '/returns',
+    label: 'Retur Barang',
+    group: 'Keuangan & Laporan',
+    keywords: ['retur barang', 'retur', 'pengembalian barang', 'refund', 'kembalikan produk'],
+  },
+  {
+    route: '/payment',
+    label: 'Status Lisensi & Langganan',
+    group: 'Keuangan & Laporan',
+    keywords: ['status langganan', 'langganan', 'lisensi', 'paket lisensi', 'subscription', 'billing', 'tagihan lisensi', 'masa aktif'],
+  },
+  {
+    route: '/promo',
+    label: 'Promo & Voucher Diskon',
+    group: 'Keuangan & Laporan',
+    keywords: ['promo dan diskon', 'promo', 'diskon', 'voucher', 'kupon', 'promosi', 'potongan harga'],
+  },
+  {
+    route: '/tax-report',
+    label: 'Laporan Pajak & PPN',
+    group: 'Keuangan & Laporan',
+    keywords: ['laporan pajak', 'pajak', 'ppn', 'tax report', 'pajak penjualan'],
+  },
+  {
+    route: '/cash-flow',
+    label: 'Laporan Cash Flow',
+    group: 'Keuangan & Laporan',
+    keywords: ['cash flow', 'cashflow', 'aliran kas', 'laporan kas flow'],
+  },
+  {
+    route: '/bank-account',
+    label: 'Rekening Bank Toko',
+    group: 'Keuangan & Laporan',
+    keywords: ['rekening bank', 'akun bank', 'rekening toko', 'bank account', 'nomor rekening'],
+  },
+  {
+    route: '/fixed-asset',
+    label: 'Manajemen Aset Tetap',
+    group: 'Keuangan & Laporan',
+    keywords: ['aset tetap', 'fixed asset', 'aset toko', 'inventaris toko', 'penyusutan aset', 'asset'],
+  },
+  {
+    route: '/budget',
+    label: 'Anggaran & Budgeting',
+    group: 'Keuangan & Laporan',
+    keywords: ['anggaran dan budget', 'anggaran', 'budgeting', 'rencana biaya', 'budget'],
+  },
+
+  // Relasi & Member
+  {
+    route: '/customer',
+    label: 'Data Pelanggan & Member',
+    group: 'Relasi & Member',
+    keywords: ['data pelanggan', 'pelanggan', 'customer', 'member', 'konsumen', 'poin member', 'crm'],
+  },
+  {
+    route: '/supplier',
+    label: 'Pemasok & Supplier',
+    group: 'Relasi & Member',
+    keywords: ['data supplier', 'supplier', 'pemasok', 'distributor', 'vendor', 'agen barang'],
+  },
+  {
+    route: '/sales-commission',
+    label: 'Komisi Sales',
+    group: 'Relasi & Member',
+    keywords: ['komisi sales', 'sales commission', 'komisi', 'bonus sales', 'insentif sales'],
+  },
+  {
+    route: '/membership-card',
+    label: 'Cetak Kartu Member',
+    group: 'Relasi & Member',
+    keywords: ['kartu member', 'cetak member', 'membership card', 'kartu pelanggan'],
+  },
+  {
+    route: '/supplier-rating',
+    label: 'Penilaian Supplier',
+    group: 'Relasi & Member',
+    keywords: ['rating supplier', 'penilaian supplier', 'evaluasi supplier', 'supplier rating'],
+  },
+  {
+    route: '/customer-feedback',
+    label: 'Ulasan & Feedback Pelanggan',
+    group: 'Relasi & Member',
+    keywords: ['feedback pelanggan', 'ulasan pelanggan', 'feedback', 'ulasan', 'rating toko', 'kepuasan pelanggan'],
+  },
+
+  // SDM & Karyawan
+  {
+    route: '/employee',
+    label: 'Data Karyawan & Staf',
+    group: 'SDM & Karyawan',
+    keywords: ['data karyawan', 'karyawan', 'pegawai', 'staf', 'staff', 'employee', 'sdm'],
+  },
+  {
+    route: '/employee-contract',
+    label: 'Kontrak Kerja Karyawan',
+    group: 'SDM & Karyawan',
+    keywords: ['kontrak karyawan', 'kontrak kerja', 'kontrak pegawai', 'pkwt', 'surat kontrak'],
+  },
+  {
+    route: '/attendance',
+    label: 'Absensi & Kehadiran',
+    group: 'SDM & Karyawan',
+    keywords: ['absensi karyawan', 'absensi', 'kehadiran', 'presensi', 'jam kerja', 'absen'],
+  },
+  {
+    route: '/payroll',
+    label: 'Penggajian Karyawan (Payroll)',
+    group: 'SDM & Karyawan',
+    keywords: ['penggajian karyawan', 'payroll karyawan', 'payroll', 'gaji', 'slip gaji', 'upah kerja'],
+  },
+  {
+    route: '/tip-pooling',
+    label: 'Tip Pooling Karyawan',
+    group: 'SDM & Karyawan',
+    keywords: ['tip pooling', 'bagi tip', 'uang tip', 'distribusi tip', 'tip'],
+  },
+  {
+    route: '/shift-schedule',
+    label: 'Jadwal Shift Kerja',
+    group: 'SDM & Karyawan',
+    keywords: ['jadwal shift', 'jadwal kerja', 'roster karyawan', 'shift schedule'],
+  },
+
+  // Operasional & F&B
+  {
+    route: '/kitchen-display',
+    label: 'Kitchen Display (KDS)',
+    group: 'Operasional & F&B',
+    keywords: ['kitchen display', 'kds', 'layar dapur', 'dapur', 'pesanan dapur', 'kitchen'],
+  },
+  {
+    route: '/table-management',
+    label: 'Manajemen Meja & Denah',
+    group: 'Operasional & F&B',
+    keywords: ['manajemen meja', 'denah meja', 'meja restoran', 'tata letak meja', 'meja', 'table management', 'table'],
+  },
+  {
+    route: '/reservation',
+    label: 'Reservasi Meja',
+    group: 'Operasional & F&B',
+    keywords: ['reservasi meja', 'reservasi', 'booking meja', 'pesan meja', 'reservation'],
+  },
+  {
+    route: '/recipe',
+    label: 'Resep & Bahan Baku',
+    group: 'Operasional & F&B',
+    keywords: ['resep bahan baku', 'resep produk', 'resep', 'bahan baku', 'recipe', 'komposisi', 'formula bom'],
+  },
+  {
+    route: '/delivery',
+    label: 'Kurir & Pengiriman',
+    group: 'Operasional & F&B',
+    keywords: ['kurir dan pengiriman', 'kurir', 'pengiriman', 'delivery', 'ongkir', 'antar pesanan', 'ekspedisi'],
+  },
+
+  // Alat, Pemasaran & Sistem
+  {
+    route: '/whatsapp',
+    label: 'WhatsApp Notifikasi',
+    group: 'Alat & Sistem',
+    keywords: ['whatsapp notifikasi', 'whatsapp', 'wa gateway', 'kirim wa', 'pesan wa', 'notifikasi wa', 'wa'],
+  },
+  {
+    route: '/hpp',
+    label: 'Kalkulator HPP',
+    group: 'Alat & Sistem',
+    keywords: ['kalkulator hpp', 'hpp', 'harga pokok', 'hitung hpp', 'margin profit', 'modal barang'],
+  },
+  {
+    route: '/tutorials',
+    label: 'Tutorial & Panduan',
+    group: 'Alat & Sistem',
+    keywords: ['tutorial dan panduan', 'tutorial', 'panduan', 'buku panduan', 'help', 'bantuan penggunaan'],
+  },
+  {
+    route: '/users',
+    label: 'Kelola Pengguna & Kasir',
+    group: 'Alat & Sistem',
+    keywords: ['kelola pengguna', 'manajemen pengguna', 'users', 'user', 'pengguna', 'tambah kasir', 'hak akses kasir', 'akun kasir'],
+  },
+  {
+    route: '/backup',
+    label: 'Backup Database',
+    group: 'Alat & Sistem',
+    keywords: ['backup database', 'cadangan database', 'backup', 'restore database', 'ekspor database', 'impor database', 'cadangan data'],
+  },
+  {
+    route: '/security',
+    label: 'Log Keamanan Sistem',
+    group: 'Alat & Sistem',
+    keywords: ['log keamanan', 'security log', 'keamanan sistem', 'riwayat login', 'security', 'keamanan'],
+  },
+  {
+    route: '/audit-trail',
+    label: 'Jejak Audit (Audit Trail)',
+    group: 'Alat & Sistem',
+    keywords: ['audit trail', 'jejak audit', 'audit sistem', 'riwayat aktivitas', 'log aktivitas', 'audit'],
+  },
+  {
+    route: '/license-admin',
+    label: 'Developer & License Panel',
+    group: 'Alat & Sistem',
+    keywords: ['developer panel', 'license admin', 'developer', 'panel pengembang', 'lisensi admin', 'pusat lisensi'],
+  },
+  {
+    route: '/settings',
+    label: 'Pengaturan Sistem & Toko',
+    group: 'Alat & Sistem',
+    keywords: ['pengaturan sistem', 'pengaturan toko', 'settings', 'setting', 'pengaturan', 'konfigurasi', 'printer', 'struk belanja', 'identitas toko', 'profil toko'],
+  },
+  {
+    route: '/campaign',
+    label: 'Kampanye Pemasaran (Campaign)',
+    group: 'Alat & Sistem',
+    keywords: ['kampanye pemasaran', 'campaign', 'kampanye', 'promosi blast', 'broadcast promo', 'pemasaran'],
+  },
+  {
+    route: '/storefront',
+    label: 'Katalog Toko Online (Storefront)',
+    group: 'Alat & Sistem',
+    keywords: ['toko online', 'storefront', 'website toko', 'web katalog', 'online store'],
+  },
+  {
+    route: '/print-queue',
+    label: 'Antrean Cetak Printer',
+    group: 'Alat & Sistem',
+    keywords: ['antrean cetak', 'print queue', 'antrian cetak', 'antrean printer', 'antrian printer'],
+  },
+  {
+    route: '/integrations',
+    label: 'Integrasi Marketplace & API',
+    group: 'Alat & Sistem',
+    keywords: ['integrasi marketplace', 'integrasi api', 'integrasi', 'marketplace', 'ecommerce api', 'channel penjualan'],
+  },
+]
+
+function findBestNavMatch(promptText: string): NavDestination | null {
+  const text = cleanStr(promptText)
+
+  const isNavIntent =
+    text.includes('buka') ||
+    text.includes('pergi ke') ||
+    text.includes('masuk ke') ||
+    text.includes('menuju') ||
+    text.includes('arahin') ||
+    text.includes('tampilkan') ||
+    text.includes('lihat') ||
+    text.startsWith('ke ') ||
+    text.startsWith('tab ') ||
+    text.startsWith('menu ') ||
+    text.startsWith('halaman ') ||
+    text.startsWith('layar ')
+
+  if (!isNavIntent) return null
+
+  // Strip prefixes to isolate query target
+  const targetQuery = text
+    .replace(/^(tolong|coba|bisa|mohon)\s+/i, '')
+    .replace(/^(buka|pergi ke|masuk ke|menuju ke|arahin ke|tampilkan|lihat|pindah ke|ganti ke)\s+/i, '')
+    .replace(/^(tab|menu|halaman|layar)\s+/i, '')
+    .replace(/^(buka|ke)\s+/i, '')
+    .trim()
+
+  let bestMatch: NavDestination | null = null
+  let maxScore = 0
+
+  for (const tab of ALL_APP_TABS) {
+    for (const kw of tab.keywords) {
+      if (targetQuery === kw) {
+        return tab
+      }
+      if (targetQuery.includes(kw) || text.includes(kw)) {
+        const score = kw.length
+        if (score > maxScore) {
+          maxScore = score
+          bestMatch = tab
+        }
+      }
+    }
+  }
+
+  return bestMatch
 }
 
 export class AiActionEngine {
@@ -395,40 +827,51 @@ export class AiActionEngine {
       return this.executeBackup()
     }
 
-    // 6. Navigasi Halaman
-    if (text.startsWith('buka ') || text.startsWith('pergi ke ') || text.startsWith('lihat halaman ')) {
-      const navMap: Record<string, { route: string; label: string }> = {
-        kasir: { route: '/transaksi', label: 'Buka Halaman Kasir' },
-        transaksi: { route: '/transaksi', label: 'Buka Halaman Transaksi' },
-        pos: { route: '/transaksi', label: 'Buka Kasir POS' },
-        produk: { route: '/produk', label: 'Buka Katalog Produk' },
-        barang: { route: '/produk', label: 'Buka Data Barang' },
-        laporan: { route: '/laporan', label: 'Buka Laporan Penjualan' },
-        keuangan: { route: '/accounting', label: 'Buka Pembukuan Akuntansi' },
-        hpp: { route: '/hpp', label: 'Buka Kalkulasi HPP' },
-        payroll: { route: '/payroll', label: 'Buka Penggajian Karyawan' },
-        kds: { route: '/kitchen', label: 'Buka Kitchen Display' },
-        dapur: { route: '/kitchen', label: 'Buka Kitchen Display' },
-        antrean: { route: '/queue', label: 'Buka Layar Antrean' },
-        queue: { route: '/queue', label: 'Buka Layar Antrean' },
-        setting: { route: '/settings', label: 'Buka Pengaturan' },
-        pengaturan: { route: '/settings', label: 'Buka Pengaturan' },
-        backup: { route: '/backup', label: 'Buka Menu Backup' },
-        developer: { route: '/license-admin', label: 'Buka Developer Panel' },
+    // 6. Tampilkan Daftar Seluruh Tab (Katalog Navigasi)
+    if (
+      text.includes('seluruh tab') ||
+      text.includes('semua tab') ||
+      text.includes('daftar tab') ||
+      text.includes('daftar menu') ||
+      text.includes('menu apa') ||
+      text.includes('tab apa') ||
+      text.includes('bisa buka apa') ||
+      text.includes('buka seluruh') ||
+      text.includes('buka semua') ||
+      text.includes('semua menu') ||
+      text === 'tab' ||
+      text === 'menu'
+    ) {
+      return {
+        executed: true,
+        success: true,
+        actionType: 'NAVIGATE_LIST',
+        title: 'Katalog Navigasi: Seluruh Tab WariPOS',
+        message: 'Asisten AI dapat membuka seluruh tab aplikasi WariPOS secara langsung. Silakan klik salah satu tab di bawah atau ketik perintah buka [nama tab].',
+        availableTabs: ALL_APP_TABS.map(t => ({ route: t.route, label: t.label, group: t.group })),
+        details: [
+          { label: 'Total Tab Tersedia', value: `${ALL_APP_TABS.length} Halaman Menu` },
+          { label: 'Modul Utama', value: 'Dashboard, Kasir POS, Shift, Riwayat, Antrian, Display' },
+          { label: 'Modul Inventaris', value: 'Produk, Kategori, Satuan, Pembelian, Stok Opname, Cabang' },
+          { label: 'Modul Keuangan', value: 'Laporan, Kas, Hutang/Piutang, Akuntansi, Retur, Pajak' },
+          { label: 'Modul SDM & F&B', value: 'Karyawan, Absensi, Payroll, KDS Dapur, Meja, Resep' },
+        ],
+        navigateRoute: '/transaksi',
+        navigateLabel: 'Buka Kasir POS',
       }
+    }
 
-      for (const [key, val] of Object.entries(navMap)) {
-        if (text.includes(key)) {
-          return {
-            executed: true,
-            success: true,
-            actionType: 'NAVIGATE',
-            title: `Navigasi Cepat: ${val.label}`,
-            message: `Mengalihkan layar Anda ke ${val.label}...`,
-            navigateRoute: val.route,
-            navigateLabel: val.label,
-          }
-        }
+    // 7. Navigasi Cepat ke Tab Tertentu
+    const navMatch = findBestNavMatch(promptText)
+    if (navMatch) {
+      return {
+        executed: true,
+        success: true,
+        actionType: 'NAVIGATE',
+        title: `Navigasi: ${navMatch.label}`,
+        message: `Membuka halaman ${navMatch.label} (${navMatch.group})...`,
+        navigateRoute: navMatch.route,
+        navigateLabel: `Buka ${navMatch.label}`,
       }
     }
 

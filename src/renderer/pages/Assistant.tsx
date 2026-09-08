@@ -94,6 +94,13 @@ const QUICK_ACTIONS = [
     prompt: 'Backup database sekarang',
   },
   {
+    id: 'all-tabs',
+    title: 'Katalog Seluruh Tab',
+    desc: 'Lihat & buka 45+ tab aplikasi',
+    icon: Layers,
+    prompt: 'Buka seluruh tab aplikasi',
+  },
+  {
     id: 'monthly-summary',
     title: 'Ringkasan Laporan Bisnis',
     desc: 'Estimasi performa laba rugi',
@@ -105,7 +112,7 @@ const QUICK_ACTIONS = [
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   sender: 'assistant',
-  text: 'Halo! Saya **Wari AI Autonomous Assistant**.\n\nSaya memegang kendali operasional penuh untuk mengeksekusi aksi di WariPOS:\n- **Restock Otomatis**: Ketik *"Restock semua produk yang habis masing-masing 20 pcs"* atau sebut nama produk.\n- **Tambah Produk / Promo**: Buat produk atau kupon diskon baru langsung dari chat.\n- **Backup Database**: Ketik *"Backup database sekarang"*.\n- **Navigasi Cepat**: Ketik *"Buka kasir"*, *"Buka produk"*, atau *"Buka laporan"*.\n\nSilakan ketik perintah aksi atau pilih menu cepat di bawah.',
+  text: 'Halo! Saya **Wari AI Autonomous Assistant**.\n\nSaya memegang kendali operasional penuh untuk mengeksekusi aksi di WariPOS:\n- **Restock Otomatis**: Ketik *"Restock semua produk yang habis masing-masing 20 pcs"* atau sebut nama produk.\n- **Tambah Produk / Promo**: Buat produk atau kupon diskon baru langsung dari chat.\n- **Backup Database**: Ketik *"Backup database sekarang"*.\n- **Navigasi Seluruh Tab**: Ketik *"Buka [nama tab]"* (contoh: *"Buka kasir"*, *"Buka kitchen"*, *"Buka shift"*, *"Buka seluruh tab"*).\n\nSilakan ketik perintah aksi atau pilih menu cepat di bawah.',
   timestamp: new Date(),
 }
 
@@ -649,6 +656,27 @@ export default function Assistant() {
                                     <span className="font-semibold">{d.value}</span>
                                   </div>
                                 ))}
+                              </div>
+                            )}
+
+                            {msg.actionResult.availableTabs && msg.actionResult.availableTabs.length > 0 && (
+                              <div className="space-y-2 border-t border-emerald-500/20 dark:border-emerald-400/20 pt-2.5">
+                                <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                  Pilih Tab yang Ingin Dibuka Langsung:
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                                  {msg.actionResult.availableTabs.map((tab, idx) => (
+                                    <button
+                                      key={idx}
+                                      onClick={() => navigate(tab.route)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-emerald-600 hover:text-white border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium transition-all active:scale-95 shadow-2xs"
+                                      title={`${tab.label} (${tab.group})`}
+                                    >
+                                      <span>{tab.label}</span>
+                                      <ArrowRight size={10} className="opacity-60" />
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             )}
 
