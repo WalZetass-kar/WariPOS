@@ -61,7 +61,7 @@ export default function Riwayat() {
       const paperSize = (localStorage.getItem('zetass_bt_paper_size') as '58mm' | '80mm') || strukSettingsRes?.data?.paper_size || '58mm'
 
       const result = await bluetoothPrinter.printStruk({
-        namaToko: identitasRes?.data?.namatoko || 'Zetass Pos',
+        namaToko: identitasRes?.data?.namatoko || 'WariPOS',
         alamat: identitasRes?.data?.alamattoko,
         telepon: identitasRes?.data?.nomortelptoko,
         kdTransaksi: detail.header.kd_tansaksi_jual,

@@ -29,14 +29,14 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
   }
 
   return {
-    app: 'Zetass Pos',
+    app: 'WariPOS',
     action: 'append_dashboard',
     generatedAt,
     sheets: [
       {
         name: 'Ringkasan',
         rows: [
-          ['Zetass Pos'],
+          ['WariPOS'],
           ['Export Dashboard', generatedAt],
           [],
           ['Ringkasan', 'Transaksi', 'Pemasukan'],
@@ -129,7 +129,7 @@ export function dashboardSummaryToTsv(summary: DashboardSummary) {
 
 export function testGoogleSheetsPayload(): GoogleSheetsPayload {
   return {
-    app: 'Zetass Pos',
+    app: 'WariPOS',
     action: 'test',
     generatedAt: new Date().toLocaleString('id-ID'),
     sheets: [

@@ -586,15 +586,15 @@ export class ExportService {
       }
       
       const workbook = new ExcelJS.Workbook()
-      workbook.creator = 'LCC POS System'
+      workbook.creator = 'WariPOS System'
       workbook.created = new Date()
       
       // Helper function to build header
       const applyCompanyHeader = (sheet: ExcelJS.Worksheet, title: string, lastCol: string) => {
-        const storeName = storeInfo?.namatoko || 'LCC POS'
-        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya LCC No. 1, Jakarta'
+        const storeName = storeInfo?.namatoko || 'WariPOS'
+        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya WariPOS No. 1, Pekanbaru'
         const storePhone = storeInfo?.nomortelptoko || '0812-3456-7890'
-        const storeEmail = storeInfo?.alamatemailowner || 'info@lccpos.com'
+        const storeEmail = storeInfo?.alamatemailowner || 'info@waripos.com'
         
         sheet.mergeCells(`A1:${lastCol}1`)
         const cell1 = sheet.getCell('A1')
@@ -1419,10 +1419,10 @@ export class ExportService {
         const logoY = 10
         const logoSize = 14 // diameter
         
-        const storeName = storeInfo?.namatoko || 'LCC POS'
-        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya LCC No. 1, Jakarta'
+        const storeName = storeInfo?.namatoko || 'WariPOS'
+        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya WariPOS No. 1, Pekanbaru'
         const storePhone = storeInfo?.nomortelptoko || '0812-3456-7890'
-        const storeEmail = storeInfo?.alamatemailowner || 'info@lccpos.com'
+        const storeEmail = storeInfo?.alamatemailowner || 'info@waripos.com'
         
         // Circular Logo Placeholder or Base64 Image
         let logoDrawn = false
@@ -1483,7 +1483,7 @@ export class ExportService {
         d.setFontSize(7.5)
         d.setFont('helvetica', 'normal')
         d.setTextColor(148, 163, 184)
-        d.text('Laporan POS Keuangan Penjualan - Sistem Kasir Profesional LCC', 15, pageHeight - 10)
+        d.text('Laporan POS Keuangan Penjualan - Sistem Kasir Profesional WariPOS', 15, pageHeight - 10)
         d.text(`Halaman ${pageNo} dari ${totalP}`, pageWidth - 15, pageHeight - 10, { align: 'right' })
       }
       

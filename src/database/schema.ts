@@ -20,6 +20,7 @@ export const pengguna = sqliteTable('mediasoft_pengguna', {
   subscription_plan_id: integer('subscription_plan_id'),
   subscription_expires_at: text('subscription_expires_at'),
   is_buyer: integer('is_buyer').default(0),
+  foto: text('foto'),
 })
 
 export const satuan = sqliteTable('mediasoft_satuan', {

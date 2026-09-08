@@ -1,5 +1,5 @@
 import React from 'react'
-import { Crown, MessageCircle, X, Sparkles, Zap, ShieldCheck } from 'lucide-react'
+import { Crown, MessageCircle, X, Zap, ShieldCheck } from 'lucide-react'
 import { useLicense } from './FeatureContext'
 import { sanitizeHtml } from '../utils/sanitizeHtml'
 
@@ -18,7 +18,7 @@ export const UpgradePopup: React.FC = () => {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xl animate-in fade-in duration-200"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md modal-backdrop-animate"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           closePopup()
@@ -26,7 +26,7 @@ export const UpgradePopup: React.FC = () => {
       }}
     >
       <div
-        className="relative w-full max-w-md rounded-3xl bg-slate-900/95 border border-slate-800 shadow-2xl p-6 sm:p-7 text-white space-y-4 ring-1 ring-white/10"
+        className="relative w-full max-w-md rounded-3xl bg-slate-900/95 border border-slate-800 shadow-2xl p-6 sm:p-7 text-white space-y-4 ring-1 ring-white/10 modal-card-animate"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient Glow */}
@@ -45,7 +45,7 @@ export const UpgradePopup: React.FC = () => {
         {/* Header Icon & Title */}
         <div className="text-center space-y-1.5 pt-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-bold tracking-wide mb-1">
-            <Sparkles size={12} className="text-amber-400" />
+            <ShieldCheck size={13} className="text-amber-400" />
             <span>FITUR PRO TERKUNCI</span>
           </div>
           <h2 className="text-xl font-black text-white tracking-tight">
@@ -87,7 +87,7 @@ export const UpgradePopup: React.FC = () => {
 
           {whatsappNumber && (
             <a
-              href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent('Halo Admin Zetass POS, saya ingin konsultasi upgrade lisensi toko.')}`}
+              href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent('Halo Admin WariPOS, saya ingin konsultasi upgrade lisensi toko.')}`}
               target="_blank"
               rel="noreferrer"
               onClick={closePopup}

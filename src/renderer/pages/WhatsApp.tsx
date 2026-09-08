@@ -11,9 +11,13 @@ import {
   ShieldCheck,
   XCircle,
   Zap,
-  Sparkles,
   RefreshCw,
   Clock,
+  Radio,
+  FileText,
+  History,
+  Settings2,
+  Users,
 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -60,14 +64,16 @@ interface BroadcastHistory {
   created_at: string
 }
 
+type WaTab = 'gateway' | 'template' | 'broadcast' | 'history'
+
 const DEFAULT_TEMPLATE = 'Terima kasih {customer}! Pesanan Anda sebesar {total} telah diterima. No. Transaksi: {invoice}'
 const DEFAULT_BROADCAST_TEMPLATE = 'Halo {{nama_customer}}, total belanja Anda {{total_belanja}} dan poin loyalty {{poin_loyalty}}.'
 
 const notificationItems = [
-  { key: 'notifyOnSale', label: 'Transaksi Baru', desc: 'Struk ringkas dikirim ke customer setelah transaksi selesai' },
-  { key: 'notifyOnReturn', label: 'Return Barang', desc: 'Customer mendapat kabar saat return dicatat' },
-  { key: 'notifyOnLowStock', label: 'Stok Menipis', desc: 'Owner mendapat pesan saat stok produk menyentuh batas minimum' },
-  { key: 'notifyOnPayment', label: 'Pembayaran', desc: 'Pembayaran selesai ikut mengirim notifikasi transaksi' },
+  { key: 'notifyOnSale', label: 'Transaksi Kasir Baru', desc: 'Struk ringkas otomatis dikirim ke WhatsApp customer saat pembayaran selesai' },
+  { key: 'notifyOnReturn', label: 'Nota Retur Barang', desc: 'Customer mendapat konfirmasi WhatsApp saat ada barang yang diretur' },
+  { key: 'notifyOnLowStock', label: 'Peringatan Stok Menipis', desc: 'Owner/Admin menerima pesan saat stok produk menyentuh batas minimum' },
+  { key: 'notifyOnPayment', label: 'Bukti Pembayaran / Piutang', desc: 'Notifikasi saat pembayaran piutang atau pelunasan berhasil dicatat' },
 ] as const
 
 function boolFromDb(value: unknown, fallback = false): boolean {
@@ -107,6 +113,7 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: () =
 
 export default function WhatsApp() {
   const toast = useToast()
+  const [activeTab, setActiveTab] = useState<WaTab>('gateway')
   const [loading, setLoading] = useState(false)
   const [testing, setTesting] = useState(false)
   const [showKey, setShowKey] = useState(false)
@@ -129,7 +136,7 @@ export default function WhatsApp() {
   const [history, setHistory] = useState<BroadcastHistory[]>([])
   const [targetMode, setTargetMode] = useState<'all' | 'active' | 'manual'>('active')
   const [manualTargets, setManualTargets] = useState('')
-  const [broadcastTitle, setBroadcastTitle] = useState('Broadcast Customer')
+  const [broadcastTitle, setBroadcastTitle] = useState('Broadcast Promo Member')
   const [broadcastTemplate, setBroadcastTemplate] = useState(DEFAULT_BROADCAST_TEMPLATE)
   const [scheduleMode, setScheduleMode] = useState<'now' | 'scheduled'>('now')
   const [scheduledAt, setScheduledAt] = useState('')
@@ -180,9 +187,9 @@ export default function WhatsApp() {
 
     if (r.success) {
       if (r.data) syncSettings(r.data)
-      toast('Pengaturan WhatsApp berhasil disimpan')
+      toast('Pengaturan WhatsApp berhasil disimpan', 'success')
     } else {
-      toast(r.message as string ?? 'Gagal menyimpan', 'error')
+      toast((r.message as string) ?? 'Gagal menyimpan', 'error')
     }
   }
 
@@ -196,17 +203,17 @@ export default function WhatsApp() {
     const r = await api('whatsapp:test', {
       phone,
       apiKey: settings.apiKey,
-      message: 'Test notifikasi dari Zetass POS berhasil.',
+      message: 'Test notifikasi dari WariPOS berhasil terhubung!',
     })
     setTesting(false)
 
     if (r.success) {
       setTestModal(false)
-      setLastTestMessage(r.message as string ?? 'Pesan test masuk antrean Fonnte')
-      toast('Pesan test berhasil dikirim')
+      setLastTestMessage((r.message as string) ?? 'Pesan test berhasil dikirim via Fonnte')
+      toast('Pesan test WhatsApp berhasil dikirim', 'success')
     } else {
-      setLastTestMessage(r.message as string ?? 'Gagal mengirim pesan')
-      toast(r.message as string ?? 'Gagal mengirim pesan', 'error')
+      setLastTestMessage((r.message as string) ?? 'Gagal mengirim pesan')
+      toast((r.message as string) ?? 'Gagal mengirim pesan', 'error')
     }
   }
 
@@ -221,7 +228,7 @@ export default function WhatsApp() {
     if (targetMode === 'manual') {
       return manualTargets
         .split(/\r?\n|,/)
-        .map((phone, index) => ({ kd_customer: `manual-${index}`, nama_customer: `Manual ${index + 1}`, no_telp: phone.trim(), total_belanja: 0, poin: 0 }))
+        .map((phone, index) => ({ kd_customer: `manual-${index}`, nama_customer: `Pelanggan ${index + 1}`, no_telp: phone.trim(), total_belanja: 0, poin: 0 }))
         .filter(item => item.no_telp)
     }
 
@@ -239,9 +246,9 @@ export default function WhatsApp() {
     })
     if (r.success) {
       setTemplates(r.data ?? [])
-      toast('Template broadcast disimpan')
+      toast('Template broadcast berhasil disimpan', 'success')
     } else {
-      toast(r.message as string || 'Gagal menyimpan template', 'error')
+      toast((r.message as string) || 'Gagal menyimpan template', 'error')
     }
   }
 
@@ -255,13 +262,13 @@ export default function WhatsApp() {
   const sendBroadcast = async () => {
     if (!settings.apiKey.trim()) return toast('API key Fonnte belum diisi', 'error')
     const targets = broadcastTargets()
-    if (targets.length === 0) return toast('Target broadcast kosong', 'error')
+    if (targets.length === 0) return toast('Target pelanggan broadcast kosong', 'error')
     if (!broadcastTemplate.trim()) return toast('Template pesan wajib diisi', 'error')
 
     if (scheduleMode === 'scheduled') {
-      if (!scheduledAt) return toast('Pilih jadwal broadcast', 'error')
+      if (!scheduledAt) return toast('Pilih waktu jadwal pengiriman', 'error')
       const scheduledTime = new Date(scheduledAt).getTime()
-      if (!Number.isFinite(scheduledTime) || scheduledTime <= Date.now()) return toast('Jadwal harus setelah waktu saat ini', 'error')
+      if (!Number.isFinite(scheduledTime) || scheduledTime <= Date.now()) return toast('Waktu jadwal harus di masa mendatang', 'error')
       await api('whatsapp:saveBroadcastHistory', {
         title: broadcastTitle,
         targetType: targetMode,
@@ -272,7 +279,7 @@ export default function WhatsApp() {
         status: 'scheduled',
       })
       await refreshHistory()
-      toast('Broadcast dijadwalkan')
+      toast('Broadcast berhasil dijadwalkan', 'success')
       return
     }
 
@@ -314,333 +321,488 @@ export default function WhatsApp() {
   }
 
   const normalizedTestNumber = normalizePreview(testNumber)
-  const activeCount = notificationItems.filter(item => settings[item.key]).length
+  const activeCount = notificationItems.filter(item => settings[item.key as keyof WhatsAppSettings]).length
   const targets = broadcastTargets()
-  const previewTarget = targets[0] ?? { nama_customer: 'Customer', total_belanja: 0, poin: 0 }
+  const previewTarget = targets[0] ?? { nama_customer: 'Pelanggan Setia', total_belanja: 150000, poin: 15 }
   const progressPercent = broadcastProgress.total ? Math.round(((broadcastProgress.sent + broadcastProgress.failed) / broadcastProgress.total) * 100) : 0
 
   if (loading) return <SkeletonPage rows={6} />
 
+  const tabs: Array<{ id: WaTab; label: string; icon: any }> = [
+    { id: 'gateway', label: 'Gateway & Notifikasi', icon: Settings2 },
+    { id: 'template', label: 'Template Struk Kasir', icon: FileText },
+    { id: 'broadcast', label: 'Broadcast Massal', icon: Send },
+    { id: 'history', label: 'Riwayat Broadcast', icon: History },
+  ]
+
   return (
-    <div className="space-y-5 select-none">
-      
-      {/* Header Action Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+    <div className="space-y-4">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <MessageCircle className="text-emerald-500" size={26} />
-              Integrasi WhatsApp Gateway
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <MessageCircle className="text-emerald-500" size={24} />
+              WhatsApp Notifikasi
             </h1>
             <Badge label={settings.enabled ? 'Aktif' : 'Nonaktif'} variant={settings.enabled ? 'green' : 'gray'} />
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-            Kelola API Fonnte, struk WhatsApp otomatis ke customer, dan fitur blast broadcast.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Integrasi API Fonnte untuk struk otomatis ke customer dan pengiriman pesan broadcast.
           </p>
         </div>
 
-        <div className="flex w-full sm:w-auto gap-2">
+        <div className="flex w-full sm:w-auto items-center gap-2">
           <Button
             variant="secondary"
             onClick={() => setTestModal(true)}
-            icon={<Send size={15} />}
-            className="w-full sm:w-auto font-bold border-slate-200 dark:border-slate-800"
+            icon={<Send size={14} />}
+            className="flex-1 sm:flex-initial text-xs font-bold"
           >
-            Pesan Test
+            Kirim Test
           </Button>
           <Button
             onClick={handleSave}
             loading={loading}
-            icon={<CheckCircle size={15} />}
-            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20"
+            icon={<CheckCircle size={14} />}
+            className="flex-1 sm:flex-initial bg-red-600 hover:bg-red-700 text-white font-bold text-xs border-0"
           >
-            Simpan Konfigurasi
+            Simpan Pengaturan
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-4">
-          
-          {/* Status Card */}
-          <Card className={`rounded-3xl border ${settings.enabled ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-800'}`}>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className={`rounded-2xl p-2.5 ${settings.enabled ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
-                  {settings.enabled ? <CheckCircle size={22} /> : <XCircle size={22} />}
-                </div>
-                <div>
-                  <p className="font-extrabold text-slate-900 dark:text-white text-sm">
-                    Status WhatsApp Gateway {settings.enabled ? 'Aktif' : 'Nonaktif'}
-                  </p>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    {settings.enabled ? `${activeCount} jenis notifikasi otomatis aktif` : 'Aktifkan stempel toggle di kanan jika API key sudah terisi'}
-                  </p>
-                </div>
-              </div>
-              <Toggle
-                checked={settings.enabled}
-                title="Aktifkan WhatsApp"
-                onChange={() => setSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
-              />
-            </div>
-            {lastTestMessage && (
-              <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-xs font-bold text-slate-700 dark:text-slate-300">
-                {lastTestMessage}
-              </div>
-            )}
-          </Card>
+      {/* Tabs Navigation */}
+      <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+        {tabs.map(t => {
+          const Icon = t.icon
+          const isActive = activeTab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                isActive
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Icon size={15} />
+              <span>{t.label}</span>
+            </button>
+          )
+        })}
+      </div>
 
-          {/* API Configuration Card */}
-          <Card title="Konfigurasi API Fonnte" subtitle="Token API disimpan dengan aman secara lokal di sistem aplikasi." className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="space-y-4">
-              <div className="grid gap-3.5 sm:grid-cols-2">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Provider Gateway</label>
-                  <select
-                    value={settings.provider}
-                    onChange={e => setSettings(prev => ({ ...prev, provider: e.target.value as 'fonnte' }))}
-                    className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
-                  >
-                    <option value="fonnte">Fonnte WhatsApp API Gateway</option>
-                  </select>
+      {/* TAB 1: GATEWAY & NOTIFIKASI */}
+      {activeTab === 'gateway' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 space-y-4">
+            {/* Status Switcher Card */}
+            <div className={`p-4 rounded-2xl border ${settings.enabled ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50'}`}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${settings.enabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500 dark:bg-slate-800'}`}>
+                    {settings.enabled ? <CheckCircle size={20} /> : <XCircle size={20} />}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                      Layanan WhatsApp Gateway {settings.enabled ? 'Aktif' : 'Nonaktif'}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {settings.enabled ? `${activeCount} dari ${notificationItems.length} jenis notifikasi otomatis aktif` : 'Aktifkan toggle di sebelah kanan untuk menyalakan notifikasi'}
+                    </p>
+                  </div>
                 </div>
-                <Input
-                  label="Rate Limit (Pesan / Menit)"
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={settings.rateLimitPerMinute}
-                  onChange={e => setSettings(prev => ({ ...prev, rateLimitPerMinute: Number(e.target.value) }))}
+                <Toggle
+                  checked={settings.enabled}
+                  title="Aktifkan WhatsApp"
+                  onChange={() => setSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
                 />
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">API Key / Token Fonnte</label>
-                <div className="relative">
+
+              {lastTestMessage && (
+                <div className="mt-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {lastTestMessage}
+                </div>
+              )}
+            </div>
+
+            {/* API Config Card */}
+            <Card title="Konfigurasi API Fonnte">
+              <div className="space-y-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 block">Provider Gateway</label>
+                    <select
+                      value={settings.provider}
+                      onChange={e => setSettings(prev => ({ ...prev, provider: e.target.value as 'fonnte' }))}
+                      className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
+                    >
+                      <option value="fonnte">Fonnte (fonnte.com)</option>
+                    </select>
+                  </div>
                   <Input
-                    type={showKey ? 'text' : 'password'}
-                    value={settings.apiKey}
-                    onChange={e => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
-                    placeholder="Masukkan API Key Fonnte..."
-                    className="pr-10"
+                    label="Rate Limit (Pesan / Menit)"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={settings.rateLimitPerMinute}
+                    onChange={e => setSettings(prev => ({ ...prev, rateLimitPerMinute: Number(e.target.value) }))}
                   />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 block">API Key / Token Fonnte *</label>
+                  <div className="relative">
+                    <Input
+                      type={showKey ? 'text' : 'password'}
+                      value={settings.apiKey}
+                      onChange={e => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
+                      placeholder="Contoh: a1b2c3d4e5f6g7h8..."
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    >
+                      {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowKey(prev => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                    title={showKey ? 'Sembunyikan API key' : 'Tampilkan API key'}
+                    onClick={() => window.open('https://fonnte.com', '_blank')}
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:underline"
                   >
-                    {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                    Buka situs Fonnte.com untuk ambil API Key
+                    <ExternalLink size={12} />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => window.open('https://fonnte.com', '_blank')}
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700"
+              </div>
+            </Card>
+
+            {/* Notification Triggers Card */}
+            <Card title="Pemicu Notifikasi Otomatis">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {notificationItems.map(item => (
+                  <div key={item.key} className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{item.desc}</p>
+                    </div>
+                    <Toggle
+                      checked={settings[item.key as keyof WhatsAppSettings] as boolean}
+                      title={`Toggle ${item.label}`}
+                      onChange={() => setSettings(prev => ({ ...prev, [item.key]: !prev[item.key as keyof WhatsAppSettings] }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {/* Quick Info Column */}
+          <div className="space-y-4">
+            <Card title="Status Koneksi">
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck size={18} className={settings.apiKey.trim() ? 'text-emerald-500' : 'text-slate-400'} />
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white">API Token Fonnte</p>
+                    <p className="text-slate-400 text-[11px]">{settings.apiKey.trim() ? 'Sudah Dikonfigurasi' : 'Belum Diisi'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Bell size={18} className={settings.enabled ? 'text-emerald-500' : 'text-slate-400'} />
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white">Status Pengiriman</p>
+                    <p className="text-slate-400 text-[11px]">{settings.enabled ? 'Aktif Mengirim Pesan' : 'Nonaktif'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Zap size={18} className={activeCount > 0 ? 'text-emerald-500' : 'text-slate-400'} />
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white">Event Aktif</p>
+                    <p className="text-slate-400 text-[11px]">{activeCount} dari {notificationItems.length} Event Otomatis</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 text-xs text-amber-800 dark:text-amber-200 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle size={14} className="text-amber-600" />
+                Format Nomor WhatsApp
+              </p>
+              <p className="text-[11px] leading-relaxed">
+                Nomor dapat diinput dalam format <strong>08xx</strong>, <strong>+628xx</strong>, atau <strong>628xx</strong>. Sistem akan menormalkannya secara otomatis ke format internasional.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: TEMPLATE STRUK KASIR */}
+      {activeTab === 'template' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card title="Editor Template Struk WhatsApp">
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Pesan ini akan dikirim secara otomatis ke customer setelah kasir menyelesaikan transaksi belanja.
+              </p>
+              <Textarea
+                value={settings.messageTemplate}
+                onChange={e => setSettings(prev => ({ ...prev, messageTemplate: e.target.value }))}
+                rows={6}
+                placeholder={DEFAULT_TEMPLATE}
+                helperText="Variabel: {customer}, {total}, {invoice}"
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setSettings(prev => ({ ...prev, messageTemplate: DEFAULT_TEMPLATE }))}
+                  className="text-xs font-bold"
                 >
-                  Buka Situs Fonnte.com
-                  <ExternalLink size={12} />
-                </button>
+                  Reset Template Standar
+                </Button>
               </div>
             </div>
           </Card>
 
-          {/* Automatic Trigger Notifications */}
-          <Card title="Notifikasi Otomatis POS" subtitle="Pengiriman otomatis sesuai event aplikasi" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="grid gap-3 md:grid-cols-2">
-              {notificationItems.map(item => (
-                <div key={item.key} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4">
-                  <div className="min-w-0">
-                    <p className="font-extrabold text-xs text-slate-900 dark:text-white">{item.label}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500 font-medium">{item.desc}</p>
+          <Card title="Pratinjau Struk di WhatsApp Customer">
+            <div className="space-y-3">
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Pesan Masuk WhatsApp</span>
+                </div>
+                <p className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+                  {(settings.messageTemplate || DEFAULT_TEMPLATE)
+                    .replace('{customer}', 'Bpk. Budi Santoso')
+                    .replace('{total}', 'Rp 125.000')
+                    .replace('{invoice}', 'INV-20260831-001')}
+                </p>
+                <div className="mt-3 text-right">
+                  <span className="text-[10px] text-slate-400 font-mono">12:30 · Terkirim</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* TAB 3: BROADCAST MASSAL */}
+      {activeTab === 'broadcast' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 space-y-4">
+            <Card title="Kirim Pesan Promosi Massal">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <Input
+                    label="Judul Kampanye"
+                    value={broadcastTitle}
+                    onChange={e => setBroadcastTitle(e.target.value)}
+                  />
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 block">Target Penerima</label>
+                    <select
+                      value={targetMode}
+                      onChange={e => setTargetMode(e.target.value as typeof targetMode)}
+                      className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
+                    >
+                      <option value="active">Member Aktif ({customers.filter(c => c.status === 'Aktif' && c.no_telp).length} orang)</option>
+                      <option value="all">Semua Member ({customers.filter(c => c.no_telp).length} orang)</option>
+                      <option value="manual">Manual Input Nomor HP</option>
+                    </select>
                   </div>
-                  <Toggle
-                    checked={settings[item.key]}
-                    title={`Toggle ${item.label}`}
-                    onChange={() => setSettings(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 block">Waktu Kirim</label>
+                    <select
+                      value={scheduleMode}
+                      onChange={e => setScheduleMode(e.target.value as typeof scheduleMode)}
+                      className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
+                    >
+                      <option value="now">Kirim Sekarang</option>
+                      <option value="scheduled">Jadwalkan</option>
+                    </select>
+                  </div>
+                </div>
+
+                {targetMode === 'manual' && (
+                  <Textarea
+                    label="Daftar Nomor HP (Pisahkan koma atau baris baru)"
+                    value={manualTargets}
+                    onChange={e => setManualTargets(e.target.value)}
+                    rows={3}
+                    placeholder="08123456789, 085712345678"
+                  />
+                )}
+
+                {scheduleMode === 'scheduled' && (
+                  <Input
+                    label="Pilih Tanggal & Jam Pengiriman"
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={e => setScheduledAt(e.target.value)}
+                  />
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Isi Pesan Broadcast</label>
+                    {templates.length > 0 && (
+                      <select
+                        className="text-[11px] font-bold bg-transparent text-red-600 focus:outline-none cursor-pointer"
+                        onChange={e => {
+                          const selected = templates.find(item => String(item.id) === e.target.value)
+                          if (selected) {
+                            setBroadcastTitle(selected.name)
+                            setBroadcastTemplate(selected.content)
+                          }
+                        }}
+                      >
+                        <option value="">-- Gunakan Template Tersimpan --</option>
+                        {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <Textarea
+                    value={broadcastTemplate}
+                    onChange={e => setBroadcastTemplate(e.target.value)}
+                    rows={5}
+                    placeholder={DEFAULT_BROADCAST_TEMPLATE}
+                    helperText="Variabel: {{nama_customer}}, {{total_belanja}}, {{poin_loyalty}}"
                   />
                 </div>
-              ))}
-            </div>
-          </Card>
 
-          {/* Transaction Template */}
-          <Card title="Template Struk Transaksi WhatsApp" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <Textarea
-              value={settings.messageTemplate}
-              onChange={e => setSettings(prev => ({ ...prev, messageTemplate: e.target.value }))}
-              rows={4}
-              placeholder={DEFAULT_TEMPLATE}
-              helperText="Variabel: {customer}, {total}, {invoice}"
-            />
-            <div className="mt-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
-              {settings.messageTemplate || DEFAULT_TEMPLATE}
-            </div>
-          </Card>
-
-          {/* Customer Broadcast */}
-          <Card title="Fitur Broadcast Pesan Massal" subtitle="Kirim pesan promosi atau pemberitahuan ke member" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <Input
-                  label="Judul Kampanye"
-                  value={broadcastTitle}
-                  onChange={e => setBroadcastTitle(e.target.value)}
-                />
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Target Pelanggan</label>
-                  <select
-                    value={targetMode}
-                    onChange={e => setTargetMode(e.target.value as typeof targetMode)}
-                    className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
-                  >
-                    <option value="active">Member Aktif</option>
-                    <option value="all">Semua Member Toko</option>
-                    <option value="manual">Manual Input HP</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Waktu Pengiriman</label>
-                  <select
-                    value={scheduleMode}
-                    onChange={e => setScheduleMode(e.target.value as typeof scheduleMode)}
-                    className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
-                  >
-                    <option value="now">Kirim Sekarang</option>
-                    <option value="scheduled">Jadwalkan Jam</option>
-                  </select>
-                </div>
-              </div>
-
-              {targetMode === 'manual' && (
-                <Textarea
-                  value={manualTargets}
-                  onChange={e => setManualTargets(e.target.value)}
-                  rows={3}
-                  placeholder="08123456789, 628123456789"
-                  helperText="Pisahkan nomor dengan baris baru atau koma."
-                />
-              )}
-
-              {scheduleMode === 'scheduled' && (
-                <Input
-                  label="Waktu Kirim"
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={e => setScheduledAt(e.target.value)}
-                />
-              )}
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Template Broadcast</label>
-                {templates.length > 0 && (
-                  <select
-                    className="mb-2 w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
-                    onChange={e => {
-                      const selected = templates.find(item => String(item.id) === e.target.value)
-                      if (selected) {
-                        setBroadcastTitle(selected.name)
-                        setBroadcastTemplate(selected.content)
-                      }
-                    }}
-                  >
-                    {templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
-                  </select>
-                )}
-                <Textarea
-                  value={broadcastTemplate}
-                  onChange={e => setBroadcastTemplate(e.target.value)}
-                  rows={4}
-                  placeholder={DEFAULT_BROADCAST_TEMPLATE}
-                  helperText="Variabel: {{nama_customer}}, {{total_belanja}}, {{poin_loyalty}}"
-                />
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3.5 text-xs font-medium text-slate-700 dark:text-slate-300">
-                {renderBroadcastTemplate(broadcastTemplate || DEFAULT_BROADCAST_TEMPLATE, previewTarget)}
-              </div>
-
-              {broadcastProgress.running && (
-                <div className="space-y-2">
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                    <div className="h-full bg-red-600 transition-all" style={{ width: `${progressPercent}%` }} />
-                  </div>
-                  <p className="text-xs font-bold text-slate-500">{broadcastProgress.sent + broadcastProgress.failed}/{broadcastProgress.total} diproses · {broadcastProgress.sent} terkirim · {broadcastProgress.failed} gagal</p>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button onClick={sendBroadcast} loading={broadcastProgress.running} icon={<Send size={16} />} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20">
-                  {scheduleMode === 'scheduled' ? 'Jadwalkan Broadcast' : 'Mulai Broadcast Sekarang'}
-                </Button>
-                <Button variant="secondary" onClick={saveCurrentTemplate} className="w-full sm:w-auto font-bold border-slate-200 dark:border-slate-800">
-                  Simpan Template Ini
-                </Button>
                 {broadcastProgress.running && (
-                  <Button variant="danger" onClick={() => { cancelBroadcastRef.current = true }} className="w-full sm:w-auto font-bold">
-                    Hentikan Broadcast
+                  <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 space-y-2">
+                    <div className="flex justify-between text-xs font-bold">
+                      <span>Proses Pengiriman...</span>
+                      <span>{progressPercent}%</span>
+                    </div>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                      <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${progressPercent}%` }} />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-500">
+                      {broadcastProgress.sent + broadcastProgress.failed}/{broadcastProgress.total} diproses · {broadcastProgress.sent} terkirim · {broadcastProgress.failed} gagal
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Button
+                    onClick={sendBroadcast}
+                    loading={broadcastProgress.running}
+                    icon={<Send size={15} />}
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm border-0"
+                  >
+                    {scheduleMode === 'scheduled' ? 'Jadwalkan Broadcast' : `Kirim ke ${targets.length} Pelanggan`}
                   </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={saveCurrentTemplate}
+                    className="text-xs font-bold"
+                  >
+                    Simpan Template
+                  </Button>
+                  {broadcastProgress.running && (
+                    <Button
+                      variant="danger"
+                      onClick={() => { cancelBroadcastRef.current = true }}
+                      className="text-xs font-bold"
+                    >
+                      Hentikan
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card title="Pratinjau Pesan Broadcast">
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50">
+                <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300 mb-1">Target: {previewTarget.nama_customer}</p>
+                <p className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+                  {renderBroadcastTemplate(broadcastTemplate || DEFAULT_BROADCAST_TEMPLATE, previewTarget)}
+                </p>
+              </div>
+            </Card>
+
+            <Card title="Template Tersimpan">
+              <div className="space-y-2 text-xs">
+                {templates.length === 0 ? (
+                  <p className="text-slate-400 font-bold text-center py-4">Belum ada template tersimpan</p>
+                ) : (
+                  templates.map(t => (
+                    <div
+                      key={t.id}
+                      onClick={() => {
+                        setBroadcastTitle(t.name)
+                        setBroadcastTemplate(t.content)
+                      }}
+                      className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-red-500 cursor-pointer transition-colors"
+                    >
+                      <p className="font-bold text-slate-900 dark:text-white">{t.name}</p>
+                      <p className="text-[11px] text-slate-500 truncate mt-0.5">{t.content}</p>
+                    </div>
+                  ))
                 )}
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
+      )}
 
-        {/* Sidebar Info */}
-        <div className="space-y-4">
-          <Card title="Status Gateway" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="space-y-3 text-xs font-medium">
-              <div className="flex items-start gap-2.5">
-                <ShieldCheck size={18} className={settings.apiKey.trim() ? 'mt-0.5 text-emerald-500' : 'mt-0.5 text-slate-400'} />
-                <div>
-                  <p className="font-bold text-slate-900 dark:text-white">Fonnte API Key</p>
-                  <p className="text-slate-400 text-[11px]">{settings.apiKey.trim() ? 'Tersimpan & Terhubung' : 'Belum Diisi'}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Bell size={18} className={settings.enabled ? 'mt-0.5 text-emerald-500' : 'mt-0.5 text-slate-400'} />
-                <div>
-                  <p className="font-bold text-slate-900 dark:text-white">Status Notifikasi</p>
-                  <p className="text-slate-400 text-[11px]">{settings.enabled ? 'Berjalan Otomatis' : 'Sistem Nonaktif'}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Zap size={18} className={activeCount > 0 ? 'mt-0.5 text-emerald-500' : 'mt-0.5 text-slate-400'} />
-                <div>
-                  <p className="font-bold text-slate-900 dark:text-white">Trigger Aktif</p>
-                  <p className="text-slate-400 text-[11px]">{activeCount} dari {notificationItems.length} Event Aktif</p>
-                </div>
-              </div>
+      {/* TAB 4: RIWAYAT BLAST */}
+      {activeTab === 'history' && (
+        <Card title="Riwayat Pengiriman Broadcast">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="min-w-[700px]">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50/80 dark:bg-slate-800/80">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Kampanye</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Target</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Terkirim</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Gagal</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Status</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Waktu</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {history.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-slate-400">Belum ada riwayat broadcast</td>
+                    </tr>
+                  ) : (
+                    history.map(item => (
+                      <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200">{item.title}</td>
+                        <td className="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-300">{item.total_targets} kontak</td>
+                        <td className="px-4 py-3 text-center font-bold text-emerald-600">{item.delivered}</td>
+                        <td className="px-4 py-3 text-center font-bold text-red-600">{item.failed}</td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge
+                            label={item.status}
+                            variant={item.status === 'completed' ? 'green' : item.status === 'scheduled' ? 'blue' : item.failed > 0 ? 'red' : 'gray'}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center text-xs text-slate-400 font-mono">
+                          {new Date(item.created_at).toLocaleString('id-ID')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          </Card>
-
-          <Card title="Catatan Format Nomor" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 p-3 text-xs text-amber-800 dark:text-amber-200 font-medium">
-              <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
-              <p>Nomor HP boleh ditulis dalam format 08..., +628..., atau 628.... Sistem akan memformat otomatis ke 628....</p>
-            </div>
-          </Card>
-
-          <Card title="Riwayat Broadcast" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="max-h-80 space-y-2 overflow-y-auto text-xs">
-              {history.length === 0 ? (
-                <p className="text-slate-400 font-bold text-center py-6">Belum ada riwayat broadcast</p>
-              ) : history.slice(0, 10).map(item => (
-                <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-bold text-slate-900 dark:text-white">{item.title}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{item.delivered}/{item.total_targets} terkirim · {item.failed} gagal</p>
-                    </div>
-                    <Badge label={item.status} variant={item.status === 'completed' ? 'green' : item.status === 'scheduled' ? 'blue' : item.failed > 0 ? 'red' : 'gray'} />
-                  </div>
-                  <p className="mt-1 text-[10px] text-slate-400 font-mono">{new Date(item.created_at).toLocaleString('id-ID')}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      </div>
+          </div>
+        </Card>
+      )}
 
       {/* Test Message Modal */}
       <Modal

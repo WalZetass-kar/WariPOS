@@ -47,6 +47,6 @@ export function collectAuthDeviceInfo(): RendererAuthDeviceInfo {
     userAgent,
     platform: osName,
     osName,
-    appVersion: '2.0.0',
+    appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) || '2.1.0',
   }
 }

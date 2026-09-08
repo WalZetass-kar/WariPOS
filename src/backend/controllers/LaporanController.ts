@@ -3,54 +3,52 @@ import { penjualan, penjualanDetail, barang, customer, kasDrawer, pembelian, pem
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm'
 
 function salesStartDate(date: string) {
-  return date.includes(' ') || date.includes('T') ? date : `${date} 00:00:00`
+  const d = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
+  return `${d} 00:00:00`
 }
 
 function salesEndDate(date: string) {
-  return date.includes(' ') || date.includes('T') ? date : `${date} 23:59:59`
+  const d = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
+  return `${d} 23:59:59`
 }
 
 export class LaporanController {
   // Laporan Penjualan
   static getLaporanPenjualan(startDate: string, endDate: string) {
     try {
-      const start = salesStartDate(startDate)
-      const end = salesEndDate(endDate)
-      const result = db
-        .select({
-          kd_tansaksi_jual: penjualan.kd_tansaksi_jual,
-          tgl_wkt_transaksi: penjualan.tgl_wkt_transaksi,
-          username_transaksi: penjualan.username_transaksi,
-          total_qty: penjualan.total_qty,
-          sub_total: penjualan.sub_total,
-          discount_amount: penjualan.discount_amount,
-          pajak: penjualan.pajak,
-          yang_dibayar: penjualan.yang_dibayar,
-          jenis_pembayaran: penjualan.jenis_pembayaran,
-          nama_customer: customer.nama_customer,
-        })
-        .from(penjualan)
-        .leftJoin(customer, eq(penjualan.kd_customer, customer.kd_customer))
-        .where(and(gte(penjualan.tgl_wkt_transaksi, start), lte(penjualan.tgl_wkt_transaksi, end)))
-        .orderBy(desc(penjualan.tgl_wkt_transaksi))
-        .all()
+      const startDay = String(startDate || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
+      const endDay = String(endDate || startDay).slice(0, 10)
+
+      const result = sqlite.prepare(`
+        SELECT p.kd_tansaksi_jual, p.tgl_wkt_transaksi, p.username_transaksi,
+               COALESCE(p.total_qty, 0) AS total_qty,
+               COALESCE(p.sub_total, 0) AS sub_total,
+               COALESCE(p.discount_amount, 0) AS discount_amount,
+               COALESCE(p.pajak, 0) AS pajak,
+               COALESCE(p.yang_dibayar, 0) AS yang_dibayar,
+               COALESCE(p.jenis_pembayaran, 'TUNAI') AS jenis_pembayaran,
+               c.nama_customer
+        FROM mediasoft_penjualan p
+        LEFT JOIN mediasoft_customer c ON p.kd_customer = c.kd_customer
+        WHERE date(substr(replace(p.tgl_wkt_transaksi, 'T', ' '), 1, 10)) BETWEEN date(?) AND date(?)
+        ORDER BY p.tgl_wkt_transaksi DESC
+      `).all(startDay, endDay) as any[]
 
       const returnSummary = sqlite.prepare(`
         SELECT COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total
         FROM mediasoft_returns
         WHERE status = 'APPROVED'
-          AND created_at >= ?
-          AND created_at <= ?
-      `).get(start, end) as { count?: number; total?: number } | undefined
+          AND date(substr(replace(created_at, 'T', ' '), 1, 10)) BETWEEN date(?) AND date(?)
+      `).get(startDay, endDay) as { count?: number; total?: number } | undefined
 
       const summary = {
         total_transaksi: result.length,
-        total_qty: result.reduce((sum, r) => sum + (r.total_qty || 0), 0),
-        total_penjualan: result.reduce((sum, r) => sum + (r.sub_total || 0) - (r.discount_amount || 0), 0),
-        total_pajak: result.reduce((sum, r) => sum + (r.pajak || 0), 0),
+        total_qty: result.reduce((sum, r) => sum + (Number(r.total_qty) || 0), 0),
+        total_penjualan: result.reduce((sum, r) => sum + (Number(r.sub_total) || 0) - (Number(r.discount_amount) || 0), 0),
+        total_pajak: result.reduce((sum, r) => sum + (Number(r.pajak) || 0), 0),
         total_return: returnSummary?.total ?? 0,
         transaksi_return: returnSummary?.count ?? 0,
-        total_bersih: result.reduce((sum, r) => sum + (r.sub_total || 0) - (r.discount_amount || 0), 0) - (returnSummary?.total ?? 0),
+        total_bersih: result.reduce((sum, r) => sum + (Number(r.sub_total) || 0) - (Number(r.discount_amount) || 0), 0) - (returnSummary?.total ?? 0),
       }
 
       return { success: true, data: { transaksi: result, summary } }
@@ -62,50 +60,41 @@ export class LaporanController {
   // Laporan Laba Rugi
   static getLaporanLabaRugi(startDate: string, endDate: string) {
     try {
-      const start = salesStartDate(startDate)
-      const end = salesEndDate(endDate)
-      const transaksi = db
-        .select({
-          kd_tansaksi_jual: penjualan.kd_tansaksi_jual,
-          tgl_wkt_transaksi: penjualan.tgl_wkt_transaksi,
-        })
-        .from(penjualan)
-        .where(and(gte(penjualan.tgl_wkt_transaksi, start), lte(penjualan.tgl_wkt_transaksi, end)))
-        .all()
+      const startDay = String(startDate || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
+      const endDay = String(endDate || startDay).slice(0, 10)
+
+      const transaksi = sqlite.prepare(`
+        SELECT p.kd_tansaksi_jual, p.tgl_wkt_transaksi, COALESCE(p.discount_amount, 0) AS discount_amount
+        FROM mediasoft_penjualan p
+        WHERE date(substr(replace(p.tgl_wkt_transaksi, 'T', ' '), 1, 10)) BETWEEN date(?) AND date(?)
+      `).all(startDay, endDay) as any[]
 
       let total_penjualan = 0
       let total_modal = 0
 
       for (const t of transaksi) {
-        const details = db
-          .select({
-            qty: penjualanDetail.qty,
-            harga_jual: penjualanDetail.harga_jual,
-            harga_modal: penjualanDetail.harga_modal,
-            disc: penjualanDetail.disc,
-          })
-          .from(penjualanDetail)
-          .where(eq(penjualanDetail.kd_tansaksi_jual, t.kd_tansaksi_jual))
-          .all()
+        const details = sqlite.prepare(`
+          SELECT qty, harga_jual, harga_modal, disc
+          FROM mediasoft_penjualan_detail
+          WHERE kd_tansaksi_jual = ?
+        `).all(t.kd_tansaksi_jual) as any[]
 
         for (const d of details) {
-          const disc_amount = ((d.harga_jual || 0) * (d.disc || 0)) / 100
-          total_penjualan += (d.qty || 0) * ((d.harga_jual || 0) - disc_amount)
-          total_modal += (d.qty || 0) * (d.harga_modal || 0)
+          const disc_amount = ((Number(d.harga_jual) || 0) * (Number(d.disc) || 0)) / 100
+          total_penjualan += (Number(d.qty) || 0) * ((Number(d.harga_jual) || 0) - disc_amount)
+          total_modal += (Number(d.qty) || 0) * (Number(d.harga_modal) || 0)
         }
 
-        // Kurangi diskon promo level transaksi
-        const row = sqlite.prepare('SELECT discount_amount FROM mediasoft_penjualan WHERE kd_tansaksi_jual = ?').get(t.kd_tansaksi_jual) as any
-        if (row?.discount_amount) total_penjualan -= row.discount_amount
+        if (t.discount_amount) total_penjualan -= Number(t.discount_amount)
       }
 
       const returnSummary = sqlite.prepare(`
         SELECT COALESCE(SUM(total_amount), 0) AS total
         FROM mediasoft_returns
         WHERE status = 'APPROVED'
-          AND created_at >= ?
-          AND created_at <= ?
-      `).get(start, end) as { total?: number } | undefined
+          AND date(substr(replace(created_at, 'T', ' '), 1, 10)) BETWEEN date(?) AND date(?)
+      `).get(startDay, endDay) as { total?: number } | undefined
+
       total_penjualan -= returnSummary?.total ?? 0
 
       const laba_kotor = total_penjualan - total_modal
@@ -130,59 +119,23 @@ export class LaporanController {
   // Laporan Produk Terlaris
   static getLaporanProdukTerlaris(startDate: string, endDate: string, limit: number = 10) {
     try {
-      const start = salesStartDate(startDate)
-      const end = salesEndDate(endDate)
-      const transaksi = db
-        .select({ kd_tansaksi_jual: penjualan.kd_tansaksi_jual })
-        .from(penjualan)
-        .where(and(gte(penjualan.tgl_wkt_transaksi, start), lte(penjualan.tgl_wkt_transaksi, end)))
-        .all()
+      const startDay = String(startDate || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
+      const endDay = String(endDate || startDay).slice(0, 10)
 
-      const kdTransaksiList = transaksi.map((t) => t.kd_tansaksi_jual)
+      const rows = sqlite.prepare(`
+        SELECT d.kd_barang, COALESCE(b.nama_barang, d.kd_barang) AS nama_barang,
+               SUM(COALESCE(d.qty, 0)) AS total_qty,
+               SUM(COALESCE(d.total_harga_jual, 0)) AS total_penjualan
+        FROM mediasoft_penjualan_detail d
+        JOIN mediasoft_penjualan p ON d.kd_tansaksi_jual = p.kd_tansaksi_jual
+        LEFT JOIN mediasoft_barang b ON d.kd_barang = b.kd_barang
+        WHERE date(substr(replace(p.tgl_wkt_transaksi, 'T', ' '), 1, 10)) BETWEEN date(?) AND date(?)
+        GROUP BY d.kd_barang
+        ORDER BY total_qty DESC
+        LIMIT ?
+      `).all(startDay, endDay, limit) as any[]
 
-      if (kdTransaksiList.length === 0) {
-        return { success: true, data: [] }
-      }
-
-      // Aggregate by product
-      const productSales: Record<
-        string,
-        { kd_barang: string; nama_barang: string; total_qty: number; total_penjualan: number }
-      > = {}
-
-      for (const kd of kdTransaksiList) {
-        const details = db
-          .select({
-            kd_barang: penjualanDetail.kd_barang,
-            nama_barang: barang.nama_barang,
-            qty: penjualanDetail.qty,
-            total_harga_jual: penjualanDetail.total_harga_jual,
-          })
-          .from(penjualanDetail)
-          .leftJoin(barang, eq(penjualanDetail.kd_barang, barang.kd_barang))
-          .where(eq(penjualanDetail.kd_tansaksi_jual, kd))
-          .all()
-
-        for (const d of details) {
-          const key = d.kd_barang || ''
-          if (!productSales[key]) {
-            productSales[key] = {
-              kd_barang: d.kd_barang || '',
-              nama_barang: d.nama_barang || '',
-              total_qty: 0,
-              total_penjualan: 0,
-            }
-          }
-          productSales[key].total_qty += d.qty || 0
-          productSales[key].total_penjualan += d.total_harga_jual || 0
-        }
-      }
-
-      const result = Object.values(productSales)
-        .sort((a, b) => b.total_qty - a.total_qty)
-        .slice(0, limit)
-
-      return { success: true, data: result }
+      return { success: true, data: rows }
     } catch (error) {
       return { success: false, message: 'Gagal mengambil laporan: ' + (error as Error).message }
     }

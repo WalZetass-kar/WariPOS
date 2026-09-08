@@ -5,8 +5,8 @@ const path = require('path')
 const rootDir = path.resolve(__dirname, '..')
 const androidDir = path.join(rootDir, 'android')
 const releaseDir = path.join(rootDir, 'release')
-const releaseApkName = 'ZetassPOS.apk'
-const releaseAabName = 'ZetassPOS.aab'
+const releaseApkName = 'WariPOS.apk'
+const releaseAabName = 'WariPOS.aab'
 const task = process.argv[2] || 'assembleDebug'
 const signingEnvPath = path.join(rootDir, '.keys', 'android-release.env')
 
@@ -119,14 +119,22 @@ if (status === 0 && (task === 'assembleDebug' || task === 'assembleRelease' || t
         return fs.existsSync(preferred) ? preferred : fallback
       })()
     : task === 'assembleRelease'
-      ? path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
-      : path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab')
+      ? (function() {
+          const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'ZetassPOS.apk')
+          const fallback = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+          return fs.existsSync(preferred) ? preferred : fallback
+        })()
+      : (function() {
+          const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'ZetassPOS.aab')
+          const fallback = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab')
+          return fs.existsSync(preferred) ? preferred : fallback
+        })()
   if (fs.existsSync(sourceArtifact)) {
     fs.mkdirSync(releaseDir, { recursive: true })
     for (const entry of fs.readdirSync(releaseDir)) {
       const isSameArtifactType = isBundle
-        ? (/^Zetass.*\.aab$/i.test(entry) || entry === releaseAabName)
-        : (/^Zetass.*\.apk$/i.test(entry) || entry === releaseApkName)
+        ? (/^WariPOS.*\.aab$/i.test(entry) || entry === releaseAabName)
+        : (/^WariPOS.*\.apk$/i.test(entry) || entry === releaseApkName)
       if (isSameArtifactType) {
         fs.rmSync(path.join(releaseDir, entry), { force: true })
       }

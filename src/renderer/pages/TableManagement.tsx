@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { LayoutGrid, Table2, Plus, Edit3, Trash2, Circle, Square, QrCode, Printer, X } from 'lucide-react'
+import { toDataURL } from 'qrcode'
+import { LayoutGrid, Table2, Plus, Edit3, Trash2, Circle, Square, QrCode, Printer, Download, Share2, X } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -10,6 +11,7 @@ import Select from '../components/Select'
 import { SkeletonStatGrid, SkeletonSpinner } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import { generateTableStickerPdf, saveFileToDevice } from '../utils/receiptExporter'
 
 interface FloorLayout {
   id: number
@@ -59,8 +61,20 @@ export default function TableManagement() {
   const [deleteTable, setDeleteTable] = useState<Meja | null>(null)
   const [deleteLayout, setDeleteLayout] = useState<FloorLayout | null>(null)
   const [qrModalTable, setQrModalTable] = useState<Meja | null>(null)
+  const [qrImageSrc, setQrImageSrc] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [activeLayout, setActiveLayout] = useState<string>('')
+
+  useEffect(() => {
+    if (!qrModalTable) {
+      setQrImageSrc('')
+      return
+    }
+    const orderUrl = `https://zetasspos.app/menu?table=${encodeURIComponent(qrModalTable.nomor_meja)}&id=${qrModalTable.id}`
+    toDataURL(orderUrl, { width: 320, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } })
+      .then(url => setQrImageSrc(url))
+      .catch(() => setQrImageSrc(''))
+  }, [qrModalTable])
 
   const [formTable, setFormTable] = useState({
     nomor_meja: '',
@@ -260,10 +274,10 @@ export default function TableManagement() {
 
           {/* Floor Plan */}
           <Card title="Denah Meja Restoran" action={activeLayout && <Badge label={layouts.find(l => String(l.id) === activeLayout)?.nama ?? ''} variant="blue" />}>
-            <div className="relative min-h-[380px] bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-4 overflow-x-auto">
+            <div className="relative min-h-[160px] sm:min-h-[220px] bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-4 overflow-x-auto">
               {layoutTables.length === 0 ? (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <p className="text-slate-400 dark:text-slate-500 text-sm">Belum ada meja di layout ini. Klik &quot;Tambah Meja&quot; untuk memulai.</p>
+                <div className="flex flex-col items-center justify-center py-8">
+                  <p className="text-slate-400 dark:text-slate-500 text-xs sm:text-sm font-semibold">Belum ada meja di layout ini. Klik &quot;Tambah Meja&quot; untuk memulai.</p>
                 </div>
               ) : (
                 layoutTables.map(meja => {
@@ -469,23 +483,147 @@ export default function TableManagement() {
           <Modal
             open={!!qrModalTable}
             onClose={() => setQrModalTable(null)}
-            title={`QR Code ${qrModalTable?.nomor_meja ?? ''}`}
+            title={`QR Code Order ${qrModalTable?.nomor_meja ?? ''}`}
             size="sm"
             footer={
-              <Button variant="secondary" icon={<Printer size={16} />} onClick={() => window.print()} className="w-full font-bold">
-                Cetak Stiker Meja
-              </Button>
+              <div className="flex gap-2 w-full">
+                {qrImageSrc && (
+                  <a
+                    href={qrImageSrc}
+                    download={`QR-Meja-${qrModalTable?.nomor_meja ?? 'Meja'}.png`}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+                  >
+                    <Download size={14} />
+                    <span>Download PNG</span>
+                  </a>
+                )}
+                <Button
+                  variant="secondary"
+                  icon={<Printer size={14} />}
+                  onClick={async () => {
+                    if (qrModalTable && qrImageSrc) {
+                      try {
+                        const pdfBlob = await generateTableStickerPdf(qrModalTable.nomor_meja, qrImageSrc, 'WARIPOS')
+                        await saveFileToDevice(`Stiker-Meja-${qrModalTable.nomor_meja}.pdf`, pdfBlob, 'application/pdf')
+                        toast(`Stiker Meja ${qrModalTable.nomor_meja} disimpan sebagai PDF`, 'success')
+                      } catch (err) {
+                        console.warn('PDF export fallback:', err)
+                      }
+                      const printWindow = window.open('', '_blank', 'width=450,height=600')
+                      if (!printWindow) {
+                        window.print()
+                        return
+                      }
+                      printWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                          <head>
+                            <title>Stiker Meja ${qrModalTable.nomor_meja}</title>
+                            <style>
+                              @page { size: auto; margin: 0; }
+                              body {
+                                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                margin: 0;
+                                padding: 24px;
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                justify-content: center;
+                                text-align: center;
+                                background: #fff;
+                                color: #0f172a;
+                              }
+                              .card {
+                                border: 3px solid #0f172a;
+                                border-radius: 20px;
+                                padding: 24px 28px;
+                                max-width: 320px;
+                                box-sizing: border-box;
+                              }
+                              .store-title {
+                                font-size: 13px;
+                                font-weight: 800;
+                                letter-spacing: 1.5px;
+                                text-transform: uppercase;
+                                color: #64748b;
+                                margin-bottom: 4px;
+                              }
+                              .table-number {
+                                font-size: 32px;
+                                font-weight: 900;
+                                margin: 0 0 10px 0;
+                                letter-spacing: -0.5px;
+                              }
+                              .qr-wrapper {
+                                margin: 10px 0;
+                                display: inline-block;
+                              }
+                              .qr-image {
+                                width: 200px;
+                                height: 200px;
+                                border-radius: 12px;
+                              }
+                              .instruction {
+                                font-size: 13px;
+                                font-weight: 800;
+                                color: #dc2626;
+                                margin-top: 10px;
+                                text-transform: uppercase;
+                                letter-spacing: 0.5px;
+                              }
+                              .subtext {
+                                font-size: 11px;
+                                color: #64748b;
+                                margin-top: 4px;
+                              }
+                            </style>
+                          </head>
+                          <body>
+                            <div class="card">
+                              <div class="store-title">WariPOS & Resto</div>
+                              <div class="table-number">${qrModalTable.nomor_meja}</div>
+                              <div class="qr-wrapper">
+                                <img src="${qrImageSrc}" class="qr-image" alt="QR Code Meja" />
+                              </div>
+                              <div class="instruction">Scan untuk Lihat Menu & Order</div>
+                              <div class="subtext">${qrModalTable.label || 'Meja Restoran'} · Kapasitas ${qrModalTable.kapasitas} Orang</div>
+                            </div>
+                            <script>
+                              window.onload = function() {
+                                window.focus();
+                                window.print();
+                              };
+                            </script>
+                          </body>
+                        </html>
+                      `)
+                      printWindow.document.close()
+                    } else {
+                      window.print()
+                    }
+                  }}
+                  className="flex-1 font-bold text-xs"
+                >
+                  Cetak Stiker
+                </Button>
+              </div>
             }
           >
             {qrModalTable && (
               <div className="flex flex-col items-center justify-center p-4 text-center space-y-3">
-                <div className="p-4 bg-white rounded-2xl border-2 border-slate-200 shadow-sm inline-block">
-                  <QrCode size={180} className="text-slate-900" />
+                <div className="p-3 bg-white rounded-2xl border-2 border-slate-200 shadow-md inline-block">
+                  {qrImageSrc ? (
+                    <img src={qrImageSrc} alt={`QR Meja ${qrModalTable.nomor_meja}`} className="w-48 h-48 rounded-xl object-contain mx-auto" />
+                  ) : (
+                    <QrCode size={180} className="text-slate-900" />
+                  )}
                 </div>
                 <div>
-                  <h4 className="text-base font-extrabold text-slate-900 dark:text-white">{qrModalTable.nomor_meja}</h4>
-                  <p className="text-xs text-slate-500">{qrModalTable.label || 'Meja Restoran'} · Kapasitas {qrModalTable.kapasitas} orang</p>
-                  <p className="text-[11px] text-red-600 font-bold mt-1">Scan untuk lihat menu & order</p>
+                  <h4 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">{qrModalTable.nomor_meja}</h4>
+                  <p className="text-xs text-slate-500 font-medium">{qrModalTable.label || 'Meja Restoran'} · Kapasitas {qrModalTable.kapasitas} orang</p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-[11px] text-red-600 dark:text-red-400 font-bold">
+                    <span>Scan untuk pesan menu & self-order</span>
+                  </div>
                 </div>
               </div>
             )}

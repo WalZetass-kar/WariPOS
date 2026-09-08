@@ -1,10 +1,7 @@
 import { useEffect, useLayoutEffect, useState, useRef, useCallback, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowRight,
-  Bell,
-  FileText,
   ShoppingCart,
   TrendingUp,
   Package,
@@ -16,20 +13,12 @@ import {
   Crown,
   Clock,
   Users2,
-  Wallet,
-  Award,
-  Timer,
-  UserCheck,
-  Users,
-  TrendingDown,
-  Search,
-  PieChart,
   CheckCircle,
-  Sparkles,
-  Zap,
-  ChevronRight,
-  DollarSign,
+  PackagePlus,
   Calculator,
+  Store,
+  Layers,
+  ArrowRight,
 } from 'lucide-react'
 import {
   XAxis,
@@ -43,7 +32,7 @@ import {
 } from 'recharts'
 import Card from '../components/Card'
 import Button from '../components/Button'
-import Badge from '../components/Badge'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { SkeletonCard, SkeletonChart } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
@@ -69,14 +58,6 @@ interface InsightData {
   reorder: Array<{ kd_barang: string; nama_barang: string; stok: number; stok_minimum: number }>
   marginByCategory: Array<{ category: string; margin: number; revenue: number }>
   customerSegments: { vip: number; active: number; inactive: number }
-}
-
-interface QuickAction {
-  label: string
-  description: string
-  to: string
-  icon: ReactNode
-  tone: string
 }
 
 const EMPTY_INSIGHTS: InsightData = {
@@ -108,15 +89,6 @@ const EMPTY_SUMMARY: DashboardSummary = {
     todayRevenue: 0,
   },
 }
-
-const QUICK_ACTIONS: QuickAction[] = [
-  { label: 'Kasir POS', description: 'Mulai transaksi baru kilat', to: '/transaksi', icon: <ShoppingCart size={18} />, tone: 'bg-red-600' },
-  { label: 'Manajemen Produk', description: 'Kelola stok, varian & harga', to: '/produk', icon: <Package size={18} />, tone: 'bg-pink-500' },
-  { label: 'Laporan Keuangan', description: 'Lihat ringkasan laba rugi', to: '/laporan', icon: <BarChart2 size={18} />, tone: 'bg-emerald-600' },
-  { label: 'Catatan Harian', description: 'Catatan operasional toko', to: '/daily-notes', icon: <FileText size={18} />, tone: 'bg-violet-600' },
-  { label: 'Kas Kecil', description: 'Kelola kas kecil & operasional', to: '/petty-cash', icon: <Wallet size={18} />, tone: 'bg-amber-600' },
-  { label: 'Notifikasi Stok', description: 'Atur batas pengingat stok', to: '/notification-settings', icon: <Bell size={18} />, tone: 'bg-sky-600' },
-]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -310,6 +282,8 @@ export default function Dashboard() {
   const [insightsLoading, setInsightsLoading] = useState(true)
   const [insightsError, setInsightsError] = useState('')
   const [seedingDemo, setSeedingDemo] = useState(false)
+  const [confirmSeedModal, setConfirmSeedModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'operasional' | 'analisis'>('operasional')
   const navigate = useNavigate()
   const toast = useToast()
   const { user } = useAuth()
@@ -405,497 +379,457 @@ export default function Dashboard() {
 
   const dashboard = summary ?? EMPTY_SUMMARY
   const recentTransactions = dashboard.recentTransactions ?? []
-  const alertSummary = dashboard.alertSummary ?? {
-    stockOutCount: 0,
-    lowStockCount: dashboard.lowStockCount,
-    todayTransactionCount: dashboard.today.count,
-    todayRevenue: dashboard.today.total,
-  }
   const ownerPeakHours = insights.peakHours ?? []
   const activeOwnerPeakHours = ownerPeakHours.filter(item => item.count > 0)
   const ownerPeakHour = activeOwnerPeakHours.reduce<typeof ownerPeakHours[number] | null>(
     (best, item) => (!best || item.count > best.count ? item : best),
     null,
   )
-  const ownerTopPeakHours = [...activeOwnerPeakHours]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 3)
-  const ownerAveragePeakHours = activeOwnerPeakHours.length
-    ? Math.round(activeOwnerPeakHours.reduce((sum, item) => sum + item.count, 0) / activeOwnerPeakHours.length)
-    : 0
 
   return (
-    <div className="space-y-5 sm:space-y-6 select-none">
+    <div className="space-y-5 select-none">
 
-      {/* ── Top Header & Action Launcher ── */}
-      <div className="flex flex-row items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3 sm:pb-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
-              <Calculator size={18} className="sm:w-5 sm:h-5" />
+      {/* ── Top Header & Tab Navigation ── */}
+      <div className="space-y-3.5 border-b border-slate-200 dark:border-slate-800 pb-4">
+        {/* Row 1: Greeting + Action Buttons */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-red-600/10 text-red-600 flex items-center justify-center shrink-0">
+                <Calculator size={18} />
+              </div>
+              <h1 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+                Hai, {user?.nama_lengkap ?? user?.nama_pengguna ?? 'Kasir'}
+              </h1>
             </div>
-            <h1 className="text-base sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">
-              Hai, {user?.nama_lengkap ?? user?.nama_pengguna ?? 'Kasir'}
-            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium truncate">
+              {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           </div>
-          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium truncate">
-            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Refresh Button */}
+            <button
+              type="button"
+              onClick={() => { fetchData(true); if (isAdmin) fetchInsights() }}
+              disabled={loading || (isAdmin && insightsLoading)}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 shadow-sm"
+              title="Refresh data dashboard"
+            >
+              <RefreshCw size={14} className={loading || (isAdmin && insightsLoading) ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            
+            {/* Transaksi POS Button */}
+            <button
+              type="button"
+              onClick={() => navigate('/transaksi')}
+              className="px-3 sm:px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+            >
+              <ShoppingCart size={14} />
+              <span>Kasir POS</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => { fetchData(true); if (isAdmin) fetchInsights() }}
-            disabled={loading || (isAdmin && insightsLoading)}
-            className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            title="Refresh data dashboard"
-          >
-            <RefreshCw size={15} className={loading || (isAdmin && insightsLoading) ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
-          
-          <button
-            type="button"
-            onClick={() => navigate('/transaksi')}
-            className="px-3 py-2 sm:px-4 sm:py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-red-600/30 active:scale-95 transition-all"
-          >
-            <ShoppingCart size={15} />
-            <span>Transaksi</span>
-          </button>
-        </div>
+        {/* Row 2: Clean Full-width Segmented Tab Switcher (Mobile 50-50 Grid, Desktop inline-flex) */}
+        {isAdmin && (
+          <div className="w-full sm:w-auto sm:inline-flex grid grid-cols-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setActiveTab('operasional')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 sm:px-4 rounded-lg text-xs font-bold transition-all text-center ${
+                activeTab === 'operasional'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Store size={14} />
+              <span>Operasional Toko</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('analisis')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 sm:px-4 rounded-lg text-xs font-bold transition-all text-center ${
+                activeTab === 'analisis'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Crown size={14} className="text-amber-500" />
+              <span>Analisis Owner</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      <>
-        {/* Error State */}
-        {error && !loading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-            <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-red-600 border border-red-200 dark:border-red-900/60">
-              <AlertTriangle size={32} />
-            </div>
-            <div className="text-center">
-              <p className="font-extrabold text-slate-900 dark:text-white text-base">Gagal Memuat Data Dashboard</p>
-              <p className="text-xs text-slate-400 mt-1">Periksa koneksi jaringan atau database lokal Anda lalu coba lagi.</p>
-            </div>
-            <Button onClick={() => fetchData(true)} icon={<RefreshCw size={15} />} className="bg-red-600 hover:bg-red-700 text-white font-bold border-0">
-              Coba Lagi
-            </Button>
+      {/* ── ERROR STATE ── */}
+      {error && !loading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-red-600 border border-red-200 dark:border-red-900/60">
+            <AlertTriangle size={28} />
           </div>
-        )}
+          <div className="text-center">
+            <p className="font-extrabold text-slate-900 dark:text-white text-base">Gagal Memuat Data Dashboard</p>
+            <p className="text-xs text-slate-400 mt-1">Periksa koneksi database lokal Anda lalu coba lagi.</p>
+          </div>
+          <Button onClick={() => fetchData(true)} icon={<RefreshCw size={14} />} className="bg-red-600 hover:bg-red-700 text-white font-bold border-0 text-xs">
+            Coba Lagi
+          </Button>
+        </div>
+      )}
 
-        {!error && (
-          <>
-            {/* Onboarding Demo Banner if Database is Empty */}
-            {!loading && dashboard.totalBarang === 0 && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 shadow-sm mb-1">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-                    <Sparkles size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">Database Masih Kosong</h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                      Muat data contoh toko (20+ produk, meja, customer, resep BOM, dan 7 hari transaksi) agar grafik dan laporan langsung hidup.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="secondary"
-                  icon={<Sparkles size={16} className="text-amber-600 dark:text-amber-400" />}
-                  loading={seedingDemo}
-                  onClick={async () => {
-                    setSeedingDemo(true)
-                    try {
-                      const r = await api<any>('system:seedSampleData')
-                      if (r.success) {
-                        toast(r.message || 'Data demo berhasil dimuat!', 'success')
-                        fetchData(true)
-                        if (isAdmin) fetchInsights()
-                      } else {
-                        toast(r.message || 'Gagal memuat data demo', 'error')
-                      }
-                    } finally {
-                      setSeedingDemo(false)
-                    }
-                  }}
-                  className="shrink-0 w-full sm:w-auto font-bold border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40"
-                >
-                  Muat Data Contoh Toko
-                </Button>
-              </div>
-            )}
-
-            {/* Stat Cards (4 KPI Cards) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 sm:gap-4">
-              {loading
-                ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
-                : (
-                  <>
-                    <StatCard
-                      icon={<ShoppingCart size={22} />}
-                      label="Transaksi Hari Ini"
-                      value={dashboard.today.count}
-                      sub={formatRupiah(dashboard.today.total)}
-                      color="bg-red-600"
-                    />
-                    <StatCard
-                      icon={<TrendingUp size={22} />}
-                      label="Pendapatan Bulan Ini"
-                      value={dashboard.month.total}
-                      sub={`${dashboard.month.count} transaksi terjual`}
-                      color="bg-emerald-600"
-                      isCurrency
-                    />
-                    <StatCard
-                      icon={<Package size={22} />}
-                      label="Total Katalog Produk"
-                      value={dashboard.totalBarang}
-                      sub="produk siap jual"
-                      color="bg-pink-600"
-                    />
-                    <StatCard
-                      icon={<AlertTriangle size={22} />}
-                      label="Stok Menipis (Restock)"
-                      value={dashboard.lowStockCount}
-                      sub="produk ≤ 5 unit"
-                      color="bg-amber-600"
-                    />
-                  </>
-                )}
+      {/* ── ONBOARDING DEMO BANNER ── */}
+      {!error && !loading && dashboard.totalBarang === 0 && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/80 dark:bg-amber-950/20 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+              <PackagePlus size={20} />
             </div>
-
-            {/* Chart + Weekly Summary Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-5">
-              {loading ? <SkeletonChart className="xl:col-span-2" /> : (
-                <Card
-                  title="Penjualan 7 Hari Terakhir"
-                  subtitle="Tren pendapatan harian toko"
-                  className="xl:col-span-2"
-                  action={
-                    <div className="flex items-center gap-2">
-                      <div className="hidden sm:flex flex-col items-end mr-2">
-                        <p className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider">Prediksi Besok</p>
-                        <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">{formatRupiah(dashboard.predictedTomorrow || 0)}</p>
-                      </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleExportGoogleSheets}
-                        icon={<Table2 size={14} />}
-                        loading={exportingSheets}
-                        disabled={!summary}
-                        className="font-bold text-xs"
-                      >
-                        Google Sheets
-                      </Button>
-                    </div>
-                  }
-                >
-                  <ChartSurface
-                    height={240}
-                    fallback={
-                      <div className="flex h-[240px] items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 px-4 text-center">
-                        <div>
-                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Grafik Penjualan Belum Siap</p>
-                          <p className="mt-1 text-[11px] text-slate-400">Menunggu data transaksi dihitung</p>
-                        </div>
-                      </div>
-                    }
-                  >
-                    {width => (
-                      <AreaChart width={width} height={240} data={dashboard.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorTotalRed" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#DC2626" stopOpacity={0.35} />
-                            <stop offset="95%" stopColor="#DC2626" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} dy={8} />
-                        <YAxis
-                          tick={{ fontSize: 10, fill: '#94a3b8' }}
-                          axisLine={false}
-                          tickLine={false}
-                          dx={-8}
-                          tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}jt` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
-                        />
-                        <Tooltip content={<ChartTooltip />} />
-                        <Area type="monotone" dataKey="total" stroke="#DC2626" strokeWidth={3} fill="url(#colorTotalRed)" animationDuration={800} />
-                      </AreaChart>
-                    )}
-                  </ChartSurface>
-                </Card>
-              )}
-
-              {loading ? (
-                <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex justify-between">
-                      <div className="h-4 w-28 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                      <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Card title="Ringkasan Minggu Ini" subtitle="Statistik 7 hari berjalan">
-                  <div className="space-y-3.5 mt-2">
-                    <SummaryRow icon={<Calendar size={16} />} label="Total Transaksi" value={String(dashboard.week.count)} />
-                    <SummaryRow icon={<TrendingUp size={16} />} label="Total Pendapatan" value={formatRupiah(dashboard.week.total)} />
-                    <SummaryRow icon={<BarChart2 size={16} />} label="Rata-rata / Hari" value={formatRupiah(Math.round(dashboard.week.total / 7))} />
-                  </div>
-                  <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-                    <Button variant="secondary" className="w-full font-bold text-xs" onClick={() => navigate('/riwayat')}>
-                      Lihat Semua Riwayat Transaksi
-                    </Button>
-                  </div>
-                </Card>
-              )}
-            </div>
-
-            {/* Quick Actions & Recent Activity Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-5">
-              
-              {/* Quick Actions Menu */}
-              <Card title="Akses Cepat" subtitle="Fitur utama yang sering digunakan" className="xl:col-span-2">
-                {loading ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 animate-pulse">
-                    {Array.from({ length: QUICK_ACTIONS.length }).map((_, i) => (
-                      <div key={i} className="flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 py-3">
-                        <div className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 shrink-0" />
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="h-3.5 w-20 rounded bg-slate-200 dark:bg-slate-800" />
-                          <div className="h-2.5 w-32 rounded bg-slate-200 dark:bg-slate-800" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {QUICK_ACTIONS.map(action => (
-                      <motion.button
-                        key={action.to}
-                        whileHover={{ y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        type="button"
-                        onClick={() => navigate(action.to)}
-                        className="group flex items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 text-left transition-all hover:border-red-600/40 hover:shadow-md"
-                      >
-                        <div className={`w-10 h-10 rounded-xl ${action.tone} flex items-center justify-center text-white shrink-0 shadow-sm shadow-slate-900/10`}>
-                          {action.icon}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">{action.label}</p>
-                          <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{action.description}</p>
-                        </div>
-                        <ArrowRight size={16} className="mt-1 text-slate-300 transition-colors group-hover:text-red-600 dark:text-slate-600 shrink-0" />
-                      </motion.button>
-                    ))}
-                  </div>
-                )}
-              </Card>
-
-              {/* Recent Transactions List */}
-              <Card title="Transaksi Terbaru" subtitle="5 transaksi terakhir yang diproses">
-                {loading ? (
-                  <div className="space-y-2.5 animate-pulse">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-2 min-w-0 flex-1">
-                            <div className="h-3.5 w-32 rounded bg-slate-200 dark:bg-slate-800" />
-                            <div className="h-2.5 w-48 rounded bg-slate-200 dark:bg-slate-800" />
-                          </div>
-                          <div className="h-3.5 w-24 rounded bg-slate-200 dark:bg-slate-800 shrink-0" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : recentTransactions.length > 0 ? (
-                  <div className="space-y-2.5">
-                    {recentTransactions.map(transaction => (
-                      <button
-                        key={transaction.kd_tansaksi_jual}
-                        type="button"
-                        onClick={() => navigate('/riwayat')}
-                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-left transition-all hover:border-red-600/40 hover:bg-white dark:hover:bg-slate-900"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-slate-900 dark:text-white font-mono">{transaction.kd_tansaksi_jual}</p>
-                            <p className="mt-0.5 truncate text-[11px] text-slate-500 font-medium">
-                              {transaction.nama_customer || 'Pelanggan Umum'} • {formatDateTime(transaction.tgl_wkt_transaksi)}
-                            </p>
-                            <p className="mt-1 text-[10px] text-slate-400 font-medium">
-                              {transaction.total_qty} item • {transaction.jenis_pembayaran || 'TUNAI'}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="font-extrabold text-xs text-red-600 dark:text-red-400">{formatRupiah(transaction.total_penjualan)}</p>
-                            <span className="text-[10px] text-slate-400 font-semibold underline">Detail</span>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-4 text-center">
-                    <ShoppingCart size={32} className="mx-auto mb-2 text-slate-400 opacity-40" />
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Belum Ada Transaksi Terbaru</p>
-                    <p className="mt-1 text-[11px] text-slate-400">Mulai transaksi pertama dari halaman kasir.</p>
-                  </div>
-                )}
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <Button variant="secondary" className="w-full font-bold text-xs" onClick={() => navigate('/riwayat')}>
-                    Lihat Riwayat Lengkap
-                  </Button>
-                </div>
-              </Card>
-
-              {/* Operational Alert Summary */}
-              <Card title="Ringkasan Alert Toko" subtitle="Indikator yang perlu ditindaklanjuti">
-                {loading ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-pulse">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3">
-                        <div className="h-3.5 w-24 rounded bg-slate-200 dark:bg-slate-800" />
-                        <div className="mt-2 h-8 w-16 rounded bg-slate-200 dark:bg-slate-800" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-red-200 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-950/30">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-600 dark:text-red-400">Produk Habis</p>
-                      <p className="mt-1 text-2xl font-black text-red-600 dark:text-red-400">{alertSummary.stockOutCount}</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Perlu restock barang</p>
-                    </div>
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/40 dark:bg-amber-950/30">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300">Stok Menipis</p>
-                      <p className="mt-1 text-2xl font-black text-amber-600 dark:text-amber-400">{alertSummary.lowStockCount}</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Menyentuh batas min</p>
-                    </div>
-                    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-900/40 dark:bg-sky-950/30">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-sky-700 dark:text-sky-300">Transaksi Hari Ini</p>
-                      <p className="mt-1 text-2xl font-black text-sky-600 dark:text-sky-400">{alertSummary.todayTransactionCount}</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Struk terbit hari ini</p>
-                    </div>
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/30">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Pendapatan Hari Ini</p>
-                      <p className="mt-1 text-xl font-black text-emerald-600 dark:text-emerald-400">{formatRupiah(alertSummary.todayRevenue)}</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Omset kotor harian</p>
-                    </div>
-                  </div>
-                )}
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <Button variant="secondary" className="w-full font-bold text-xs" onClick={() => navigate('/produk')}>
-                    Kelola Stok & Inventaris
-                  </Button>
-                </div>
-              </Card>
-
-            </div>
-
-            {/* Top Products & Low Stock Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-              
-              <Card title="Produk Terlaris" subtitle="Top 5 produk paling laku minggu ini">
-                <div className="space-y-2">
-                  {loading
-                    ? Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 animate-pulse">
-                        <div className="w-8 h-8 bg-slate-200 dark:bg-slate-800 rounded-lg" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
-                          <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
-                        </div>
-                      </div>
-                    ))
-                    : (dashboard.topProducts || []).length > 0
-                      ? (dashboard.topProducts || []).map((product, idx) => (
-                        <div key={product.kd_barang} className="flex items-center gap-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-extrabold text-xs shrink-0 ${
-                            idx === 0 ? 'bg-red-600 text-white' :
-                            idx === 1 ? 'bg-amber-500 text-white' :
-                            idx === 2 ? 'bg-slate-800 text-white' :
-                            'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                          }`}>{idx + 1}</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{product.nama_barang || 'Produk'}</p>
-                            <p className="text-[11px] text-slate-400 font-medium">{product.total_qty} unit terjual</p>
-                          </div>
-                          <p className="text-xs font-extrabold text-red-600 dark:text-red-400">{formatRupiah(product.total_revenue)}</p>
-                        </div>
-                      ))
-                      : (
-                        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-4 text-center">
-                          <Package size={28} className="mx-auto mb-2 text-slate-400 opacity-40" />
-                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Belum Ada Penjualan Minggu Ini</p>
-                          <p className="mt-1 text-[11px] text-slate-400">Peringkat produk terlaris akan otomatis muncul setelah transaksi.</p>
-                        </div>
-                      )}
-                </div>
-              </Card>
-
-              <Card title="Stok Menipis" subtitle="Daftar barang yang perlu di-restock segera">
-                <div className="space-y-2">
-                  {loading
-                    ? Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 animate-pulse">
-                        <div className="w-8 h-8 bg-slate-200 dark:bg-slate-800 rounded-lg" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
-                          <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
-                        </div>
-                      </div>
-                    ))
-                    : (dashboard.lowStockProducts || []).length > 0
-                      ? (dashboard.lowStockProducts || []).map(product => (
-                        <div key={product.kd_barang} className="flex items-center gap-3 p-3 rounded-2xl border border-red-200 bg-red-50/60 dark:bg-red-950/30 dark:border-red-900/40">
-                          <div className="w-8 h-8 rounded-xl bg-red-600/10 text-red-600 flex items-center justify-center shrink-0">
-                            <AlertTriangle size={16} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{product.nama_barang || 'Produk'}</p>
-                            <p className="text-[11px] font-bold text-red-600 dark:text-red-400">Sisa stok: {product.stok ?? 0} unit</p>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={() => navigate('/produk')}
-                            className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs border-0 shrink-0"
-                          >
-                            Restock
-                          </Button>
-                        </div>
-                      ))
-                      : (
-                        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-4 text-center">
-                          <CheckCircle size={28} className="mx-auto mb-2 text-emerald-500 opacity-80" />
-                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Semua Stok Barang Aman</p>
-                          <p className="mt-1 text-[11px] text-slate-400">Tidak ada barang yang berada di bawah batas minimum.</p>
-                        </div>
-                      )}
-                </div>
-              </Card>
-
-            </div>
-          </>
-        )}
-      </>
-
-      {/* Owner Insights Section */}
-      {isAdmin && (
-        <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-                <Crown size={22} className="text-red-600" />
-                Insight Executive Owner
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Analisis keuangan, jam ramai, dan performa tim kasir secara real-time.
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Database Toko Masih Kosong</h3>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                Muat data contoh toko (20+ produk, meja, customer, dan riwayat transaksi) agar grafik langsung terisi.
               </p>
             </div>
           </div>
+          <Button
+            variant="secondary"
+            icon={<PackagePlus size={14} className="text-amber-600 dark:text-amber-400" />}
+            loading={seedingDemo}
+            onClick={() => setConfirmSeedModal(true)}
+            className="shrink-0 w-full sm:w-auto font-bold text-xs"
+          >
+            Muat Data Contoh
+          </Button>
+
+          <ConfirmDialog
+            open={confirmSeedModal}
+            onClose={() => setConfirmSeedModal(false)}
+            onConfirm={async () => {
+              setSeedingDemo(true)
+              try {
+                const r = await api<any>('system:seedSampleData')
+                if (r.success) {
+                  toast(r.message || 'Data demo berhasil dimuat!', 'success')
+                  fetchData(true)
+                  if (isAdmin) fetchInsights()
+                  setConfirmSeedModal(false)
+                } else {
+                  toast(r.message || 'Gagal memuat data demo', 'error')
+                }
+              } finally {
+                setSeedingDemo(false)
+              }
+            }}
+            title="Muat Data Contoh Toko"
+            message="Apakah Anda yakin ingin memuat data contoh toko? Tindakan ini akan menambahkan 20+ produk, meja restoran, customer, supplier, dan riwayat transaksi simulasi ke sistem."
+            confirmText="Ya, Muat Data Contoh"
+            variant="warning"
+            loading={seedingDemo}
+          />
+        </div>
+      )}
+
+      {/* ── TAB 1: OPERASIONAL TOKO ── */}
+      {!error && activeTab === 'operasional' && (
+        <div className="space-y-5">
+          
+          {/* 4 Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+            {loading
+              ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+              : (
+                <>
+                  <StatCard
+                    icon={<ShoppingCart size={20} />}
+                    label="Transaksi Hari Ini"
+                    value={dashboard.today.count}
+                    sub={formatRupiah(dashboard.today.total)}
+                    color="bg-red-600"
+                  />
+                  <StatCard
+                    icon={<TrendingUp size={20} />}
+                    label="Pendapatan Bulan Ini"
+                    value={dashboard.month.total}
+                    sub={`${dashboard.month.count} transaksi terjual`}
+                    color="bg-emerald-600"
+                    isCurrency
+                  />
+                  <StatCard
+                    icon={<Package size={20} />}
+                    label="Total Katalog Produk"
+                    value={dashboard.totalBarang}
+                    sub="produk siap jual"
+                    color="bg-sky-600"
+                  />
+                  <StatCard
+                    icon={<AlertTriangle size={20} />}
+                    label="Stok Menipis"
+                    value={dashboard.lowStockCount}
+                    sub="produk ≤ batas min"
+                    color="bg-amber-600"
+                  />
+                </>
+              )}
+          </div>
+
+          {/* Chart + Weekly Summary Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            {loading ? <SkeletonChart className="xl:col-span-2" /> : (
+              <Card
+                title="Tren Penjualan 7 Hari"
+                subtitle="Grafik pendapatan harian toko"
+                className="xl:col-span-2"
+                action={
+                  <div className="flex items-center gap-2">
+                    <div className="hidden sm:flex flex-col items-end mr-2">
+                      <p className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider">Prediksi Besok</p>
+                      <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">{formatRupiah(dashboard.predictedTomorrow || 0)}</p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleExportGoogleSheets}
+                      icon={<Table2 size={13} />}
+                      loading={exportingSheets}
+                      disabled={!summary}
+                      className="font-bold text-xs"
+                    >
+                      Google Sheets
+                    </Button>
+                  </div>
+                }
+              >
+                <ChartSurface
+                  height={220}
+                  fallback={
+                    <div className="flex h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 px-4 text-center">
+                      <div>
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Grafik Penjualan Belum Siap</p>
+                        <p className="mt-1 text-[11px] text-slate-400">Menunggu data transaksi dihitung</p>
+                      </div>
+                    </div>
+                  }
+                >
+                  {width => (
+                    <AreaChart width={width} height={220} data={dashboard.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorTotalRed" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#DC2626" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#DC2626" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} dy={8} />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                        dx={-8}
+                        tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}jt` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                      />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Area type="monotone" dataKey="total" stroke="#DC2626" strokeWidth={2.5} fill="url(#colorTotalRed)" animationDuration={800} />
+                    </AreaChart>
+                  )}
+                </ChartSurface>
+              </Card>
+            )}
+
+            {loading ? (
+              <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex justify-between">
+                    <div className="h-4 w-28 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                    <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Card title="Ringkasan 7 Hari" subtitle="Statistik performa minggu ini">
+                <div className="space-y-3 mt-1">
+                  <SummaryRow icon={<Calendar size={15} />} label="Total Transaksi" value={String(dashboard.week.count)} />
+                  <SummaryRow icon={<TrendingUp size={15} />} label="Total Pendapatan" value={formatRupiah(dashboard.week.total)} />
+                  <SummaryRow icon={<BarChart2 size={15} />} label="Rata-rata / Hari" value={formatRupiah(Math.round(dashboard.week.total / 7))} />
+                </div>
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <Button variant="secondary" className="w-full font-bold text-xs" onClick={() => navigate('/riwayat')}>
+                    Lihat Riwayat Transaksi
+                  </Button>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          {/* Row 2: Recent Transactions & Low Stock Alert */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            
+            {/* Recent Transactions */}
+            <Card
+              title="Transaksi Terbaru"
+              subtitle="5 transaksi terakhir yang diproses"
+              action={
+                <button
+                  type="button"
+                  onClick={() => navigate('/riwayat')}
+                  className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                >
+                  Semua <ArrowRight size={12} />
+                </button>
+              }
+            >
+              {loading ? (
+                <div className="space-y-2 animate-pulse">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-14 rounded-2xl bg-slate-100 dark:bg-slate-800" />
+                  ))}
+                </div>
+              ) : recentTransactions.length > 0 ? (
+                <div className="space-y-2">
+                  {recentTransactions.map(transaction => (
+                    <button
+                      key={transaction.kd_tansaksi_jual}
+                      type="button"
+                      onClick={() => navigate('/riwayat')}
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950 p-3 text-left transition-all hover:border-red-600/40 hover:bg-white dark:hover:bg-slate-900"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-slate-900 dark:text-white font-mono">{transaction.kd_tansaksi_jual}</p>
+                          <p className="truncate text-[11px] text-slate-500 font-medium mt-0.5">
+                            {transaction.nama_customer || 'Pelanggan Umum'} • {formatDateTime(transaction.tgl_wkt_transaksi)}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-bold text-xs text-red-600 dark:text-red-400">{formatRupiah(transaction.total_penjualan)}</p>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase">{transaction.jenis_pembayaran || 'TUNAI'}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-4 text-center">
+                  <ShoppingCart size={28} className="mx-auto mb-2 text-slate-400 opacity-40" />
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Belum Ada Transaksi</p>
+                  <p className="mt-1 text-[11px] text-slate-400">Mulai transaksi pertama dari menu Kasir POS.</p>
+                </div>
+              )}
+            </Card>
+
+            {/* Low Stock Restock */}
+            <Card
+              title="Stok Menipis (Perlu Restock)"
+              subtitle="Daftar barang di bawah batas minimum"
+              action={
+                <button
+                  type="button"
+                  onClick={() => navigate('/produk')}
+                  className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                >
+                  Kelola Stok <ArrowRight size={12} />
+                </button>
+              }
+            >
+              <div className="space-y-2">
+                {loading
+                  ? Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                  ))
+                  : (dashboard.lowStockProducts || []).length > 0
+                    ? (dashboard.lowStockProducts || []).map(product => (
+                      <div key={product.kd_barang} className="flex items-center gap-3 p-2.5 rounded-2xl border border-red-200 bg-red-50/50 dark:bg-red-950/30 dark:border-red-900/40">
+                        <div className="w-8 h-8 rounded-xl bg-red-600/10 text-red-600 flex items-center justify-center shrink-0">
+                          <AlertTriangle size={15} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{product.nama_barang || 'Produk'}</p>
+                          <p className="text-[11px] font-bold text-red-600 dark:text-red-400">Sisa: {product.stok ?? 0} unit</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => navigate('/produk')}
+                          className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs border-0 shrink-0"
+                        >
+                          Restock
+                        </Button>
+                      </div>
+                    ))
+                    : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-4 text-center">
+                        <CheckCircle size={28} className="mx-auto mb-2 text-emerald-500 opacity-80" />
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Semua Stok Barang Aman</p>
+                        <p className="mt-1 text-[11px] text-slate-400">Tidak ada barang yang berada di bawah batas minimum.</p>
+                      </div>
+                    )}
+              </div>
+            </Card>
+
+          </div>
+
+          {/* Row 3: Top 5 Best Selling Products */}
+          <Card
+            title="Produk Terlaris Minggu Ini"
+            subtitle="Peringkat 5 produk paling laku berdasarkan volume penjualan"
+            action={
+              <button
+                type="button"
+                onClick={() => navigate('/laporan')}
+                className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+              >
+                Lihat Laporan Penjualan <ArrowRight size={12} />
+              </button>
+            }
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {loading
+                ? Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-20 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                ))
+                : (dashboard.topProducts || []).length > 0
+                  ? (dashboard.topProducts || []).map((product, idx) => (
+                    <div key={product.kd_barang || idx} className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900 flex flex-col justify-between gap-2 shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-xs ${
+                          idx === 0 ? 'bg-red-600 text-white' :
+                          idx === 1 ? 'bg-amber-500 text-white' :
+                          idx === 2 ? 'bg-slate-800 text-white' :
+                          'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <span className="text-[11px] font-bold text-red-600 dark:text-red-400">
+                          {formatRupiah(product.total_revenue)}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate" title={product.nama_barang || ''}>
+                          {product.nama_barang || 'Produk'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          {product.total_qty} unit terjual
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                  : (
+                    <div className="col-span-full rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-4 text-center">
+                      <Package size={24} className="mx-auto mb-1 text-slate-400 opacity-40" />
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Belum Ada Data Penjualan</p>
+                      <p className="mt-0.5 text-[11px] text-slate-400">Peringkat produk terlaris akan otomatis terisi setelah kasir bertransaksi.</p>
+                    </div>
+                  )}
+            </div>
+          </Card>
+
+        </div>
+      )}
+
+      {/* ── TAB 2: ANALISIS OWNER & STRATEGI BISNIS ── */}
+      {!error && activeTab === 'analisis' && isAdmin && (
+        <div className="space-y-5">
 
           {insightsError && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 px-4 py-3 text-xs font-medium text-amber-800 dark:text-amber-200">
@@ -903,25 +837,26 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* KPI Cards */}
+          {/* 5 KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3.5">
             {insightsLoading
               ? Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
               : (
                 <>
-                  <KpiCard label="Hari Ini" value={formatRupiah(insights.kpis.salesToday)} icon={<TrendingUp size={18} />} color="bg-red-600" />
-                  <KpiCard label="Bulan Ini" value={formatRupiah(insights.kpis.salesMonth)} icon={<TrendingUp size={18} />} color="bg-emerald-600" />
-                  <KpiCard label="Laba Kotor" value={formatRupiah(insights.kpis.grossProfitMonth)} icon={<BarChart2 size={18} />} color="bg-violet-600" />
-                  <KpiCard label="Rata-rata Harian" value={formatRupiah(insights.kpis.avgDailySales)} icon={<Clock size={18} />} color="bg-amber-600" />
-                  <KpiCard label="Proyeksi Bulan" value={formatRupiah(insights.kpis.projectedMonth)} icon={<Crown size={18} />} color="bg-pink-600" />
+                  <KpiCard label="Penjualan Hari Ini" value={formatRupiah(insights.kpis.salesToday)} icon={<TrendingUp size={16} />} color="bg-red-600" />
+                  <KpiCard label="Penjualan Bulan Ini" value={formatRupiah(insights.kpis.salesMonth)} icon={<TrendingUp size={16} />} color="bg-emerald-600" />
+                  <KpiCard label="Laba Kotor" value={formatRupiah(insights.kpis.grossProfitMonth)} icon={<BarChart2 size={16} />} color="bg-violet-600" />
+                  <KpiCard label="Rata-rata Harian" value={formatRupiah(insights.kpis.avgDailySales)} icon={<Clock size={16} />} color="bg-amber-600" />
+                  <KpiCard label="Proyeksi Akhir Bulan" value={formatRupiah(insights.kpis.projectedMonth)} icon={<Crown size={16} />} color="bg-pink-600" />
                 </>
               )}
           </div>
 
-          {/* Peak Hours & Cashier Performance */}
+          {/* Deep Business Analysis Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             
-            <Card title="Analisis Jam Tersibuk" subtitle="Berdasarkan 30 hari transaksi terakhir">
+            {/* Peak Hours Chart */}
+            <Card title="Jam Tersibuk Toko" subtitle="Berdasarkan riwayat transaksi 30 hari terakhir">
               {insightsLoading ? (
                 <InsightSkeleton rows={4} />
               ) : ownerPeakHours.length === 0 ? (
@@ -946,14 +881,15 @@ export default function Dashboard() {
                     )}
                   </ChartSurface>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                     <CompactStat label="Jam Puncak" value={ownerPeakHour ? ownerPeakHour.hour : '-'} />
-                    <CompactStat label="Puncak Transaksi" value={`${ownerPeakHour?.count ?? 0} Transaksi`} />
+                    <CompactStat label="Total Transaksi" value={`${ownerPeakHour?.count ?? 0} Transaksi`} />
                   </div>
                 </div>
               )}
             </Card>
 
+            {/* Cashier Performance */}
             <Card title="Performa Tim Kasir" subtitle="Total transaksi & penjualan per kasir">
               {insightsLoading ? (
                 <InsightSkeleton />
@@ -979,6 +915,7 @@ export default function Dashboard() {
               )}
             </Card>
 
+            {/* Customer Segmentation */}
             <Card title="Segmen Pelanggan" subtitle="Status keaktifan customer toko">
               {insightsLoading ? (
                 <InsightSkeleton />
@@ -1013,13 +950,13 @@ function StatCard({ icon, label, value, sub, color, isCurrency = false }: {
 }) {
   const animated = useCountUp(value)
   return (
-    <Card className="flex items-center gap-4 hover:border-red-600/30 transition-all">
-      <div className={`w-12 h-12 rounded-2xl ${color} flex items-center justify-center text-white shrink-0 shadow-md shadow-slate-900/10`}>
+    <Card className="flex items-center gap-3.5 hover:border-red-600/30 transition-all shadow-sm">
+      <div className={`w-11 h-11 rounded-2xl ${color} flex items-center justify-center text-white shrink-0 shadow-sm`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 truncate uppercase tracking-wider">{label}</p>
-        <p className="font-black text-slate-900 dark:text-white text-lg sm:text-xl leading-tight truncate mt-0.5">
+        <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate uppercase tracking-wider">{label}</p>
+        <p className="font-black text-slate-900 dark:text-white text-base sm:text-lg leading-tight truncate mt-0.5">
           {isCurrency ? formatRupiah(animated) : animated.toLocaleString('id-ID')}
         </p>
         <p className="text-[11px] text-slate-400 truncate mt-0.5 font-medium">{sub}</p>
@@ -1050,13 +987,13 @@ function CompactStat({ label, value }: { label: string; value: ReactNode }) {
 
 function KpiCard({ label, value, icon, color }: { label: string; value: string; icon: React.ReactNode; color: string }) {
   return (
-    <Card>
+    <Card className="shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">{label}</p>
-          <p className="mt-1 text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">{value}</p>
+          <p className="mt-1 text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">{value}</p>
         </div>
-        <div className={`w-9 h-9 rounded-xl ${color} flex items-center justify-center text-white shrink-0 shadow-sm`}>{icon}</div>
+        <div className={`w-8 h-8 rounded-xl ${color} flex items-center justify-center text-white shrink-0 shadow-sm`}>{icon}</div>
       </div>
     </Card>
   )

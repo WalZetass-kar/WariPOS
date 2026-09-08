@@ -248,6 +248,7 @@ export class UserController {
     nama_lengkap?: string
     email?: string
     no_telp?: string
+    foto?: string | null
     hak_akses?: string
     status_user?: string
     access_expires_at?: string | null
@@ -276,6 +277,11 @@ export class UserController {
 
       if (isDeveloperAccount(existing)) {
         return { success: false, message: developerLockedMessage('diubah') }
+      }
+
+      const callerUsername = _caller || demoSession.getUsername()
+      if (!callerIsPrivileged && callerUsername && callerUsername !== username) {
+        return { success: false, message: 'Anda hanya dapat mengubah profil akun Anda sendiri' }
       }
 
       const pinError = validatePin(data.pin)

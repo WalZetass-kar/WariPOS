@@ -55,18 +55,18 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         >
           <div className="flex flex-col items-center gap-6 max-w-xs w-full">
             {/* Logo */}
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center p-4 shadow-sm">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center p-2">
               <img
                 src={appLogo}
-                alt="Zetass POS"
-                className="w-full h-full object-contain"
+                alt="WariPOS"
+                className="w-full h-full object-contain drop-shadow-md"
               />
             </div>
 
             {/* Title */}
             <div className="text-center space-y-1">
               <h1 className="text-2xl font-bold tracking-tight">
-                Zetass <span className="text-red-600">POS</span>
+                Wari<span className="text-red-600">POS</span>
               </h1>
             </div>
 

@@ -55,8 +55,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={t.id}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg pointer-events-auto
-                animate-in fade-in slide-in-from-top-3 duration-300 ${colors[t.type]}`}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg pointer-events-auto toast-smooth-animate ${colors[t.type]}`}
             >
               <Icon size={18} />
               <span className="text-sm font-medium">{t.message}</span>

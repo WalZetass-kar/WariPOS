@@ -173,7 +173,7 @@ function exportPath(defaultName: string, customPath?: string) {
     return target
   }
   const baseDir = app.isPackaged ? app.getPath('documents') : process.cwd()
-  const exportDir = path.join(baseDir, 'Zetass Pos', 'exports')
+  const exportDir = path.join(baseDir, 'WariPOS', 'exports')
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true })
   return path.join(exportDir, defaultName)
 }
@@ -309,7 +309,7 @@ export class ExportService {
     try {
       const rows = Array.isArray(data) ? data : []
       const workbook = new ExcelJS.Workbook()
-      workbook.creator = 'Zetass Pos'
+      workbook.creator = 'WariPOS'
       workbook.created = new Date()
 
       const safeSheetName = String(sheetName || 'Data').slice(0, 31)
@@ -441,7 +441,7 @@ export class ExportService {
       // Subtitle
       doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')
-      doc.text('Zetass Pos', 35, 21)
+      doc.text('WariPOS', 35, 21)
 
       // Date & Time
       doc.setFontSize(9)
@@ -480,7 +480,7 @@ export class ExportService {
       if (pageHeight - finalY > 20) {
         doc.setFontSize(8)
         doc.setTextColor(100, 116, 139)
-        doc.text('Zetass Pos Developer', 14, pageHeight - 10)
+        doc.text('WariPOS Developer', 14, pageHeight - 10)
         doc.text(`Halaman 1`, pageWidth - 14, pageHeight - 10, { align: 'right' })
         
         // Decorative line
@@ -586,15 +586,15 @@ export class ExportService {
       }
       
       const workbook = new ExcelJS.Workbook()
-      workbook.creator = 'LCC POS System'
+      workbook.creator = 'WariPOS System'
       workbook.created = new Date()
       
       // Helper function to build header
       const applyCompanyHeader = (sheet: ExcelJS.Worksheet, title: string, lastCol: string) => {
-        const storeName = storeInfo?.namatoko || 'LCC POS'
-        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya LCC No. 1, Jakarta'
+        const storeName = storeInfo?.namatoko || 'WariPOS'
+        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya WariPOS No. 1, Pekanbaru'
         const storePhone = storeInfo?.nomortelptoko || '0812-3456-7890'
-        const storeEmail = storeInfo?.alamatemailowner || 'info@lccpos.com'
+        const storeEmail = storeInfo?.alamatemailowner || 'info@waripos.com'
         
         sheet.mergeCells(`A1:${lastCol}1`)
         const cell1 = sheet.getCell('A1')
@@ -1419,10 +1419,10 @@ export class ExportService {
         const logoY = 10
         const logoSize = 14 // diameter
         
-        const storeName = storeInfo?.namatoko || 'LCC POS'
-        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya LCC No. 1, Jakarta'
+        const storeName = storeInfo?.namatoko || 'WariPOS'
+        const storeAddress = storeInfo?.alamattoko || 'Jl. Raya WariPOS No. 1, Pekanbaru'
         const storePhone = storeInfo?.nomortelptoko || '0812-3456-7890'
-        const storeEmail = storeInfo?.alamatemailowner || 'info@lccpos.com'
+        const storeEmail = storeInfo?.alamatemailowner || 'info@waripos.com'
         
         // Circular Logo Placeholder or Base64 Image
         let logoDrawn = false
@@ -1483,7 +1483,7 @@ export class ExportService {
         d.setFontSize(7.5)
         d.setFont('helvetica', 'normal')
         d.setTextColor(148, 163, 184)
-        d.text('Laporan POS Keuangan Penjualan - Sistem Kasir Profesional LCC', 15, pageHeight - 10)
+        d.text('Laporan POS Keuangan Penjualan - Sistem Kasir Profesional WariPOS', 15, pageHeight - 10)
         d.text(`Halaman ${pageNo} dari ${totalP}`, pageWidth - 15, pageHeight - 10, { align: 'right' })
       }
       
@@ -1862,7 +1862,7 @@ export class ExportService {
 
       doc.setFontSize(11)
       doc.setFont('helvetica', 'normal')
-      doc.text('Zetass Pos', 38, 25)
+      doc.text('WariPOS', 38, 25)
 
       const now = new Date()
       doc.setFontSize(9)
@@ -1950,7 +1950,7 @@ export class ExportService {
       
       doc.setFontSize(8)
       doc.setTextColor(100, 116, 139)
-      doc.text('Zetass Pos Developer', 14, pageHeight - 8)
+      doc.text('WariPOS Developer', 14, pageHeight - 8)
       doc.text('Inventory Management System', pageWidth / 2, pageHeight - 8, { align: 'center' })
       doc.text(`Halaman 1`, pageWidth - 14, pageHeight - 8, { align: 'right' })
 

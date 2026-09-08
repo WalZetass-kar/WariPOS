@@ -55,8 +55,8 @@ export const LoginScreen: React.FC = () => {
 
       <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 dark:border dark:border-slate-800 shadow-2xl p-8">
         <div className="text-center mb-6">
-          <img src={appLogo} alt="Zetass Pos" className="mx-auto mb-2 h-14 w-14 rounded-2xl object-cover shadow" />
-          <h1 className="text-2xl font-bold dark:text-white">Zetass Pos</h1>
+          <img src={appLogo} alt="WariPOS" className="mx-auto mb-2 h-14 w-14 rounded-2xl object-cover shadow" />
+          <h1 className="text-2xl font-bold dark:text-white">WariPOS</h1>
           <p className="text-sm text-gray-500 dark:text-slate-400">Masuk untuk mulai berjualan</p>
         </div>
 

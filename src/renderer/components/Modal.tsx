@@ -30,14 +30,14 @@ export default function Modal({ open, onClose, title, children, footer, size = '
 
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm modal-backdrop-animate transition-opacity"
         onClick={onClose}
       />
       {/* Dialog / Responsive Bottom Sheet on mobile */}
-      <div className={`relative w-full ${sizes[size]} glass-card shadow-2xl zoom-in-95 p-4 sm:p-5 max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-5`}>
+      <div className={`relative w-full ${sizes[size]} glass-card shadow-2xl modal-card-animate p-4 sm:p-5 max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-5`}>
         {/* Mobile handle indicator */}
         <div className="sm:hidden w-10 h-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-3" />
 

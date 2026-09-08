@@ -11,7 +11,7 @@ type LicenseConfig = {
 }
 
 const DEFAULT_LICENSE_URL = import.meta.env.VITE_LICENSE_SERVER_URL || 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
-const DEFAULT_ADMIN_EMAIL = import.meta.env.VITE_LICENSE_ADMIN_EMAIL || 'admin@lcc-web-design.local'
+const DEFAULT_ADMIN_EMAIL = import.meta.env.VITE_LICENSE_ADMIN_EMAIL || 'admin@waripos.local'
 
 export default function LicenseServerConfig() {
   const toast = useToast()
@@ -94,9 +94,9 @@ export default function LicenseServerConfig() {
   return (
     <div className="max-w-none space-y-4">
       {adminReady && (
-        <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3">
-          <Wifi className="w-4 h-4 text-green-600" />
-          <span className="text-sm text-green-700 dark:text-green-300">Admin aktif di <code className="font-mono">{config?.url}</code></span>
+        <div className="flex items-start sm:items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 overflow-hidden">
+          <Wifi className="w-4 h-4 text-green-600 shrink-0 mt-0.5 sm:mt-0" />
+          <span className="text-sm text-green-700 dark:text-green-300 min-w-0 break-all">Admin aktif di <code className="font-mono bg-green-100/70 dark:bg-green-950/50 px-1 py-0.5 rounded break-all">{config?.url}</code></span>
         </div>
       )}
 
@@ -115,7 +115,7 @@ export default function LicenseServerConfig() {
           <button
             type="button"
             onClick={() => {
-              setForm(f => ({ ...f, url: 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license', email: 'admin@lcc-web-design.local' }))
+              setForm(f => ({ ...f, url: 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license', email: 'admin@waripos.local' }))
               setPingOk(null)
             }}
             className="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 hover:bg-red-100 transition-colors flex items-center gap-1.5"
@@ -126,7 +126,7 @@ export default function LicenseServerConfig() {
           <button
             type="button"
             onClick={() => {
-              setForm(f => ({ ...f, url: 'http://localhost:4000/api', email: 'admin@lcc-web-design.local' }))
+              setForm(f => ({ ...f, url: 'http://localhost:4000/api', email: 'admin@waripos.local' }))
               setPingOk(null)
             }}
             className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition-colors flex items-center gap-1.5"
@@ -218,10 +218,12 @@ export default function LicenseServerConfig() {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 overflow-hidden">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tips</p>
-        <ul className="space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-          <li>• Server aktif: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license</code></li>
+        <ul className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
+          <li className="break-all leading-relaxed">
+            • Server aktif: <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded break-all inline-block max-w-full">https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license</code>
+          </li>
           <li>• Login admin: gunakan email Supabase Auth yang sudah diverifikasi dan punya role <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">super_admin</code></li>
           <li>• Pembeli login memakai email dan password akun yang dibuat admin</li>
           <li>• Token admin tersimpan di database lokal aplikasi ini</li>

@@ -70,20 +70,31 @@ export default function Payroll() {
   const [search, setSearch] = useState('')
 
   const load = async (isManual = false) => {
-    const [r1, r2] = await Promise.all([
-      api<PayrollRow[]>('payroll:getAll', bulan, tahun),
-      api<any>('payroll:getSummary', bulan, tahun),
-    ])
-    if (r1.success) setData(r1.data ?? [])
-    if (r2.success && r2.data) {
-      setSummary({
-        total_gaji: r2.data.total_gaji ?? 0,
-        total_karyawan: r2.data.total_karyawan ?? 0,
-        rata_rata: r2.data.rata_rata ?? 0,
-      })
+    try {
+      const [r1, r2] = await Promise.all([
+        api<PayrollRow[]>('payroll:getAll', bulan, tahun),
+        api<any>('payroll:getSummary', bulan, tahun),
+      ])
+      if (r1.success) setData(Array.isArray(r1.data) ? r1.data : [])
+      else setData([])
+
+      if (r2.success && r2.data && typeof r2.data === 'object') {
+        setSummary({
+          total_gaji: Number(r2.data.total_gaji) || 0,
+          total_karyawan: Number(r2.data.total_karyawan) || 0,
+          rata_rata: Number(r2.data.rata_rata) || 0,
+        })
+      } else {
+        setSummary({ total_gaji: 0, total_karyawan: 0, rata_rata: 0 })
+      }
+    } catch (err) {
+      console.warn('[Payroll] Load error:', err)
+      setData([])
+      setSummary({ total_gaji: 0, total_karyawan: 0, rata_rata: 0 })
+    } finally {
+      setLoadingData(false)
+      if (isManual) toast('Data payroll diperbarui', 'success')
     }
-    setLoadingData(false)
-    if (isManual) toast('Data payroll diperbarui', 'success')
   }
 
   useEffect(() => { load() }, [])
@@ -118,18 +129,19 @@ export default function Payroll() {
   }
 
   const openSlip = async (p: PayrollRow) => {
+    if (!p) return
     const r = await api<SlipData>('payroll:getSlip', p.id)
-    if (r.success && r.data) {
+    if (r.success && r.data && r.data.payroll) {
       setSlipModal(r.data)
     } else {
-      // Construct fallback slip
+      // Construct fallback slip safely
       setSlipModal({
         payroll: p,
         employee: {
-          nama_lengkap: p.nama_karyawan,
-          nik: p.nik,
-          jabatan: p.jabatan,
-          departemen: p.departemen,
+          nama_lengkap: p.nama_karyawan || 'Karyawan',
+          nik: p.nik || '-',
+          jabatan: p.jabatan || '-',
+          departemen: p.departemen || '-',
         },
         details: [],
         total_penambah: (p.gaji_pokok || 0) + (p.tunjangan || 0) + (p.uang_makan || 0) + (p.uang_transport || 0) + (p.lembur || 0) + (p.bonus || 0),
@@ -234,12 +246,12 @@ export default function Payroll() {
                             <p className="text-xs text-slate-400">{p.nik || '-'}</p>
                           </td>
                           <td className="px-3 sm:px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{p.jabatan || '-'}</td>
-                          <td className="px-3 sm:px-4 py-3 text-right text-xs font-medium text-slate-700 dark:text-slate-300">{formatRupiah(p.gaji_pokok)}</td>
-                          <td className="px-3 sm:px-4 py-3 text-right text-xs font-medium text-slate-700 dark:text-slate-300">{formatRupiah(p.tunjangan + p.uang_makan + p.uang_transport)}</td>
-                          <td className="px-3 sm:px-4 py-3 text-right text-xs text-red-600 font-medium">{formatRupiah(p.potongan_bpjs + p.potongan)}</td>
-                          <td className="px-3 sm:px-4 py-3 text-right font-black text-slate-900 dark:text-white">{formatRupiah(p.total_gaji)}</td>
+                          <td className="px-3 sm:px-4 py-3 text-right text-xs font-medium text-slate-700 dark:text-slate-300">{formatRupiah(p.gaji_pokok || 0)}</td>
+                          <td className="px-3 sm:px-4 py-3 text-right text-xs font-medium text-slate-700 dark:text-slate-300">{formatRupiah((p.tunjangan || 0) + (p.uang_makan || 0) + (p.uang_transport || 0))}</td>
+                          <td className="px-3 sm:px-4 py-3 text-right text-xs text-red-600 font-medium">{formatRupiah((p.potongan_bpjs || 0) + (p.potongan || 0))}</td>
+                          <td className="px-3 sm:px-4 py-3 text-right font-black text-slate-900 dark:text-white">{formatRupiah(p.total_gaji || 0)}</td>
                           <td className="px-3 sm:px-4 py-3 text-center">
-                            <Badge label={p.status} variant={statusVariant(p.status)} />
+                            <Badge label={p.status || 'DRAFT'} variant={statusVariant(p.status || 'DRAFT')} />
                           </td>
                           <td className="px-3 sm:px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-1.5">
@@ -293,19 +305,19 @@ export default function Payroll() {
               </div>
             }
           >
-            {slipModal && (
+            {slipModal && slipModal.payroll && (
               <div className="space-y-4 p-2 bg-white dark:bg-slate-900 rounded-xl text-slate-800 dark:text-slate-100">
                 {/* Header Struk Slip */}
                 <div className="text-center pb-3 border-b border-dashed border-slate-300 dark:border-slate-700">
                   <h3 className="text-base font-black uppercase tracking-wider text-slate-900 dark:text-white">SLIP GAJI KARYAWAN</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Periode: {months[slipModal.payroll.periode_bulan - 1]} {slipModal.payroll.periode_tahun}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Periode: {months[(slipModal.payroll.periode_bulan || bulan) - 1]} {slipModal.payroll.periode_tahun || tahun}</p>
                 </div>
 
                 {/* Employee details */}
                 <div className="grid grid-cols-2 gap-2 text-xs py-1">
                   <div>
                     <span className="text-slate-400">Nama:</span>
-                    <p className="font-bold text-slate-900 dark:text-slate-100">{slipModal.employee?.nama_lengkap || slipModal.payroll.nama_karyawan}</p>
+                    <p className="font-bold text-slate-900 dark:text-slate-100">{slipModal.employee?.nama_lengkap || slipModal.payroll.nama_karyawan || 'Karyawan'}</p>
                   </div>
                   <div>
                     <span className="text-slate-400">NIK:</span>
@@ -317,7 +329,7 @@ export default function Payroll() {
                   </div>
                   <div>
                     <span className="text-slate-400">Status Pembayaran:</span>
-                    <Badge label={slipModal.payroll.status} variant={statusVariant(slipModal.payroll.status)} />
+                    <Badge label={slipModal.payroll.status || 'DRAFT'} variant={statusVariant(slipModal.payroll.status || 'DRAFT')} />
                   </div>
                 </div>
 
@@ -326,22 +338,22 @@ export default function Payroll() {
                   <p className="font-bold text-slate-500 uppercase text-[10px]">Komponen Penghasilan</p>
                   <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                     <span>Gaji Pokok</span>
-                    <span className="font-bold">{formatRupiah(slipModal.payroll.gaji_pokok)}</span>
+                    <span className="font-bold">{formatRupiah(slipModal.payroll.gaji_pokok || 0)}</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                     <span>Tunjangan & Operasional</span>
                     <span className="font-bold">{formatRupiah((slipModal.payroll.tunjangan || 0) + (slipModal.payroll.uang_makan || 0) + (slipModal.payroll.uang_transport || 0))}</span>
                   </div>
-                  {slipModal.payroll.lembur > 0 && (
+                  {(slipModal.payroll.lembur || 0) > 0 && (
                     <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                       <span>Uang Lembur</span>
-                      <span className="font-bold">{formatRupiah(slipModal.payroll.lembur)}</span>
+                      <span className="font-bold">{formatRupiah(slipModal.payroll.lembur || 0)}</span>
                     </div>
                   )}
-                  {slipModal.payroll.bonus > 0 && (
+                  {(slipModal.payroll.bonus || 0) > 0 && (
                     <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                       <span>Bonus Prestasi</span>
-                      <span className="font-bold">{formatRupiah(slipModal.payroll.bonus)}</span>
+                      <span className="font-bold">{formatRupiah(slipModal.payroll.bonus || 0)}</span>
                     </div>
                   )}
 
@@ -358,7 +370,7 @@ export default function Payroll() {
                     <span className="text-xs text-emerald-700 dark:text-emerald-300 font-bold uppercase">Gaji Bersih (Take Home Pay)</span>
                     <p className="text-[10px] text-slate-400">Total ditransfer ke rekening karyawan</p>
                   </div>
-                  <span className="text-lg font-black text-emerald-800 dark:text-emerald-200">{formatRupiah(slipModal.payroll.total_gaji)}</span>
+                  <span className="text-lg font-black text-emerald-800 dark:text-emerald-200">{formatRupiah(slipModal.payroll.total_gaji || 0)}</span>
                 </div>
               </div>
             )}

@@ -216,7 +216,7 @@ export class WhatsAppController {
       WhatsAppService.init(apiKey)
       const result = await WhatsAppService.sendMessage({
         to: phone,
-        message: payload?.message || 'Test notifikasi dari Zetass Pos berhasil.',
+        message: payload?.message || 'Test notifikasi dari WariPOS berhasil.',
         typing: true,
       })
       return result

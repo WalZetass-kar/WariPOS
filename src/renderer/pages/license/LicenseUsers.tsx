@@ -150,7 +150,7 @@ export default function LicenseUsersPage() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-thin">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 text-left">
             <tr>
@@ -300,7 +300,7 @@ function ResetPasswordModal({ user, password, onClose }: { user: UserRow; passwo
 function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const toast = useToast()
   const [plans, setPlans] = useState<PlanRow[]>([])
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', plan_code: '', duration_days: 30 })
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', role: 'developer', plan_code: '', duration_days: 30 })
   const [loading, setLoading] = useState(false)
   useEffect(() => {
     api<PlanRow[]>('license:getPlans').then(r => {
@@ -332,24 +332,46 @@ function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true)
-    if (!form.plan_code) {
+    if (form.role !== 'developer' && !form.plan_code) {
       setLoading(false)
-      return toast('Paket wajib dipilih', 'error')
+      return toast('Paket wajib dipilih untuk akun pengguna/pembeli', 'error')
     }
-    const r = await api('license:createUser', { ...form, duration_days: Number(form.duration_days) })
+    const r = await api('license:createUser', {
+      ...form,
+      hak_akses: form.role,
+      duration_days: form.role === 'developer' ? 0 : Number(form.duration_days),
+    })
     setLoading(false)
-    if (r.success) { onSaved(); onClose() } else toast(r.message || 'Gagal', 'error')
+    if (r.success) {
+      toast(r.message || `Akun ${form.role} berhasil dibuat!`, 'success')
+      onSaved()
+      onClose()
+    } else {
+      toast(r.message || 'Gagal membuat akun', 'error')
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-          <h3 className="font-semibold text-slate-800 dark:text-white">Buat Akun Pembeli</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-white">Tambah Akun Baru</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
         </div>
         <form onSubmit={submit} className="p-5 space-y-3">
-          {[['Nama / Toko','text','name',true],['Email','email','email',true],['Password (min 8)','password','password',true],['WhatsApp (opsional)','text','phone',false]].map(([label,type,key,req]) => (
+          <div>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Tipe Akun / Role *</label>
+            <select
+              value={form.role}
+              onChange={e => setForm({ ...form, role: e.target.value })}
+              className="w-full border-2 border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            >
+              <option value="developer">Developer (Akses Penuh Tanpa Batas & Panel Lisensi)</option>
+              <option value="pembeli">Pengguna / Pembeli Toko</option>
+              <option value="admin">Admin Toko</option>
+            </select>
+          </div>
+          {[['Nama / Toko','text','name',true],['Email / Username','text','email',true],['Password (min 8)','password','password',true],['WhatsApp (opsional)','text','phone',false]].map(([label,type,key,req]) => (
             <div key={key as string}>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">{label as string}</label>
               <input type={type as string} required={req as boolean} minLength={key === 'password' ? 8 : undefined}
@@ -357,25 +379,33 @@ function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
                 className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500" />
             </div>
           ))}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Paket</label>
-              <select value={form.plan_code} onChange={e => selectPlan(e.target.value)}
-                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500">
-                {!plans.length && <option value="">Paket belum tersedia</option>}
-                {plans.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
-              </select>
+          {form.role !== 'developer' ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Paket</label>
+                  <select value={form.plan_code} onChange={e => selectPlan(e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500">
+                    {!plans.length && <option value="">Paket belum tersedia</option>}
+                    {plans.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Durasi (hari)</label>
+                  <input type="number" min={0} value={form.duration_days} onChange={e => setForm({ ...form, duration_days: Number(e.target.value) })}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500" />
+                </div>
+              </div>
+              <PlanAccessPreview plan={selectedPlan} />
+            </>
+          ) : (
+            <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-800 dark:text-indigo-300 font-medium">
+              Akun Developer memiliki akses seumur hidup tanpa batas transaksi, tanpa batas perangkat, serta hak akses ke seluruh fitur dan Developer Panel.
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Durasi (hari)</label>
-              <input type="number" min={0} value={form.duration_days} onChange={e => setForm({ ...form, duration_days: Number(e.target.value) })}
-                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500" />
-            </div>
-          </div>
-          <PlanAccessPreview plan={selectedPlan} />
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm">Batal</button>
-            <button type="submit" disabled={loading} className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm disabled:opacity-50">{loading ? 'Menyimpan…' : 'Simpan'}</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm disabled:opacity-50">{loading ? 'Menyimpan…' : 'Simpan Akun'}</button>
           </div>
         </form>
       </div>

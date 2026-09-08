@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Capacitor } from '@capacitor/core'
@@ -9,7 +9,20 @@ import {
   AlertCircle,
   ScanLine,
   ArrowRight,
-  Clock
+  Clock,
+  LayoutGrid,
+  List,
+  Pause,
+  Play,
+  Bluetooth,
+  Settings,
+  Trash2,
+  Tag,
+  CreditCard,
+  Banknote,
+  QrCode,
+  ArrowLeft,
+  CheckCircle2
 } from 'lucide-react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import StrukSettingsModal from '../components/StrukSettingsModal'
@@ -27,8 +40,17 @@ import { useReactToPrint } from 'react-to-print'
 import { ensureBluetoothPrinterPermission } from '../utils/nativePermissions'
 import { bluetoothPrinter } from '../utils/bluetoothPrinter'
 import { cashierSound } from '../utils/sound'
+import {
+  getNextDailyQueueNumber,
+  getCurrentDailyQueueNumber,
+  formatQueueNumber,
+  addOrderToQueue
+} from '../utils/queueNumber'
 import { useTransaksiState } from '../components/transaksi/useTransaksiState'
 import { SalePayload, QrisStatus, QrisPayment } from '../components/transaksi/types'
+import { generateReceiptPdf, generateReceiptXlsx, saveFileToDevice } from '../utils/receiptExporter'
+import { useAppStore } from '../stores'
+import { getSmartCashAmounts } from '../components/QuickAmountButtons'
 
 import CustomerSelector from '../components/transaksi/CustomerSelector'
 import OrderTypeSelector from '../components/transaksi/OrderTypeSelector'
@@ -43,9 +65,11 @@ export default function Transaksi() {
   const toast = useToast()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { posMode } = useAppStore()
   const { trackUsage, isOverLimit, remainingUsage, isDemo, showPricing } = useDemoGuard()
   const { heldCarts, holdCart, resumeCart, deleteHeld } = useHoldCart()
   const lastScanTimestampRef = useRef<number>(0)
+  const [storeTaxRate, setStoreTaxRate] = useState<number | null>(null)
 
   const state = useTransaksiState()
   
@@ -66,7 +90,13 @@ export default function Transaksi() {
     api<Customer[]>('customer:getAll').then(r => { if (r.success) state.setCustomers(r.data ?? []) })
     api<Kategori[]>('kategori:getAll').then(r => { if (r.success) state.setCategories(r.data ?? []) })
     api<any[]>('table:getAll').then(r => { if (r.success && r.data) state.setAvailableTables(r.data) })
-    api<{ rate: number }>('tax:getActiveRate').then(r => { if (r.success && r.data) state.setPajakPersen(r.data.rate) })
+    api<{ rate: number }>('tax:getActiveRate').then(r => {
+      if (r.success && r.data) {
+        const rate = Number(r.data.rate) || 0
+        setStoreTaxRate(rate)
+        state.setPajakPersen(rate)
+      }
+    })
     if (user?.nama_pengguna) {
       api<any>('shift:getCurrent', user.nama_pengguna).then(r => { if (r.success && r.data) state.setActiveShiftId(r.data.id) })
     }
@@ -229,10 +259,10 @@ export default function Transaksi() {
           toast(`Stok ${p.nama_barang} tidak mencukupi (tersisa ${maxStok})`, 'error')
           return prev
         }
-        cashierSound.playScanBeep()
+        cashierSound.playProductClick()
         return prev.map(c => c.kd_barang === p.kd_barang ? { ...c, qty: c.qty + 1 } : c)
       }
-      cashierSound.playScanBeep()
+      cashierSound.playProductClick()
       return [...prev, { kd_barang: p.kd_barang, nama_barang: p.nama_barang ?? '', harga_jual: p.harga_barang ?? 0, harga_modal: p.harga_modal ?? 0, qty: 1, disc: p.potongan ?? 0 }]
     })
     toast(`${p.nama_barang} ditambahkan ke keranjang`, 'success')
@@ -263,6 +293,9 @@ export default function Transaksi() {
   }
 
   const updateQty = (kd: string, delta: number) => {
+    if (delta > 0) {
+      cashierSound.playProductClick()
+    }
     state.setCart(prev => prev.map(c => {
       if (c.kd_barang !== kd) return c
       const newQty = c.qty + delta
@@ -328,12 +361,56 @@ export default function Transaksi() {
   const printReceipt = useReactToPrint({ content: () => state.strukRef.current })
 
   const handlePrint = async () => {
-    const permission = await ensureBluetoothPrinterPermission()
-    if (!permission.granted) {
-      toast(permission.message ?? 'Izin Bluetooth printer ditolak', 'error')
-      return
+    // 1. Try Bluetooth printer if connected
+    if (bluetoothPrinter.isConnected()) {
+      try {
+        await handleBluetoothPrint()
+        return
+      } catch (btErr) {
+        console.warn('[handlePrint] Bluetooth print failed, falling back to soft file:', btErr)
+      }
     }
-    printReceipt()
+
+    // 2. If printer is not connected or error, automatically generate and save PDF soft file
+    try {
+      const receiptData = {
+        storeName: 'WARIPOS',
+        invoiceNumber: state.lastKd || `TRX-${Date.now()}`,
+        cashierName: user?.nama_pengguna || 'KASIR',
+        cart: state.cart,
+        subTotal,
+        pajakAmount,
+        pajakPersen: state.pajakPersen,
+        promoDiskon: state.promoDiskon,
+        promoCode: state.promoCode,
+        totalBayar,
+        paidAmount,
+        kembalian,
+        jenisBayar: state.jenisBayar,
+        customer: state.selectedCustomer,
+        poinEarned,
+        tableNumber: state.tipePesanan === 'DINE_IN' ? state.nomorMeja : undefined,
+        orderType: state.tipePesanan,
+      }
+
+      const pdfBlob = await generateReceiptPdf(receiptData)
+      const fileName = `Struk-${state.lastKd || Date.now()}.pdf`
+      await saveFileToDevice(fileName, pdfBlob, 'application/pdf')
+      toast('Printer tidak terdeteksi — Struk otomatis disimpan sebagai PDF', 'info')
+
+      // Also trigger print preview if supported
+      if (typeof printReceipt === 'function') {
+        printReceipt()
+      } else {
+        try { window.print() } catch {}
+      }
+    } catch (err) {
+      console.warn('[handlePrint] Soft file generation error:', err)
+      try {
+        if (typeof printReceipt === 'function') printReceipt()
+        else window.print()
+      } catch {}
+    }
   }
 
   const buildSalePayload = (paymentType: 'TUNAI' | 'TRANSFER' | 'QRIS', amount: number): SalePayload => ({
@@ -352,6 +429,7 @@ export default function Transaksi() {
 
   const broadcastCustomerDisplay = useCallback((extra?: Record<string, any>) => {
     try {
+      const upcomingQueueSeq = getCurrentDailyQueueNumber() + 1
       const payload = {
         items: state.cart.map(item => ({
           nama_barang: item.nama_barang,
@@ -361,7 +439,10 @@ export default function Transaksi() {
         })),
         subtotal: subTotal,
         total: totalBayar,
-        storeName: 'Zetass Pos',
+        storeName: 'WariPOS',
+        nomor_antrian: formatQueueNumber(upcomingQueueSeq),
+        nomor_meja: state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
+        nama_pelanggan: state.selectedCustomer?.nama_customer || null,
         status: state.cart.length > 0 ? 'scanning' : 'idle',
         ...extra,
       }
@@ -373,7 +454,7 @@ export default function Transaksi() {
         bc.close()
       } catch {}
     } catch {}
-  }, [state.cart, subTotal, totalBayar])
+  }, [state.cart, subTotal, totalBayar, state.tipePesanan, state.nomorMeja, state.selectedCustomer])
 
   useEffect(() => {
     broadcastCustomerDisplay()
@@ -383,11 +464,13 @@ export default function Transaksi() {
     const rawPhone = (state.manualWaPhone || state.selectedCustomer?.no_telp || '').replace(/\D/g, '')
     const targetPhone = rawPhone.startsWith('0') ? '62' + rawPhone.slice(1) : rawPhone
 
-    const itemList = state.cart.map(i => `• ${i.nama_barang} (${i.qty}x) = ${formatRupiah(i.harga_jual * i.qty)}`).join('\n')
+    const itemList = state.cart.map((i, idx) => `${idx + 1}. ${i.nama_barang} (${i.qty}x) = ${formatRupiah(i.harga_jual * i.qty)}`).join('\n')
+    const currentQueue = formatQueueNumber(getCurrentDailyQueueNumber())
     const msg = 
-`*STRUK TRANSAKSI ZETASS POS*
+`*STRUK TRANSAKSI WARIPOS*
 ----------------------------------------
 No. Transaksi : *${state.lastKd || '-'}*
+No. Antrian   : *${currentQueue}*
 Waktu         : ${new Date().toLocaleString('id-ID')}
 Tipe Order    : *${state.tipePesanan === 'DINE_IN' ? 'Makan di Tempat (Dine-In)' : state.tipePesanan === 'TAKEAWAY' ? 'Bungkus (Takeaway)' : 'Pengiriman (Delivery)'}* ${state.nomorMeja ? `(Meja: ${state.nomorMeja})` : ''}
 Kasir         : ${user?.nama_pengguna || 'Kasir'}
@@ -415,12 +498,28 @@ Terima kasih atas kunjungan Anda!`
       cashierSound.playSuccessChime()
       state.setLastKd(r.data?.kd_transaksi ?? null)
       toast(r.message as string)
+
+      // Auto Generate Queue Number & Sync to Displays
+      const queueInfo = getNextDailyQueueNumber()
+      addOrderToQueue({
+        nomor_antrian: queueInfo.seq,
+        nomor_antrian_formatted: queueInfo.formatted,
+        kd_transaksi: r.data?.kd_transaksi,
+        nomor_meja: state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
+        nama_pelanggan: state.selectedCustomer?.nama_customer || null,
+        jenis_order: state.tipePesanan,
+      })
+
       state.setMobileCartDrawerOpen(false)
       state.setShowStruk(true)
       broadcastCustomerDisplay({
         status: 'success',
         paidAmount: payload.yang_dibayar,
         kembalian: Math.max(0, payload.yang_dibayar - totalBayar),
+        nomor_antrian: queueInfo.formatted,
+        nomor_meja: state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
+        nama_pelanggan: state.selectedCustomer?.nama_customer || null,
+        poinEarned: poinEarned,
       })
       try { trackUsage() } catch { /* ignore */ }
       if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
@@ -435,7 +534,7 @@ Terima kasih atas kunjungan Anda!`
       toast(r.message as string, 'error')
       return false
     }
-  }, [isDemo, remainingUsage, showPricing, toast, trackUsage, broadcastCustomerDisplay, totalBayar])
+  }, [isDemo, remainingUsage, showPricing, toast, trackUsage, broadcastCustomerDisplay, totalBayar, state.tipePesanan, state.nomorMeja, state.selectedCustomer, poinEarned])
 
   const createQrisPayment = async () => {
     if (state.qrisCreatingRef.current) return
@@ -586,7 +685,7 @@ Terima kasih atas kunjungan Anda!`
       const paperSize = (localStorage.getItem('zetass_bt_paper_size') as '58mm' | '80mm') || strukSettingsRes?.data?.paper_size || '58mm'
 
       const result = await bluetoothPrinter.printStruk({
-        namaToko: identitasRes?.data?.namatoko || 'Zetass Pos',
+        namaToko: identitasRes?.data?.namatoko || 'WariPOS',
         alamat: identitasRes?.data?.alamattoko,
         telepon: identitasRes?.data?.nomortelptoko,
         kdTransaksi: state.lastKd || 'TRX-TEMP',
@@ -717,13 +816,15 @@ Terima kasih atas kunjungan Anda!`
         onToggleDropdown={() => state.setShowCustomerDrop(v => !v)}
       />
 
-      <OrderTypeSelector
-        tipePesanan={state.tipePesanan}
-        nomorMeja={state.nomorMeja}
-        availableTables={state.availableTables}
-        onChangeTipe={state.setTipePesanan}
-        onChangeMeja={state.setNomorMeja}
-      />
+      {posMode === 'restaurant' && (
+        <OrderTypeSelector
+          tipePesanan={state.tipePesanan}
+          nomorMeja={state.nomorMeja}
+          availableTables={state.availableTables}
+          onChangeTipe={state.setTipePesanan}
+          onChangeMeja={state.setNomorMeja}
+        />
+      )}
 
       <CartPanel
         cart={state.cart}
@@ -761,6 +862,7 @@ Terima kasih atas kunjungan Anda!`
         promoLoading={state.promoLoading}
         pajakPersen={state.pajakPersen}
         pajakAmount={pajakAmount}
+        storePajakPersen={storeTaxRate ?? undefined}
         totalBayar={totalBayar}
         jenisBayar={state.jenisBayar}
         bayar={state.bayar}
@@ -769,6 +871,7 @@ Terima kasih atas kunjungan Anda!`
         kembalian={kembalian}
         qrisCanPay={qrisCanPay}
         loading={state.loading}
+        onChangePajakPersen={state.setPajakPersen}
         onChangePromoCode={c => { state.setPromoCode(c); state.setPromoDiskon(0); state.setPromoMsg('') }}
         onApplyPromo={applyPromo}
         onRemovePromo={removePromo}
@@ -779,88 +882,457 @@ Terima kasih atas kunjungan Anda!`
     </div>
   )
 
+  const renderMobileDrawerContent = () => (
+    <div className="flex flex-col h-full min-h-0">
+      {/* 2-Step Segmented Tab Bar */}
+      <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl mb-3 shrink-0">
+        <button
+          type="button"
+          onClick={() => state.setMobileCheckoutTab('cart')}
+          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            state.mobileCheckoutTab === 'cart'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+          }`}
+        >
+          <ShoppingCart size={15} className={state.mobileCheckoutTab === 'cart' ? 'text-red-600' : ''} />
+          <span>1. Keranjang</span>
+          <span className="px-1.5 py-0.2 rounded-full bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 text-[10px] font-black">
+            {totalCartQty}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => state.setMobileCheckoutTab('payment')}
+          disabled={state.cart.length === 0}
+          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 ${
+            state.mobileCheckoutTab === 'payment'
+              ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
+              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+          }`}
+        >
+          <CreditCard size={15} />
+          <span>2. Pembayaran</span>
+        </button>
+      </div>
+
+      {state.mobileCheckoutTab === 'cart' ? (
+        <div className="flex-1 flex flex-col min-h-0 relative">
+          <div className="flex-1 overflow-y-auto space-y-3 pr-0.5 pb-24 scrollbar-thin">
+            {/* Customer Selector */}
+            <CustomerSelector
+              customers={state.customers}
+              selectedCustomer={state.selectedCustomer}
+              customerSearch={state.customerSearch}
+              showCustomerDrop={state.showCustomerDrop}
+              customerRef={state.customerRef}
+              onSelectCustomer={c => { state.setSelectedCustomer(c); state.setShowCustomerDrop(false); state.setCustomerSearch('') }}
+              onClearCustomer={() => { state.setSelectedCustomer(null); state.setCustomerSearch('') }}
+              onSearchChange={state.setCustomerSearch}
+              onToggleDropdown={() => state.setShowCustomerDrop(v => !v)}
+            />
+
+            {/* Order Type (Restaurant Mode Only) */}
+            {posMode === 'restaurant' && (
+              <OrderTypeSelector
+                tipePesanan={state.tipePesanan}
+                nomorMeja={state.nomorMeja}
+                availableTables={state.availableTables}
+                onChangeTipe={state.setTipePesanan}
+                onChangeMeja={state.setNomorMeja}
+              />
+            )}
+
+            {/* Cart Items List */}
+            <CartPanel
+              cart={state.cart}
+              totalCartQty={totalCartQty}
+              heldCarts={heldCarts}
+              bluetoothPrinterConnected={bluetoothPrinter.isConnected()}
+              onHold={() => {
+                if (state.cart.length > 0) {
+                  const ok = holdCart(state.cart, state.selectedCustomer)
+                  if (ok) {
+                    state.setCart([])
+                    state.setBayar('')
+                    state.setSelectedCustomer(null)
+                    state.setMobileCartDrawerOpen(false)
+                    toast('Transaksi di-hold', 'success')
+                  } else {
+                    toast('Batas hold tercapai (maks 10)', 'error')
+                  }
+                }
+              }}
+              onShowHeld={() => state.setShowHeldCarts(true)}
+              onShowBtPrinter={() => state.setShowBtPrinterModal(true)}
+              onShowSettings={() => state.setShowSettings(true)}
+              onUpdateQty={updateQty}
+              onRemoveItem={removeItem}
+              isMobileSheet={true}
+            />
+
+            {/* Promo Code Input */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={state.promoCode}
+                    onChange={e => { state.setPromoCode(e.target.value.toUpperCase()); state.setPromoDiskon(0); state.setPromoMsg('') }}
+                    onKeyDown={e => e.key === 'Enter' && applyPromo()}
+                    placeholder="KODE PROMO / VOUCHER"
+                    disabled={state.promoDiskon > 0}
+                    className="w-full h-10 pl-8 pr-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:border-red-600 uppercase"
+                  />
+                </div>
+                {state.promoDiskon > 0 ? (
+                  <button
+                    type="button"
+                    onClick={removePromo}
+                    className="px-3 h-10 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={applyPromo}
+                    disabled={state.promoLoading || !state.promoCode.trim()}
+                    className="px-4 h-10 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    {state.promoLoading ? '...' : 'Gunakan'}
+                  </button>
+                )}
+              </div>
+              {state.promoMsg && (
+                <p className={`text-[11px] font-medium ${state.promoDiskon > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{state.promoMsg}</p>
+              )}
+            </div>
+
+            {/* Price Summary Breakdown */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>Subtotal ({totalCartQty} item)</span>
+                <span className="font-bold text-slate-900 dark:text-white">{formatRupiah(subTotal)}</span>
+              </div>
+              {state.promoDiskon > 0 && (
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">
+                  <span>Diskon Promo</span>
+                  <span>-{formatRupiah(state.promoDiskon)}</span>
+                </div>
+              )}
+              {/* PPN Control in Mobile Drawer */}
+              <div className="flex items-center justify-between py-1 border-t border-slate-200/60 dark:border-slate-800/60">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">PPN</span>
+                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-white dark:bg-slate-900 text-[10px] font-bold">
+                    {Array.from(new Set([0, storeTaxRate && storeTaxRate > 0 ? storeTaxRate : (state.pajakPersen > 0 ? state.pajakPersen : 11)])).map(r => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => state.setPajakPersen(r)}
+                        className={`px-2 py-0.5 rounded-md transition-all ${
+                          state.pajakPersen === r
+                            ? 'bg-red-600 text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {r === 0 ? 'Non-PPN' : `PPN ${r}%`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <span className={`font-bold ${pajakAmount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                  {pajakAmount > 0 ? `+${formatRupiah(pajakAmount)}` : 'Rp 0'}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-black border-t border-slate-200 dark:border-slate-800 pt-2 text-slate-900 dark:text-white">
+                <span>Total Tagihan</span>
+                <span className="text-red-600 dark:text-red-400 text-base">{formatRupiah(totalBayar)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sticky Bottom Action */}
+          <div className="absolute bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md flex items-center justify-between gap-3 shadow-lg z-20">
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">Total Tagihan</p>
+              <p className="text-base font-black text-red-600 dark:text-red-400">{formatRupiah(totalBayar)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => state.setMobileCheckoutTab('payment')}
+              disabled={state.cart.length === 0}
+              className="flex-1 max-w-[220px] h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all disabled:opacity-40"
+            >
+              <span>Lanjut Bayar</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col min-h-0 relative">
+          <div className="flex-1 overflow-y-auto space-y-3 pr-0.5 pb-24 scrollbar-thin">
+            {/* Big Total Header Card */}
+            <div className="p-4 rounded-2xl bg-red-600 text-white shadow-sm text-center space-y-1">
+              <p className="text-xs font-bold text-red-100 uppercase tracking-wider">Total Pembayaran</p>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight font-mono">{formatRupiah(totalBayar)}</h2>
+              <p className="text-[11px] text-red-100 opacity-90">
+                {totalCartQty} Item · {state.tipePesanan === 'DINE_IN' ? 'Dine In' : state.tipePesanan === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}
+                {state.nomorMeja ? ` (Meja ${state.nomorMeja})` : ''}
+              </p>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="grid grid-cols-3 gap-1.5 pt-1">
+              {(['TUNAI', 'TRANSFER', 'QRIS'] as const).map(j => (
+                <button
+                  key={j}
+                  type="button"
+                  onClick={() => state.setJenisBayar(j)}
+                  className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-black border transition-all ${
+                    state.jenisBayar === j
+                      ? 'bg-red-600 text-white border-red-600 shadow-md shadow-red-600/20'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                  }`}
+                >
+                  {j === 'TUNAI' ? <Banknote size={16} /> : j === 'TRANSFER' ? <CreditCard size={16} /> : <QrCode size={16} />}
+                  <span>{j}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Tunai Options */}
+            {state.jenisBayar === 'TUNAI' && (
+              <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">Pilihan Nominal Cepat:</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {getSmartCashAmounts(totalBayar).map(amt => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => state.setBayar(String(amt))}
+                      className={`py-2 px-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 truncate ${
+                        amt === totalBayar
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold shadow-sm'
+                          : 'border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:border-red-600/50'
+                      }`}
+                    >
+                      {amt === totalBayar ? 'Uang Pas' : formatRupiah(amt)}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Jumlah Uang Diterima (Rp):
+                  </label>
+                  <div className="relative">
+                    <input
+                      ref={state.bayarInputRef}
+                      type="number"
+                      value={state.bayar}
+                      onChange={e => state.setBayar(e.target.value)}
+                      placeholder="0"
+                      className="w-full h-12 pl-3 pr-10 text-base font-black rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-red-600 focus:ring-2 focus:ring-red-600/20"
+                    />
+                    {state.bayar && (
+                      <button
+                        type="button"
+                        onClick={() => state.setBayar('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {state.bayar.trim() !== '' && (
+                  kembalian < 0 ? (
+                    <div className="flex items-center justify-between text-xs font-bold text-red-600 dark:text-red-400 bg-red-100/60 dark:bg-red-950/60 border border-red-200 dark:border-red-900/50 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <AlertCircle size={16} className="shrink-0 text-red-500" />
+                        <span>Kurang Bayar:</span>
+                      </div>
+                      <span className="text-sm font-black">{formatRupiah(Math.abs(kembalian))}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/60 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900/50 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
+                        <span>Kembalian:</span>
+                      </div>
+                      <span className="text-base font-black">{formatRupiah(kembalian)}</span>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+            {/* QRIS / Transfer Info */}
+            {state.jenisBayar === 'QRIS' && (
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5">
+                <QrCode size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">QRIS Siap Ditampilkan</p>
+                  <p className="text-[11px] opacity-90">Tekan tombol bayar untuk menampilkan barcode QRIS statis / dinamis ke pelanggan.</p>
+                </div>
+              </div>
+            )}
+
+            {state.jenisBayar === 'TRANSFER' && (
+              <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 text-xs text-blue-800 dark:text-blue-200 flex items-start gap-2.5">
+                <CreditCard size={20} className="text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Pembayaran Transfer Bank / EDC</p>
+                  <p className="text-[11px] opacity-90">Pastikan bukti transfer atau struk EDC telah berhasil sebelum menyelesaikan transaksi.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sticky Bottom Action */}
+          <div className="absolute bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md flex items-center gap-2 shadow-lg z-20">
+            <button
+              type="button"
+              onClick={() => state.setMobileCheckoutTab('cart')}
+              className="h-12 px-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
+            >
+              <ArrowLeft size={16} />
+              <span className="hidden xs:inline">Item</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={state.loading || (state.jenisBayar === 'QRIS' ? !qrisCanPay : (!state.cart.length || !state.bayar || (state.jenisBayar === 'TUNAI' && kembalian < 0)))}
+              onClick={handleBayar}
+              className="flex-1 h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all disabled:opacity-40"
+            >
+              {state.loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : state.jenisBayar === 'QRIS' ? (
+                <>
+                  <QrCode size={18} />
+                  <span>TAMPILKAN QRIS</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} />
+                  <span>SELESAIKAN PEMBAYARAN</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
   return (
-    <div className="flex flex-col gap-3 lg:h-[calc(100vh-8.5rem)] lg:flex-row select-none">
-      <div className="flex min-w-0 flex-none lg:flex-1 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm lg:p-4 lg:h-full lg:overflow-hidden">
+    <div className="flex flex-col gap-2.5 lg:gap-3 lg:h-[calc(100vh-8.5rem)] lg:flex-row touch-pan-y">
+      {/* Catalog & Search Area */}
+      <div className="flex min-w-0 flex-none lg:flex-1 flex-col gap-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-slate-900 p-2.5 sm:p-3 shadow-sm lg:p-4 lg:h-full lg:overflow-hidden">
         
-        <div className="shrink-0 flex flex-col gap-2.5">
+        {/* Header Bar */}
+        <div className="shrink-0 flex flex-col gap-2">
           {!state.activeShiftId && (
-            <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-2.5 text-xs text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
-                <AlertCircle size={16} className="text-amber-600 shrink-0" />
-                <span>Shift kasir belum dibuka. Buka shift untuk memproses transaksi.</span>
+                <AlertCircle size={15} className="text-amber-600 shrink-0" />
+                <span>Shift kasir belum dibuka. Buka shift untuk mencatat transaksi kasir.</span>
               </div>
               <button
                 type="button"
                 onClick={() => navigate('/shifts')}
-                className="rounded-lg bg-amber-600 px-3 py-1.5 font-bold text-white transition-colors hover:bg-amber-700 shadow-sm shrink-0"
+                className="rounded-lg bg-amber-600 px-3 py-1 font-bold text-white transition-colors hover:bg-amber-700 shadow-sm shrink-0 text-xs"
               >
                 Buka Shift Kasir
               </button>
             </div>
           )}
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Katalog Kasir</h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[11px] font-bold border border-red-600/20">
-                  {filtered.length} Produk
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Pilih produk atau scan barcode untuk menambahkan ke keranjang</p>
+          {/* Mobile Top Status & Action Row */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate">Kasir</h1>
+              <span className="px-2 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[10px] sm:text-[11px] font-bold border border-red-600/20 shrink-0">
+                {filtered.length} Produk
+              </span>
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Shift Quick Badge */}
               <button
                 type="button"
                 onClick={() => navigate('/shifts')}
-                className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 text-slate-700 dark:text-slate-300 shadow-sm transition shrink-0"
+                className="px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-bold flex items-center gap-1 text-slate-700 dark:text-slate-300 shadow-sm transition"
                 title="Buka / Tutup Shift Kasir"
               >
-                <Clock size={14} className={state.activeShiftId ? "text-emerald-500" : "text-amber-500"} />
-                <span>{state.activeShiftId ? 'Shift Aktif' : 'Shift Kasir'}</span>
+                <Clock size={13} className={state.activeShiftId ? "text-emerald-500" : "text-amber-500"} />
+                <span>{state.activeShiftId ? 'Shift Aktif' : 'Shift'}</span>
               </button>
 
-              {state.cart.length > 0 && (
+              {/* Held Carts Badge */}
+              {heldCarts.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => state.setMobileCartDrawerOpen(true)}
-                  className="lg:hidden px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-red-600/30 active:scale-95 transition-transform"
+                  onClick={() => state.setShowHeldCarts(true)}
+                  className="px-2 py-1 rounded-xl bg-amber-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-transform"
+                  title="Lihat Transaksi Tersimpan"
                 >
-                  <ShoppingCart size={14} />
-                  <span>{totalCartQty} Item</span>
-                  <span className="bg-white/20 px-1.5 py-0.5 rounded-md text-[10px]">{formatRupiah(totalBayar)}</span>
+                  <Play size={11} fill="currentColor" />
+                  <span>{heldCarts.length} Hold</span>
                 </button>
               )}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F1 Cari</span>
-                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F2 Bayar</span>
-                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F5 Proses</span>
-                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">Esc Reset</span>
-              </div>
+
+              {/* Bluetooth Thermal Printer */}
+              <button
+                type="button"
+                onClick={() => state.setShowBtPrinterModal(true)}
+                className={`p-1.5 rounded-xl border transition-colors ${
+                  bluetoothPrinter.isConnected()
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-500 hover:text-red-600'
+                }`}
+                title="Printer Thermal Bluetooth"
+              >
+                <Bluetooth size={15} />
+              </button>
+
+              {/* Struk Settings */}
+              <button
+                type="button"
+                onClick={() => state.setShowSettings(true)}
+                className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-500 hover:text-red-600 transition-colors"
+                title="Pengaturan Struk"
+              >
+                <Settings size={15} />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Search Input & Scanner */}
+          <div className="flex items-center gap-2">
             <div className="relative flex-1 group">
-              <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-red-600 transition-colors" />
+              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-red-600 transition-colors" />
               <input
                 ref={state.searchRef}
                 type="text"
-                placeholder="Cari produk (Nama / Kode / Barcode)... [F1]"
+                placeholder="Cari nama barang / barcode..."
                 value={state.search}
                 onChange={e => state.setSearch(e.target.value)}
                 onKeyDown={handleSearchKey}
-                className="w-full h-12 pl-11 pr-10 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-600/15 transition-all shadow-inner"
+                className="w-full h-11 pl-10 pr-9 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/80 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-600/15 transition-all shadow-inner"
               />
               {state.search && (
                 <button
                   type="button"
-                  onClick={() => { state.setSearch(''); state.searchRef.current?.focus() }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  onClick={() => { state.setSearch(''); if (!Capacitor.isNativePlatform()) state.searchRef.current?.focus() }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               )}
             </div>
@@ -868,69 +1340,106 @@ Terima kasih atas kunjungan Anda!`
             <button
               type="button"
               onClick={openCameraScanner}
-              className="h-12 px-4 sm:px-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-red-600 dark:hover:text-red-400 font-bold text-xs sm:text-sm flex items-center gap-2 shrink-0 shadow-sm active:scale-95 transition-all"
+              className="h-11 px-3.5 sm:px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-red-600 dark:hover:text-red-400 font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0 shadow-sm active:scale-95 transition-all"
               title="Buka Kamera Barcode Scanner"
             >
-              <ScanLine size={20} className="text-red-600" />
-              <span className="hidden sm:inline">Scan Barcode</span>
+              <ScanLine size={18} className="text-red-600" />
+              <span className="hidden sm:inline">Scan</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-0.5">
-            <button
-              type="button"
-              onClick={() => state.setSelectedCategory('ALL')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                state.selectedCategory === 'ALL'
-                  ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              <span>Semua</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                state.selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-              }`}>
-                {state.products.filter(p => p.jenis_transaksi === 'INCOME').length}
-              </span>
-            </button>
-
-            {categoryList.map(cat => (
+          {/* Category Filter Pills & Grid/List Toggle */}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none flex-1 min-w-0">
               <button
-                key={cat.id}
                 type="button"
-                onClick={() => state.setSelectedCategory(cat.id)}
+                onClick={() => state.setSelectedCategory('ALL')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                  state.selectedCategory === cat.id
+                  state.selectedCategory === 'ALL'
                     ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                <span>{cat.name}</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                  state.selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                <span>Semua</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                  state.selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                 }`}>
-                  {cat.count}
+                  {state.products.filter(p => p.jenis_transaksi === 'INCOME').length}
                 </span>
               </button>
-            ))}
+
+              {categoryList.map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => state.setSelectedCategory(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                    state.selectedCategory === cat.id
+                      ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <span>{cat.name}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                    state.selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    {cat.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Grid vs List View Toggle */}
+            <div className="flex items-center p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl shrink-0">
+              <button
+                type="button"
+                onClick={() => state.setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  state.viewMode === 'grid'
+                    ? 'bg-white dark:bg-slate-700 text-red-600 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Tampilan Grid"
+              >
+                <LayoutGrid size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() => state.setViewMode('list')}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  state.viewMode === 'list'
+                    ? 'bg-white dark:bg-slate-700 text-red-600 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Tampilan List"
+              >
+                <List size={15} />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin">
+        {/* Product Catalog Grid */}
+        <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto pr-0.5 lg:scrollbar-thin touch-pan-y">
           <ProductGrid
             products={state.products}
             productsLoading={state.productsLoading}
             filtered={filtered}
             onAddToCart={addToCart}
+            cart={state.cart}
+            viewMode={state.viewMode}
+            onUpdateQty={updateQty}
           />
         </div>
 
       </div>
 
+      {/* Desktop Sidebar: Cart & Payment Column */}
       <div className="hidden lg:flex flex-none w-full shrink-0 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm lg:w-[26rem] xl:w-[28rem] lg:h-full lg:overflow-y-auto scrollbar-thin">
         {renderCartAndPayment(false)}
       </div>
 
+      {/* Floating Bottom Cart Pill on Mobile (when cart > 0) */}
       <AnimatePresence>
         {state.cart.length > 0 && !state.mobileCartDrawerOpen && (
           <motion.div
@@ -938,30 +1447,30 @@ Terima kasih atas kunjungan Anda!`
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: 'spring', damping: 22, stiffness: 260 }}
-            className="fixed bottom-[4.5rem] left-3 right-3 z-40 lg:hidden"
+            className="fixed bottom-[4.75rem] left-3 right-3 z-40 lg:hidden"
           >
             <div
-              onClick={() => state.setMobileCartDrawerOpen(true)}
-              className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/95 dark:bg-slate-900/95 text-white shadow-2xl shadow-red-600/30 border border-red-500/30 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
+              onClick={() => { state.setMobileCheckoutTab('cart'); state.setMobileCartDrawerOpen(true) }}
+              className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/95 dark:bg-slate-900/95 text-white shadow-2xl shadow-red-600/30 border border-red-500/40 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
             >
               <div className="flex items-center gap-3">
-                <div className="relative p-2.5 rounded-xl bg-gradient-to-tr from-red-600 to-rose-600 text-white font-bold shadow-md">
-                  <ShoppingCart size={20} />
+                <div className="relative p-2.5 rounded-xl bg-red-600 text-white font-bold shadow-sm">
+                  <ShoppingCart size={18} />
                   <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow">
                     {totalCartQty}
                   </span>
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Tagihan ({totalCartQty} item)</p>
-                  <p className="text-base font-black text-white">{formatRupiah(totalBayar)}</p>
+                  <p className="text-base font-black text-white font-mono">{formatRupiah(totalBayar)}</p>
                 </div>
               </div>
 
               <button
                 type="button"
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-red-600/40 active:scale-95 transition-transform"
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
               >
-                <span>Bayar</span>
+                <span>Keranjang & Bayar</span>
                 <ArrowRight size={14} />
               </button>
             </div>
@@ -969,6 +1478,7 @@ Terima kasih atas kunjungan Anda!`
         )}
       </AnimatePresence>
 
+      {/* Full-Featured Mobile Bottom Sheet Checkout Drawer */}
       <AnimatePresence>
         {state.mobileCartDrawerOpen && (
           <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
@@ -984,33 +1494,47 @@ Terima kasih atas kunjungan Anda!`
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="relative z-10 w-full max-h-[88vh] rounded-t-3xl border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 flex flex-col shadow-2xl overflow-hidden"
+              className="relative z-10 w-full h-[92vh] max-h-[92vh] rounded-t-3xl border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 flex flex-col shadow-2xl overflow-hidden"
             >
+              {/* Drag Handle */}
               <div
                 className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mb-2 shrink-0 cursor-pointer"
                 onClick={() => state.setMobileCartDrawerOpen(false)}
               />
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3 shrink-0">
+
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800 mb-2.5 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/50 text-red-600">
                     <ShoppingCart size={16} />
                   </div>
-                  <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">Keranjang & Pembayaran</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400 text-[11px] font-bold">
-                    {totalCartQty} Item
-                  </span>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">Keranjang & Kasir</h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => state.setMobileCartDrawerOpen(false)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <X size={20} />
-                </button>
+
+                <div className="flex items-center gap-1.5">
+                  {state.cart.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => state.setShowClearCart(true)}
+                      className="px-2.5 py-1 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 size={13} />
+                      <span>Kosongkan</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => state.setMobileCartDrawerOpen(false)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-1 pb-4 scrollbar-thin">
-                {renderCartAndPayment(true)}
+              {/* Drawer Content */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {renderMobileDrawerContent()}
               </div>
             </motion.div>
           </div>

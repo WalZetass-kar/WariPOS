@@ -23,12 +23,13 @@ class BiometricService {
       const module = await import('@capgo/capacitor-native-biometric')
       const result = await module.NativeBiometric.isAvailable({ useFallback: true })
       return {
-        isAvailable: Boolean(result?.isAvailable),
-        biometryType: result?.biometryType ? String(result.biometryType) : undefined,
+        isAvailable: result?.isAvailable !== false,
+        biometryType: result?.biometryType ? String(result.biometryType) : 'fingerprint',
         strongBiometry: Boolean((result as any)?.strongBiometry),
       }
     } catch {
-      return { isAvailable: false }
+      // On native Android, biometrics are generally available
+      return { isAvailable: Capacitor.isNativePlatform(), biometryType: 'fingerprint' }
     }
   }
 
@@ -64,12 +65,13 @@ class BiometricService {
         username,
         password: tokenOrPassword,
       })
-      this.setEnabled(true)
-    } catch {
-      // Fallback to secure storage
-      secureStorage.setJSON(BIOMETRIC_CREDENTIALS_KEY, { username, tokenOrPassword })
-      this.setEnabled(true)
+    } catch (err) {
+      console.warn('[Biometric] Native setCredentials failed, using secureStorage fallback:', err)
     }
+
+    // Always keep encrypted fallback in secureStorage
+    secureStorage.setJSON(BIOMETRIC_CREDENTIALS_KEY, { username, tokenOrPassword })
+    this.setEnabled(true)
   }
 
   /**
@@ -77,20 +79,21 @@ class BiometricService {
    */
   async authenticate(): Promise<{ success: boolean; username?: string; password?: string; message?: string }> {
     if (!Capacitor.isNativePlatform()) {
-      return { success: false, message: 'Autentikasi biometrik hanya tersedia di perangkat mobile native.' }
+      return { success: false, message: 'Autentikasi sidik jari hanya tersedia di aplikasi Android/iOS.' }
     }
 
     try {
       const module = await import('@capgo/capacitor-native-biometric')
       await module.NativeBiometric.verifyIdentity({
-        reason: 'Masuk ke Zetass POS menggunakan Sidik Jari atau Face ID',
-        title: 'Autentikasi Biometrik',
+        reason: 'Pindai sidik jari Anda untuk masuk ke WariPOS',
+        title: 'Verifikasi Sidik Jari',
         subtitle: 'Konfirmasi identitas kasir / pemilik',
-        description: 'Pindai sidik jari atau wajah Anda',
+        description: 'Sentuh sensor sidik jari perangkat Anda',
         useFallback: true,
+        maxAttempts: 5,
       })
 
-      // Retrieve credentials
+      // Try retrieve credentials from native keychain
       try {
         const creds = await module.NativeBiometric.getCredentials({ server: 'com.zetass.pos' })
         if (creds && creds.username && creds.password) {
@@ -98,7 +101,7 @@ class BiometricService {
         }
       } catch {}
 
-      // Check fallback storage
+      // Try retrieve credentials from secure storage fallback
       const fallback = secureStorage.getJSON<{ username: string; tokenOrPassword: string } | null>(BIOMETRIC_CREDENTIALS_KEY, null)
       if (fallback?.username && fallback?.tokenOrPassword) {
         return { success: true, username: fallback.username, password: fallback.tokenOrPassword }
@@ -106,9 +109,16 @@ class BiometricService {
 
       return { success: true }
     } catch (error: any) {
+      const msg = String(error?.message || '')
+      if (msg.includes('cancel') || msg.includes('dibatalkan') || msg.includes('USER_CANCELED')) {
+        return { success: false, message: 'Verifikasi sidik jari dibatalkan.' }
+      }
+      if (msg.includes('NOT_ENROLLED') || msg.includes('no biometric enrolled')) {
+        return { success: false, message: 'Belum ada sidik jari yang terdaftar di pengaturan HP Anda.' }
+      }
       return {
         success: false,
-        message: error.message || 'Verifikasi biometrik dibatalkan atau tidak cocok.',
+        message: error.message || 'Verifikasi sidik jari gagal atau tidak cocok.',
       }
     }
   }

@@ -64,7 +64,7 @@ export function defaultModelForProvider(provider: AiProvider) {
   if (provider === 'deepseek') return 'deepseek-chat'
   if (provider === 'openrouter') return 'deepseek/deepseek-r1:free'
   if (provider === 'bluesminds') return 'DeepSeek-V4-Flash'
-  if (provider === 'gemini') return 'gemini-1.5-flash'
+  if (provider === 'gemini') return 'gemini-2.0-flash'
   return ''
 }
 

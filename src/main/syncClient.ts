@@ -278,7 +278,7 @@ class SyncClient {
     return {
       deviceId: config.deviceId,
       deviceName: config.deviceName,
-      userAgent: `Zetass Pos Desktop/${app.getVersion()} ${process.platform}/${process.arch}`,
+      userAgent: `WariPOS Desktop/${app.getVersion()} ${process.platform}/${process.arch}`,
     }
   }
 

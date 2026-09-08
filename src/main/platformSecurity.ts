@@ -5,7 +5,8 @@ import path from 'path'
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 
-const DEEP_LINK_SCHEME = 'zetasspos'
+const DEEP_LINK_SCHEME = 'waripos'
+const LEGACY_DEEP_LINK_SCHEME = 'zetasspos'
 const DEFAULT_CERT_PIN_SHA256 = 'ZcJbApTb7wyllleAjHw2vYAskqdT+DhMY9aPDFwAtf4='
 const TRUSTED_DEV_ORIGINS = new Set(['http://localhost:5173', 'http://127.0.0.1:5173'])
 
@@ -78,7 +79,7 @@ export function configureElectronSecurity(isDev: boolean) {
     "default-src 'self'",
     `script-src 'self'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https:",
     "connect-src 'self' ws://localhost:* http://localhost:* https://*.supabase.co wss://*.supabase.co https://api.openai.com https://api.fonnte.com https://quickchart.io https://script.google.com",
     "font-src 'self'",
     "frame-src 'none'",
@@ -122,11 +123,11 @@ export function configureElectronSecurity(isDev: boolean) {
     const host = request.hostname.toLowerCase()
     const hostPins = pins.get(host)
     if (!hostPins) {
-      if (host.endsWith('.supabase.co') || host.endsWith('.supabaseapp.com')) {
+      if (host.endsWith('.supabase.co') || host.endsWith('.supabaseapp.com') || host.includes('unsplash.com') || host.includes('github.com')) {
         callback(0)
         return
       }
-      callback(request.verificationResult === 'OK' ? 0 : -2)
+      callback(request.verificationResult === 'OK' || isDev ? 0 : -2)
       return
     }
 
@@ -154,7 +155,7 @@ export function attachWindowSecurity(win: ElectronBrowserWindow, isDev: boolean)
           height: 700,
           minWidth: 800,
           minHeight: 500,
-          title: 'Zetass Pos - Customer Display',
+          title: 'WariPOS - Customer Display',
           autoHideMenuBar: true,
         },
       }
@@ -190,8 +191,10 @@ export async function openExternalHttps(rawUrl: string) {
 export function registerDesktopDeepLinks(isDev: boolean) {
   if (process.defaultApp && process.argv.length >= 2) {
     app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [path.resolve(process.argv[1])])
+    app.setAsDefaultProtocolClient(LEGACY_DEEP_LINK_SCHEME, process.execPath, [path.resolve(process.argv[1])])
   } else {
     app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME)
+    app.setAsDefaultProtocolClient(LEGACY_DEEP_LINK_SCHEME)
   }
 
   pendingDeepLink = extractDeepLink(process.argv)
@@ -222,7 +225,7 @@ export function registerDesktopDeepLinks(isDev: boolean) {
 }
 
 function extractDeepLink(argv: string[]) {
-  return argv.find(arg => arg.toLowerCase().startsWith(`${DEEP_LINK_SCHEME}:`)) ?? null
+  return argv.find(arg => arg.toLowerCase().startsWith(`${DEEP_LINK_SCHEME}:`) || arg.toLowerCase().startsWith(`${LEGACY_DEEP_LINK_SCHEME}:`)) ?? null
 }
 
 function sendDeepLink(win: ElectronBrowserWindow, url: string) {

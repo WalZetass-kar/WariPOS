@@ -321,11 +321,11 @@ export default function Returns() {
                               <button onClick={() => handleReject(ret.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500" title="Reject">
                                 <X size={14} />
                               </button>
-                              <button onClick={() => setDeleteReturn(ret)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500" title="Hapus">
-                                <Trash2 size={14} />
-                              </button>
                             </>
                           )}
+                          <button onClick={() => setDeleteReturn(ret)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500" title="Hapus">
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>

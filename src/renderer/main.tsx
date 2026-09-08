@@ -63,7 +63,7 @@ function App() {
   const [showSplash, setShowSplash] = useState(true)
 
   return (
-    <HashRouter>
+    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
       <MobileBridge />
       <AppRoutes />

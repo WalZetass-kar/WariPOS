@@ -56,7 +56,16 @@ export default function Security() {
   useEffect(() => {
     Promise.all([
       api<any>('security:get').then(r => {
-        if (r.success && r.data) setSettings(r.data)
+        if (r.success && r.data) {
+          setSettings({
+            loginAttempts: Number(r.data.loginAttempts) || 5,
+            lockDuration: Number(r.data.lockDuration) || 15,
+            sessionTimeout: Number(r.data.sessionTimeout) || 30,
+            requireStrongPassword: Boolean(r.data.requireStrongPassword ?? true),
+            twoFactorEnabled: Boolean(r.data.twoFactorEnabled),
+            ipWhitelist: Array.isArray(r.data.ipWhitelist) ? r.data.ipWhitelist : [],
+          })
+        }
       }),
       loadSessions(),
     ]).finally(() => setInitialLoading(false))
@@ -72,13 +81,15 @@ export default function Security() {
 
   const addIp = () => {
     if (!newIp) return toast('Masukkan IP address', 'error')
-    if (settings.ipWhitelist.includes(newIp)) return toast('IP sudah ada', 'error')
-    setSettings({ ...settings, ipWhitelist: [...settings.ipWhitelist, newIp] })
+    const currentList = Array.isArray(settings.ipWhitelist) ? settings.ipWhitelist : []
+    if (currentList.includes(newIp)) return toast('IP sudah ada', 'error')
+    setSettings({ ...settings, ipWhitelist: [...currentList, newIp] })
     setNewIp('')
   }
 
   const removeIp = (ip: string) => {
-    setSettings({ ...settings, ipWhitelist: settings.ipWhitelist.filter(i => i !== ip) })
+    const currentList = Array.isArray(settings.ipWhitelist) ? settings.ipWhitelist : []
+    setSettings({ ...settings, ipWhitelist: currentList.filter(i => i !== ip) })
   }
 
   const revokeSession = async (id: number) => {
@@ -248,9 +259,9 @@ export default function Security() {
             <Button onClick={addIp} variant="secondary">Tambah IP</Button>
           </div>
 
-          {settings.ipWhitelist.length > 0 ? (
+          {(settings.ipWhitelist || []).length > 0 ? (
             <div className="space-y-2">
-              {settings.ipWhitelist.map(ip => (
+              {(settings.ipWhitelist || []).map(ip => (
                 <div key={ip} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                   <span className="font-mono text-slate-700 dark:text-slate-200">{ip}</span>
                   <button onClick={() => removeIp(ip)} className="text-red-500 hover:text-red-600">

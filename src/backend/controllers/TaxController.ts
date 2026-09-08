@@ -32,12 +32,15 @@ export class TaxController {
   }
 
   static getActiveRate(): number {
+    const identitas = sqlite.prepare('SELECT pajak_persen FROM mediasoft_identitas LIMIT 1').get() as { pajak_persen?: number | null } | undefined
+    if (identitas && typeof identitas.pajak_persen === 'number') {
+      return Math.max(0, Math.min(100, identitas.pajak_persen))
+    }
     const active = sqlite.prepare('SELECT rate FROM mediasoft_tax_settings WHERE is_active = 1 LIMIT 1').get() as { rate?: number } | undefined
     if (active && typeof active.rate === 'number') {
       return Math.max(0, Math.min(100, active.rate))
     }
-    const legacy = sqlite.prepare('SELECT COALESCE(pajak_persen, 0) AS rate FROM mediasoft_identitas LIMIT 1').get() as { rate?: number } | undefined
-    return Math.max(0, Math.min(100, Number(legacy?.rate ?? 0)))
+    return 0
   }
 
   static getActive() {
@@ -47,6 +50,26 @@ export class TaxController {
   static getAll() {
     const data = sqlite.prepare('SELECT * FROM mediasoft_tax_settings ORDER BY name').all()
     return { success: true, data }
+  }
+
+  static setActiveRate(rate: number) {
+    const val = Math.max(0, Math.min(100, Number(rate) || 0))
+    try {
+      sqlite.transaction(() => {
+        const existing = sqlite.prepare('SELECT id FROM mediasoft_tax_settings WHERE is_active = 1 LIMIT 1').get() as { id: number } | undefined
+        if (existing) {
+          sqlite.prepare('UPDATE mediasoft_tax_settings SET rate = ?, name = ? WHERE id = ?').run(val, `PPN ${val}%`, existing.id)
+        } else {
+          sqlite.prepare('INSERT INTO mediasoft_tax_settings (name, rate, is_active) VALUES (?, ?, 1)').run(`PPN ${val}%`, val)
+        }
+        try {
+          sqlite.prepare('UPDATE mediasoft_identitas SET pajak_persen = ?').run(val)
+        } catch { /* ignore if column/table absent */ }
+      })()
+      return { success: true, message: 'Tarif PPN berhasil diperbarui', data: { rate: val } }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
   }
 
   static setActive(id: number) {

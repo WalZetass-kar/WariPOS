@@ -1,4 +1,19 @@
 export const SUBSCRIPTION_UPGRADE_WA_NUMBER = '08988098238'
+const STORAGE_SUPPORT_WA_KEY = 'zetass_support_wa_number'
+
+export function getSupportWaNumber(): string {
+  try {
+    const saved = localStorage.getItem(STORAGE_SUPPORT_WA_KEY)
+    if (saved && saved.trim()) return saved.trim()
+  } catch {}
+  return SUBSCRIPTION_UPGRADE_WA_NUMBER
+}
+
+export function setSupportWaNumber(phone: string): void {
+  try {
+    localStorage.setItem(STORAGE_SUPPORT_WA_KEY, phone.trim())
+  } catch {}
+}
 
 /** Fallback WhatsApp number if a custom number is missing or invalid. */
 const FALLBACK_WA_NUMBER = SUBSCRIPTION_UPGRADE_WA_NUMBER
@@ -67,7 +82,7 @@ function openExternalUrl(url: string): void {
  */
 export function buildUpgradeMessage(params: WhatsAppUpgradeParams): string {
   const lines: string[] = [
-    `Halo Admin, saya ingin upgrade paket Zetass Pos`,
+    `Halo Admin, saya ingin upgrade paket WariPOS`,
     ``,
     `*Detail Pesanan:*`,
     `• Paket: *${params.planName}* (${params.planPrice}${params.planPeriod})`,
@@ -97,7 +112,7 @@ export function buildUpgradeMessage(params: WhatsAppUpgradeParams): string {
  */
 export function openWhatsAppUpgrade(params: WhatsAppUpgradeParams): boolean {
   const phone = normalizePhoneNumber(params.phone || '')
-  const fallbackPhone = normalizePhoneNumber(FALLBACK_WA_NUMBER)
+  const fallbackPhone = normalizePhoneNumber(getSupportWaNumber())
   const targetPhone = isValidPhoneNumber(phone) ? phone : fallbackPhone
 
   // Basic validation

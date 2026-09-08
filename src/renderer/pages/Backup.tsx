@@ -221,14 +221,14 @@ export default function BackupPage() {
 
       {/* Backup List */}
       <Card
-        title="Riwayat Backup"
+        title="Riwayat Backup Database"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Button
               variant="secondary"
               icon={<RefreshCw size={14} />}
               onClick={load}
-              className="text-xs px-3 py-1.5"
+              className="text-xs px-3 py-2 font-bold rounded-xl border border-slate-200 dark:border-slate-700"
             >
               Refresh
             </Button>
@@ -236,7 +236,7 @@ export default function BackupPage() {
               variant="secondary"
               icon={<Upload size={14} />}
               onClick={() => setModal("import")}
-              className="text-xs px-3 py-1.5"
+              className="text-xs px-3 py-2 font-bold rounded-xl border border-slate-200 dark:border-slate-700"
             >
               Import
             </Button>
@@ -244,9 +244,9 @@ export default function BackupPage() {
               icon={<Plus size={14} />}
               onClick={handleCreate}
               loading={creating}
-              className="text-xs px-3 py-1.5"
+              className="text-xs px-3.5 py-2 font-bold bg-primary-600 hover:bg-primary-700 text-white rounded-xl shadow-sm"
             >
-              Buat Backup
+              Buat Backup Baru
             </Button>
           </div>
         }

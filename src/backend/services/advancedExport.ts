@@ -15,7 +15,7 @@ export interface ExportOptions {
 
 function exportPath(filename: string) {
   const baseDir = app.isPackaged ? app.getPath('documents') : process.cwd()
-  const exportDir = path.join(baseDir, 'Zetass Pos', 'exports')
+  const exportDir = path.join(baseDir, 'WariPOS', 'exports')
   if (!fs.existsSync(exportDir)) {
     fs.mkdirSync(exportDir, { recursive: true })
   }

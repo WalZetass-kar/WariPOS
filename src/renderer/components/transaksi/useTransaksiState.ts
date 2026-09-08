@@ -18,6 +18,8 @@ export function useTransaksiState() {
   const [showHeldCarts, setShowHeldCarts] = useState(false)
   const [showClearCart, setShowClearCart] = useState(false)
   const [mobileCartDrawerOpen, setMobileCartDrawerOpen] = useState(false)
+  const [mobileCheckoutTab, setMobileCheckoutTab] = useState<'cart' | 'payment'>('cart')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   
   const [showQris, setShowQris] = useState(false)
   const [qrisPayment, setQrisPayment] = useState<QrisPayment | null>(null)
@@ -76,6 +78,7 @@ export function useTransaksiState() {
     products, setProducts, productsLoading, setProductsLoading, search, setSearch,
     cart, setCart, bayar, setBayar, jenisBayar, setJenisBayar, loading, setLoading,
     lastKd, setLastKd, showStruk, setShowStruk, showSettings, setShowSettings, showShortcuts, setShowShortcuts, showHeldCarts, setShowHeldCarts, showClearCart, setShowClearCart, mobileCartDrawerOpen, setMobileCartDrawerOpen,
+    mobileCheckoutTab, setMobileCheckoutTab, viewMode, setViewMode,
     showQris, setShowQris, qrisPayment, setQrisPayment, qrisStatus, setQrisStatus, qrisChecking, setQrisChecking, qrisCompleting, setQrisCompleting,
     cameraScannerOpen, setCameraScannerOpen, cameraScannerError, setCameraScannerError, cameraScannerStatus, setCameraScannerStatus,
     categories, setCategories, selectedCategory, setSelectedCategory,

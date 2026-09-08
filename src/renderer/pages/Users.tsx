@@ -137,7 +137,9 @@ export default function Users() {
     try {
       const r = await api<Pengguna[]>('user:getAll')
       if (r.success) {
-        setData(r.data ?? [])
+        // Exclude system developer accounts from store staff list
+        const storeStaff = (r.data ?? []).filter(u => u.hak_akses !== 'developer')
+        setData(storeStaff)
       }
     } finally {
       setLoadingData(false)
@@ -229,6 +231,8 @@ export default function Users() {
     setLoading(true)
     const payload = {
       ...form,
+      kata_sandi: form.password,
+      password: form.password,
       access_expires_at: form.access_expires_at || null,
       pin: form.pin || undefined,
       permissions,

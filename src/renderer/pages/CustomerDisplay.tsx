@@ -1,8 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Monitor, ShoppingCart, CheckCircle2, QrCode, Sparkles, Store, CreditCard, Tag } from 'lucide-react'
+import {
+  ShoppingCart,
+  CheckCircle2,
+  QrCode,
+  Store,
+  CreditCard,
+  Hash,
+  Award,
+  BellRing,
+  ShoppingBag
+} from 'lucide-react'
 import { formatRupiah } from '../utils/format'
 import { SkeletonPage } from '../components/Skeleton'
+import { playChimeSound } from '../utils/queueNumber'
 
 interface DisplayItem {
   nama_barang: string
@@ -22,6 +33,11 @@ interface CustomerDisplayData {
   status?: 'idle' | 'scanning' | 'paying_qris' | 'success'
   paidAmount?: number
   kembalian?: number
+  nomor_antrian?: number | string
+  nomor_meja?: string | null
+  nama_pelanggan?: string | null
+  jenis_order?: string | null
+  poinEarned?: number
 }
 
 export default function CustomerDisplay() {
@@ -29,11 +45,12 @@ export default function CustomerDisplay() {
     items: [],
     subtotal: 0,
     total: 0,
-    storeName: 'Zetass Pos',
+    storeName: 'WariPOS',
     status: 'idle',
   })
   const [loading, setLoading] = useState(true)
   const [time, setTime] = useState(new Date())
+  const prevItemsLengthRef = useRef(0)
 
   useEffect(() => {
     const clockTimer = setInterval(() => setTime(new Date()), 1000)
@@ -41,12 +58,21 @@ export default function CustomerDisplay() {
   }, [])
 
   useEffect(() => {
-    // 1. BroadcastChannel for fast tab/window sync
+    // 1. BroadcastChannel for instant cross-tab / cross-window sync
     let bc: BroadcastChannel | null = null
     try {
       bc = new BroadcastChannel('customer_display_channel')
       bc.onmessage = (event) => {
-        if (event.data) setData(prev => ({ ...prev, ...event.data }))
+        if (event.data) {
+          setData(prev => {
+            const next = { ...prev, ...event.data }
+            if (next.items && next.items.length > prevItemsLengthRef.current) {
+              playChimeSound()
+            }
+            prevItemsLengthRef.current = next.items?.length || 0
+            return next
+          })
+        }
       }
     } catch {}
 
@@ -68,7 +94,7 @@ export default function CustomerDisplay() {
     }
     window.addEventListener('storage', storageHandler)
 
-    // Initial load
+    // Initial load from storage
     const stored = localStorage.getItem('customer_display_data')
     if (stored) {
       try { setData(JSON.parse(stored)) } catch {}
@@ -101,200 +127,312 @@ export default function CustomerDisplay() {
 
   if (loading) return <SkeletonPage rows={6} />
 
-  // Celebration screen on successful payment
+  // ─── Screen: Payment Success & Ticket Voucher (Light Theme) ───────
   if (data.status === 'success') {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-8 relative overflow-hidden select-none">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-emerald-600/20 rounded-full blur-3xl pointer-events-none" />
+    const queueFormatted = data.nomor_antrian
+      ? String(data.nomor_antrian).startsWith('#')
+        ? String(data.nomor_antrian)
+        : `#${String(data.nomor_antrian).padStart(3, '0')}`
+      : '#001'
 
+    return (
+      <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col items-center justify-center p-6 select-none font-sans">
         <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
+          initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-          className="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl backdrop-blur-xl relative z-10"
+          transition={{ duration: 0.2 }}
+          className="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-xl relative"
         >
-          <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-5 ring-8 ring-emerald-500/10">
-            <CheckCircle2 size={44} className="animate-bounce" />
+          {/* Top Check Icon */}
+          <div className="w-16 h-16 bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 font-black shadow-sm">
+            <CheckCircle2 size={36} strokeWidth={2.5} />
           </div>
 
-          <h2 className="text-2xl font-black text-white tracking-tight mb-1">Pembayaran Berhasil!</h2>
-          <p className="text-sm text-slate-400 font-medium mb-6">Terima kasih telah berbelanja di {data.storeName}</p>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">
+            Pembayaran Berhasil
+          </h2>
+          <p className="text-xs text-slate-500 font-medium mb-6">
+            Terima kasih telah berbelanja di <span className="text-slate-900 font-bold">{data.storeName}</span>
+          </p>
 
-          <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 space-y-2.5 text-left mb-6">
-            <div className="flex justify-between items-center text-xs text-slate-400 font-medium">
-              <span>Total Belanja</span>
-              <span className="text-sm font-bold text-white">{formatRupiah(data.total)}</span>
+          {/* Queue Ticket Box (Solid Red Card Pembatas) */}
+          <div className="p-6 rounded-2xl bg-red-600 text-white mb-6 text-center shadow-md">
+            <span className="text-xs font-black uppercase tracking-widest text-red-100 block mb-1">
+              NOMOR ANTRIAN ANDA
+            </span>
+            <p className="text-6xl font-black font-mono tracking-tight my-2">
+              {queueFormatted}
+            </p>
+            <div className="mt-3 pt-3 border-t border-red-500 text-xs font-bold text-red-100 flex items-center justify-center gap-2">
+              <BellRing size={15} className="shrink-0" />
+              <span>
+                {data.nomor_meja
+                  ? `Pesanan Meja ${data.nomor_meja} · Silakan kembali ke meja`
+                  : 'Pesanan sedang disiapkan, silakan perhatikan layar antrian'}
+              </span>
+            </div>
+          </div>
+
+          {/* Payment Breakdown Card */}
+          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-2.5 text-left mb-5 text-xs">
+            <div className="flex justify-between items-center text-slate-600">
+              <span className="font-medium">Total Tagihan ({data.items.length} Item)</span>
+              <span className="text-sm font-black text-slate-900 font-mono">{formatRupiah(data.total)}</span>
             </div>
             {data.paidAmount !== undefined && data.paidAmount > 0 && (
-              <div className="flex justify-between items-center text-xs text-slate-400 font-medium">
-                <span>Jumlah Bayar</span>
-                <span className="text-xs font-bold text-slate-200">{formatRupiah(data.paidAmount)}</span>
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="font-medium">Pembayaran ({data.paymentMethod || 'TUNAI'})</span>
+                <span className="font-mono text-slate-800 font-semibold">{formatRupiah(data.paidAmount)}</span>
               </div>
             )}
-            {data.kembalian !== undefined && (
-              <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-800 font-bold">
-                <span className="text-emerald-400">Kembalian</span>
-                <span className="text-base text-emerald-400 font-black">{formatRupiah(data.kembalian)}</span>
+            {data.kembalian !== undefined && data.kembalian > 0 && (
+              <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 font-bold">
+                <span className="text-emerald-700">Kembalian</span>
+                <span className="text-base text-emerald-700 font-mono font-black">{formatRupiah(data.kembalian)}</span>
+              </div>
+            )}
+            {data.poinEarned !== undefined && data.poinEarned > 0 && (
+              <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 font-bold text-amber-700">
+                <span className="flex items-center gap-1.5">
+                  <Award size={15} />
+                  <span>Poin Member Didapat:</span>
+                </span>
+                <span>+{data.poinEarned} Poin</span>
               </div>
             )}
           </div>
 
           <p className="text-xs text-slate-500 font-semibold flex items-center justify-center gap-1.5">
-            <Sparkles size={14} className="text-amber-400" />
-            <span>Sampai jumpa kembali!</span>
+            <span>Struk transaksi telah tercetak otomatis</span>
           </p>
         </motion.div>
       </div>
     )
   }
 
+  // ─── Active Shopping & Scanning Screen (Tema Terang dengan Card Pembatas) ───
+  const currentQueueFormatted = data.nomor_antrian
+    ? String(data.nomor_antrian).startsWith('#')
+      ? String(data.nomor_antrian)
+      : `#${String(data.nomor_antrian).padStart(3, '0')}`
+    : '#001'
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col select-none">
-      {/* Header */}
-      <header className="h-16 px-6 sm:px-8 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md shadow-red-600/30">
-            <Store size={22} />
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col select-none font-sans">
+      
+      {/* ─── Top Header Bar (Tema Terang Bersih & Kontras) ──────────── */}
+      <header className="h-20 px-8 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center font-black shadow-sm">
+            <Store size={24} />
           </div>
           <div>
-            <h1 className="font-extrabold text-base sm:text-lg text-white leading-tight tracking-tight">{data.storeName}</h1>
-            <p className="text-[11px] text-slate-400 font-medium">Customer Display</p>
+            <div className="flex items-center gap-3">
+              <h1 className="font-black text-xl text-slate-900 tracking-tight">
+                {data.storeName || 'WariPOS'}
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-bold uppercase tracking-wider">
+                Layar Pelanggan
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              {data.items.length > 0 ? `${data.items.length} macam produk di keranjang` : 'Selamat Datang! Siap melayani pesanan Anda'}
+            </p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-bold text-slate-200">
-            {time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </p>
-          <p className="text-[11px] text-slate-400 font-medium">
-            {time.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
-          </p>
+
+        {/* Header Right: Queue Status Card & Live Clock */}
+        <div className="flex items-center gap-4">
+          <div className="px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-right">
+            <span className="text-[10px] text-red-600 font-black uppercase tracking-wider block">
+              Antrian Anda
+            </span>
+            <span className="text-base font-black font-mono text-red-700">
+              {currentQueueFormatted} {data.nomor_meja ? `· Meja ${data.nomor_meja}` : ''}
+            </span>
+          </div>
+
+          <div className="text-right border-l border-slate-200 pl-4">
+            <p className="text-base font-black font-mono text-slate-900 leading-tight">
+              {time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </p>
+            <p className="text-xs text-slate-500 font-medium leading-tight mt-0.5">
+              {time.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
+            </p>
+          </div>
         </div>
       </header>
 
-      {/* Main Body */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-        {/* Left Column: Scanned Item List */}
-        <div className="flex-1 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800/80 bg-slate-950">
-          {/* Header Row */}
-          <div className="px-6 py-3 bg-slate-900/40 border-b border-slate-800/60 flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
-            <span>Daftar Produk ({data.items.length})</span>
-            <span>Total</span>
+      {/* ─── Main Content: 2 Cards Pembatas Berdampingan ────────────── */}
+      <div className="flex-1 p-6 flex flex-col lg:flex-row gap-6 min-h-0 overflow-hidden">
+        
+        {/* ─── CARD PEMBATAS 1: Daftar Produk Belanjaan ────────────────── */}
+        <div className="flex-1 flex flex-col bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          
+          {/* Card Header Row */}
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShoppingBag size={18} className="text-red-600" />
+              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                Daftar Produk Belanja ({data.items.length} Macam)
+              </h2>
+            </div>
+            <span className="text-xs font-bold text-slate-500">
+              Urutan Scan Kasir
+            </span>
           </div>
 
-          {/* Item Scrollable List */}
-          <div className="flex-1 overflow-y-auto px-6 py-3 space-y-2.5 scrollbar-thin">
+          {/* Product Items List (Setiap Produk Memiliki Card Pembatas Sendiri) */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 scrollbar-thin">
             {data.items.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-slate-500 py-16">
-                <div className="w-16 h-16 rounded-2xl bg-slate-900 flex items-center justify-center mb-3">
-                  <ShoppingCart size={32} className="opacity-40 text-slate-400" />
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-24">
+                <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mb-4 text-slate-400 shadow-sm">
+                  <ShoppingBag size={32} />
                 </div>
-                <p className="text-base font-bold text-slate-400">Selamat Datang!</p>
-                <p className="text-xs text-slate-500 mt-1 font-medium">Barang belanjaan Anda akan tampil di sini</p>
+                <p className="text-lg font-black text-slate-700">Selamat Datang di {data.storeName}</p>
+                <p className="text-xs text-slate-500 mt-1 font-medium">Barang belanjaan Anda akan otomatis muncul di sini</p>
               </div>
             ) : (
               data.items.map((item, idx) => {
                 const discAmount = (item.harga_jual * (item.disc || 0)) / 100
                 const itemTotal = (item.harga_jual - discAmount) * item.qty
                 const isLast = idx === data.items.length - 1
+                const sequenceNum = idx + 1
 
                 return (
-                  <motion.div
+                  <div
                     key={idx}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                    className={`p-4 rounded-2xl border-2 transition-all shadow-sm ${
                       isLast
-                        ? 'bg-red-950/20 border-red-900/50 shadow-sm'
-                        : 'bg-slate-900/40 border-slate-800/60'
+                        ? 'bg-red-50/80 border-red-500 shadow-md ring-2 ring-red-200'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex-1 min-w-0 pr-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-sm text-slate-100 truncate">{item.nama_barang}</span>
-                        {item.disc > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-800 text-emerald-400 text-[10px] font-bold">
-                            -{item.disc}%
-                          </span>
-                        )}
+                    <div className="flex items-center justify-between gap-4">
+                      {/* Left: Sequence Number badge + Product Name + Details */}
+                      <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black font-mono shrink-0 shadow-sm ${
+                          isLast
+                            ? 'bg-red-600 text-white'
+                            : 'bg-slate-100 border border-slate-300 text-slate-700'
+                        }`}>
+                          #{sequenceNum}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base font-bold text-slate-900 truncate">
+                              {item.nama_barang}
+                            </h3>
+                            {item.disc > 0 && (
+                              <span className="px-2 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-black uppercase">
+                                Diskon {item.disc}%
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-3 mt-1 text-xs text-slate-600 font-medium">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 font-bold text-slate-800 font-mono">
+                              {item.qty} pcs
+                            </span>
+                            <span>×</span>
+                            <span className="font-mono">{formatRupiah(item.harga_jual)}</span>
+                            {isLast && (
+                              <span className="text-[10px] font-bold text-red-600 uppercase bg-red-100 px-2 py-0.5 rounded-full">
+                                Baru Di-scan
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5 font-medium">
-                        {item.qty} × {formatRupiah(item.harga_jual)}
-                      </p>
+
+                      {/* Right: Subtotal Amount */}
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                          Subtotal
+                        </span>
+                        <span className="text-lg font-black font-mono text-slate-900">
+                          {formatRupiah(itemTotal)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-base font-black text-white">{formatRupiah(itemTotal)}</p>
-                    </div>
-                  </motion.div>
+                  </div>
                 )
               })
             )}
           </div>
         </div>
 
-        {/* Right Column: QRIS Display & Total Summary */}
-        <div className="w-full lg:w-[420px] xl:w-[460px] bg-slate-900/50 flex flex-col justify-between shrink-0 p-6 sm:p-8">
-          {/* QRIS / Active Payment Mode */}
-          {data.status === 'paying_qris' || data.qrisImage ? (
-            <div className="flex flex-col items-center justify-center p-6 bg-slate-950 rounded-3xl border border-slate-800 shadow-xl mb-6 text-center">
-              <p className="text-xs font-bold text-red-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <QrCode size={15} />
-                <span>Pindai QRIS untuk Bayar</span>
-              </p>
-              {data.qrisImage ? (
-                <div className="p-3 bg-white rounded-2xl shadow-lg mb-3">
-                  <img src={data.qrisImage} alt="QRIS" className="w-48 h-48 object-contain" />
-                </div>
-              ) : (
-                <div className="w-48 h-48 rounded-2xl bg-slate-900 flex flex-col items-center justify-center text-slate-400 mb-3 border border-slate-800">
-                  <QrCode size={40} className="animate-pulse mb-2 text-red-500" />
-                  <span className="text-xs font-bold">Membuat QRIS...</span>
-                </div>
-              )}
-              <p className="text-[11px] text-slate-400 font-medium">
-                Mendukung BCA, GoPay, OVO, Dana, ShopeePay & Semua Mobile Banking
-              </p>
-            </div>
-          ) : lastItem ? (
-            /* Highlight of last scanned item */
-            <div className="p-5 bg-gradient-to-br from-red-950/40 via-slate-900 to-slate-950 rounded-3xl border border-red-900/30 mb-6">
-              <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider block mb-1">Item Baru Ditambahkan</span>
-              <p className="text-xl font-black text-white truncate">{lastItem.nama_barang}</p>
-              <div className="flex items-end justify-between mt-2">
-                <span className="text-xs text-slate-400 font-medium">{lastItem.qty} × {formatRupiah(lastItem.harga_jual)}</span>
-                <span className="text-2xl font-black text-red-500">
-                  {formatRupiah((lastItem.harga_jual - (lastItem.harga_jual * (lastItem.disc || 0)) / 100) * lastItem.qty)}
-                </span>
+        {/* ─── CARD PEMBATAS 2: Ringkasan & Total Pembayaran ──────────── */}
+        <div className="w-full lg:w-[400px] xl:w-[440px] flex flex-col justify-between gap-4 shrink-0">
+          
+          {/* Sub-Card: QRIS / Status Card */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+            {data.status === 'paying_qris' || data.qrisImage ? (
+              <div className="text-center">
+                <p className="text-xs font-black text-red-600 uppercase tracking-wider mb-3 flex items-center justify-center gap-2">
+                  <QrCode size={18} />
+                  <span>Silakan Pindai QRIS untuk Bayar</span>
+                </p>
+                {data.qrisImage ? (
+                  <div className="p-3 bg-white border border-slate-200 rounded-2xl inline-block mb-3 shadow-md">
+                    <img src={data.qrisImage} alt="QRIS Code" className="w-44 h-44 object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-44 h-44 mx-auto rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-3">
+                    <QrCode size={36} className="text-red-500 mb-2 animate-pulse" />
+                    <span className="text-xs font-bold">Membuat QRIS...</span>
+                  </div>
+                )}
+                <p className="text-xs text-slate-500 font-medium">
+                  BCA, Mandiri, BRI, BNI, GoPay, OVO, Dana, ShopeePay
+                </p>
               </div>
-            </div>
-          ) : (
-            <div className="p-6 bg-slate-950/60 rounded-3xl border border-slate-800/80 mb-6 text-center text-slate-500 flex flex-col items-center justify-center">
-              <CreditCard size={32} className="opacity-30 mb-2" />
-              <p className="text-xs font-bold">Siap Melayani Transaksi</p>
-            </div>
-          )}
-
-          {/* Grand Total Box */}
-          <div className="bg-slate-950 rounded-3xl p-6 border border-slate-800 shadow-2xl">
-            <div className="space-y-2 mb-4 text-xs font-semibold text-slate-400">
-              <div className="flex justify-between">
-                <span>Subtotal ({data.items.length} item)</span>
-                <span className="text-slate-200">{formatRupiah(data.subtotal)}</span>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-800/80 flex items-end justify-between">
+            ) : lastItem ? (
               <div>
-                <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider block">Total Tagihan</span>
-                <span className="text-3xl sm:text-4xl font-black text-red-500 tracking-tight">
-                  {formatRupiah(data.total)}
-                </span>
+                <div className="flex items-center justify-between mb-2 text-xs font-black">
+                  <span className="text-red-600 uppercase tracking-wider">Item Baru Ditambahkan</span>
+                  <span className="text-slate-500 font-mono">Item #{data.items.length}</span>
+                </div>
+                <p className="text-base font-black text-slate-900 truncate mb-1">{lastItem.nama_barang}</p>
+                <div className="flex items-baseline justify-between pt-3 border-t border-slate-100 mt-2">
+                  <span className="text-xs text-slate-500 font-mono">{lastItem.qty} × {formatRupiah(lastItem.harga_jual)}</span>
+                  <span className="text-xl font-black font-mono text-red-600">
+                    {formatRupiah((lastItem.harga_jual - (lastItem.harga_jual * (lastItem.disc || 0)) / 100) * lastItem.qty)}
+                  </span>
+                </div>
               </div>
+            ) : (
+              <div className="text-center py-6">
+                <CreditCard size={32} className="mx-auto mb-2 text-slate-400" />
+                <p className="text-sm font-bold text-slate-700">Kasir Siap Melayani</p>
+                <p className="text-xs text-slate-400 mt-0.5">Silakan scan barang belanjaan Anda</p>
+              </div>
+            )}
+          </div>
+
+          {/* Sub-Card: Subtotal Breakdown & Grand Total */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-2.5 text-xs font-medium">
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal ({data.items.length} Item)</span>
+                <span className="text-slate-900 font-mono font-bold">{formatRupiah(data.subtotal)}</span>
+              </div>
+            </div>
+
+            {/* Huge Grand Total Card Pembatas */}
+            <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-md text-left border border-slate-800">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-1">
+                TOTAL PEMBAYARAN
+              </span>
+              <p className="text-5xl font-black text-red-500 font-mono tracking-tight">
+                {formatRupiah(data.total)}
+              </p>
             </div>
           </div>
+
         </div>
       </div>
     </div>
   )
 }
-

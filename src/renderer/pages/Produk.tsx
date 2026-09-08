@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image as ImageIcon, X, Upload, Camera, ScanLine, Copy, Package, Sparkles } from 'lucide-react'
+import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image as ImageIcon, X, Upload, Camera, ScanLine, Copy, Package } from 'lucide-react'
 import Barcode_ from 'react-barcode'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -8,6 +8,7 @@ import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import ProductImage from '../components/ProductImage'
 import Select from '../components/Select'
 import Textarea from '../components/Textarea'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -23,10 +24,10 @@ import type { Barang, IpcResponse, Kategori, Satuan } from '../../shared/types'
 interface FormState {
   kd_barang: string
   nama_barang: string
-  stok: number
-  harga_barang: number
-  harga_modal: number
-  potongan: number
+  stok: number | ''
+  harga_barang: number | ''
+  harga_modal: number | ''
+  potongan: number | ''
   kd_kategori_barang: number
   kd_satuan: number
   deskripsi_barang: string
@@ -47,7 +48,7 @@ interface PaginationMeta {
 type PaginatedResponse<T> = IpcResponse<T> & { pagination?: PaginationMeta }
 
 const EMPTY: FormState = {
-  kd_barang: '', nama_barang: '', stok: 0, harga_barang: 0, harga_modal: 0,
+  kd_barang: '', nama_barang: '', stok: '', harga_barang: '', harga_modal: '',
   potongan: 0, kd_kategori_barang: 0, kd_satuan: 0, deskripsi_barang: '',
   barcode: '', expired_date: '', foto_barang: '',
 }
@@ -69,6 +70,7 @@ export default function Produk() {
   const [kategori, setKategori] = useState<Kategori[]>([])
   const [satuan, setSatuan] = useState<Satuan[]>([])
   const [modal, setModal] = useState<'add' | 'edit' | 'barcode' | null>(null)
+  const [modalTab, setModalTab] = useState<'info' | 'media'>('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Barang | null>(null)
@@ -141,7 +143,7 @@ export default function Produk() {
     loadLookups()
   }, [])
 
-  const openAdd = () => { setForm({ ...EMPTY }); setModal('add'); setFormErrors({}) }
+  const openAdd = () => { setForm({ ...EMPTY }); setModalTab('info'); setModal('add'); setFormErrors({}) }
   const openEdit = (row: Barang) => {
     setSelected(row)
     setForm({
@@ -158,6 +160,7 @@ export default function Produk() {
       expired_date: row.expired_date ?? '',
       foto_barang: row.foto_barang ?? '',
     })
+    setModalTab('info')
     setModal('edit')
   }
   const openBarcode = (row: Barang) => { setSelected(row); setModal('barcode') }
@@ -239,20 +242,33 @@ export default function Produk() {
   }
 
   const handleSave = async () => {
+    const harga_barang = form.harga_barang === '' ? 0 : Number(form.harga_barang)
+    const harga_modal = form.harga_modal === '' ? 0 : Number(form.harga_modal)
+    const stok = form.stok === '' ? 0 : Number(form.stok)
+    const potongan = form.potongan === '' ? 0 : Number(form.potongan)
+
     const errors: Record<string, string> = {}
     if (!form.kd_barang) errors.kd_barang = 'Kode barang wajib diisi'
     if (!form.nama_barang) errors.nama_barang = 'Nama barang wajib diisi'
-    if (form.harga_barang < 0) errors.harga_barang = 'Harga tidak boleh negatif'
-    if (form.harga_modal < 0) errors.harga_modal = 'Harga modal tidak boleh negatif'
-    if (form.stok < 0) errors.stok = 'Stok tidak boleh negatif'
-    if (form.potongan < 0 || form.potongan > 100) errors.potongan = 'Diskon 0-100%'
+    if (harga_barang < 0) errors.harga_barang = 'Harga tidak boleh negatif'
+    if (harga_modal < 0) errors.harga_modal = 'Harga modal tidak boleh negatif'
+    if (stok < 0) errors.stok = 'Stok tidak boleh negatif'
+    if (potongan < 0 || potongan > 100) errors.potongan = 'Diskon 0-100%'
     if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
+
+    const sanitizedPayload = {
+      ...form,
+      harga_barang,
+      harga_modal,
+      stok,
+      potongan,
+    }
 
     setLoading(true)
     try {
       const r = modal === 'add'
-        ? await api('barang:create', form)
-        : await api('barang:update', selected?.kd_barang, form)
+        ? await api('barang:create', sanitizedPayload)
+        : await api('barang:update', selected?.kd_barang, sanitizedPayload)
       if (r.success) {
         toast(r.message as string)
         closeModal()
@@ -398,16 +414,9 @@ export default function Produk() {
     { accessorKey: 'kd_barang', header: 'Kode', size: 120 },
     {
       accessorKey: 'foto_barang', header: 'Foto', size: 80,
-      cell: ({ getValue }) => {
-        const foto = getValue() as string | null
-        return foto ? (
-          <img src={foto} alt="Produk" className="w-11 h-11 object-cover rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm" />
-        ) : (
-          <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-800">
-            <ImageIcon size={18} className="text-slate-400 opacity-60" />
-          </div>
-        )
-      }
+      cell: ({ getValue }) => (
+        <ProductImage src={getValue() as string | null} className="w-10 h-10 rounded-lg" iconSize={16} />
+      ),
     },
     { accessorKey: 'nama_barang', header: 'Nama Produk' },
     {
@@ -572,117 +581,171 @@ export default function Produk() {
         title={modal === 'add' ? 'Tambah Produk Baru' : 'Edit Data Produk'}
         size="lg"
         footer={
-          <>
-            <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto font-bold">Batal</Button>
-            <Button loading={loading} onClick={handleSave} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">Simpan Data Produk</Button>
-          </>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 w-full">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {modalTab === 'media' ? (
+                <Button variant="secondary" onClick={() => setModalTab('info')} className="w-full sm:w-auto font-bold text-xs">
+                  ← Kembali ke Data Utama
+                </Button>
+              ) : (
+                <Button variant="secondary" onClick={() => setModalTab('media')} className="w-full sm:w-auto font-bold text-xs">
+                  Lanjut ke Barcode & Foto →
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto font-bold text-xs">Batal</Button>
+              <Button loading={loading} onClick={handleSave} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold text-xs border-0">Simpan Data Produk</Button>
+            </div>
+          </div>
         }
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <Input label="Kode Barang *" value={form.kd_barang} onChange={e => f('kd_barang', e.target.value)} disabled={modal === 'edit'} error={formErrors.kd_barang} />
-          <Input label="Nama Barang *" value={form.nama_barang} onChange={e => f('nama_barang', e.target.value)} error={formErrors.nama_barang} />
-          <Input label="Harga Jual (Rp) *" type="number" value={form.harga_barang} onChange={e => f('harga_barang', +e.target.value)} error={formErrors.harga_barang} />
-          <Input label="Harga Modal (Rp)" type="number" value={form.harga_modal} onChange={e => f('harga_modal', +e.target.value)} error={formErrors.harga_modal} />
-          <Input label="Jumlah Stok Unit *" type="number" value={form.stok} onChange={e => f('stok', +e.target.value)} error={formErrors.stok} />
-          <Input label="Diskon Potongan (%)" type="number" value={form.potongan} onChange={e => f('potongan', +e.target.value)} error={formErrors.potongan} />
-          <Select
-            label="Kategori Produk"
-            value={form.kd_kategori_barang}
-            onChange={e => f('kd_kategori_barang', +e.target.value)}
-            placeholder="-- Pilih Kategori --"
-            options={kategori.map(k => ({ value: k.kd_kategori_barang, label: k.kategori_barang ?? '' }))}
-          />
-          <Select
-            label="Satuan Unit"
-            value={form.kd_satuan}
-            onChange={e => f('kd_satuan', +e.target.value)}
-            placeholder="-- Pilih Satuan --"
-            options={satuan.map(s => ({ value: s.kd_satuan, label: s.nama_satuan ?? '' }))}
-          />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Kode Barcode</label>
-            <div className="flex gap-2">
-              <input
-                value={form.barcode}
-                onChange={e => f('barcode', e.target.value)}
-                placeholder="Scan atau ketik barcode..."
-                className="min-w-0 flex-1 h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-mono font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                icon={<ScanLine size={16} />}
-                onClick={openCameraScanner}
-                className="shrink-0 px-3 font-bold"
-              >
-                <span className="hidden sm:inline">Scan Kamera</span>
-              </Button>
-            </div>
-          </div>
-          <Input label="Tanggal Expired" type="date" value={form.expired_date} onChange={e => f('expired_date', e.target.value)} />
-          
-          {/* Image Upload */}
-          <div className="sm:col-span-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 block">Foto Produk</label>
-            <div className="flex gap-3 items-start">
-              {form.foto_barang ? (
-                <div className="relative group">
-                  <img src={form.foto_barang} alt="Preview" className="w-24 h-24 object-cover rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm" />
-                  <button
-                    type="button"
-                    onClick={() => f('foto_barang', '')}
-                    className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white shadow-sm"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-800 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-                  <ImageIcon size={32} className="text-slate-400 opacity-60" />
-                </div>
-              )}
-              <div className="flex-1 space-y-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="image-upload"
-                />
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="image-capture"
-                />
-                <div className="flex flex-wrap gap-2">
-                  <label
-                    htmlFor="image-capture"
-                    className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-red-700 cursor-pointer"
-                  >
-                    <Camera size={16} />
-                    Ambil Foto
-                  </label>
-                  <label
-                    htmlFor="image-upload"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
-                  >
-                    <ImageIcon size={16} />
-                    {form.foto_barang ? 'Ganti File' : 'Upload File'}
-                  </label>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Format: JPG, PNG, GIF. Maksimal 2MB.
-                </p>
-              </div>
-            </div>
+        <div className="space-y-4">
+          {/* Modal Tab Switcher */}
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setModalTab('info')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                modalTab === 'info'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Package size={14} />
+              <span>1. Data Utama & Harga</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setModalTab('media')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                modalTab === 'media'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Barcode size={14} />
+              <span>2. Barcode & Media</span>
+            </button>
           </div>
 
-          <div className="sm:col-span-2">
-            <Textarea label="Deskripsi Produk" rows={3} value={form.deskripsi_barang} onChange={e => f('deskripsi_barang', e.target.value)} placeholder="Tuliskan deskripsi lengkap produk..." />
-          </div>
+          {/* TAB 1: INFORMASI UTAMA & HARGA */}
+          {modalTab === 'info' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+              <Input label="Kode Barang *" value={form.kd_barang} onChange={e => f('kd_barang', e.target.value)} disabled={modal === 'edit'} error={formErrors.kd_barang} />
+              <Input label="Nama Barang *" value={form.nama_barang} onChange={e => f('nama_barang', e.target.value)} error={formErrors.nama_barang} />
+              <Select
+                label="Kategori Produk"
+                value={form.kd_kategori_barang}
+                onChange={e => f('kd_kategori_barang', +e.target.value)}
+                placeholder="-- Pilih Kategori --"
+                options={kategori.map(k => ({ value: k.kd_kategori_barang, label: k.kategori_barang ?? '' }))}
+              />
+              <Select
+                label="Satuan Unit"
+                value={form.kd_satuan}
+                onChange={e => f('kd_satuan', +e.target.value)}
+                placeholder="-- Pilih Satuan --"
+                options={satuan.map(s => ({ value: s.kd_satuan, label: s.nama_satuan ?? '' }))}
+              />
+              <Input label="Harga Jual (Rp) *" type="number" placeholder="0" value={form.harga_barang} onChange={e => f('harga_barang', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))} error={formErrors.harga_barang} />
+              <Input label="Harga Modal / Beli (Rp)" type="number" placeholder="0" value={form.harga_modal} onChange={e => f('harga_modal', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))} error={formErrors.harga_modal} />
+              <Input label="Jumlah Stok Unit *" type="number" placeholder="0" value={form.stok} onChange={e => f('stok', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))} error={formErrors.stok} />
+              <Input label="Diskon Potongan (%)" type="number" placeholder="0" value={form.potongan} onChange={e => f('potongan', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))} error={formErrors.potongan} />
+            </div>
+          )}
+
+          {/* TAB 2: BARCODE, MEDIA & EXPIRED */}
+          {modalTab === 'media' && (
+            <div className="space-y-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Kode Barcode</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={form.barcode}
+                      onChange={e => f('barcode', e.target.value)}
+                      placeholder="Scan atau ketik barcode..."
+                      className="min-w-0 flex-1 h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-mono font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      icon={<ScanLine size={16} />}
+                      onClick={openCameraScanner}
+                      className="shrink-0 px-3 font-bold"
+                    >
+                      <span className="hidden sm:inline">Scan Kamera</span>
+                    </Button>
+                  </div>
+                </div>
+                <Input label="Tanggal Kedaluwarsa (Expired)" type="date" value={form.expired_date} onChange={e => f('expired_date', e.target.value)} />
+              </div>
+              
+              {/* Image Upload */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 block">Foto Produk</label>
+                <div className="flex gap-3 items-start p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                  {form.foto_barang ? (
+                    <div className="relative group shrink-0">
+                      <img src={form.foto_barang} alt="Preview" className="w-20 h-20 object-cover rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm" />
+                      <button
+                        type="button"
+                        onClick={() => f('foto_barang', '')}
+                        className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white shadow-sm"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 shrink-0">
+                      <ImageIcon size={28} className="text-slate-400 opacity-60" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="image-upload"
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="image-capture"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <label
+                        htmlFor="image-capture"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-red-700 cursor-pointer"
+                      >
+                        <Camera size={14} />
+                        Ambil Foto
+                      </label>
+                      <label
+                        htmlFor="image-upload"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm transition-colors hover:bg-slate-50 cursor-pointer"
+                      >
+                        <ImageIcon size={14} />
+                        {form.foto_barang ? 'Ganti File' : 'Upload File'}
+                      </label>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      Mendukung JPG, PNG, GIF. Maksimal 2MB.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Textarea label="Deskripsi Produk (Opsional)" rows={2} value={form.deskripsi_barang} onChange={e => f('deskripsi_barang', e.target.value)} placeholder="Tuliskan deskripsi ringkas produk..." />
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 

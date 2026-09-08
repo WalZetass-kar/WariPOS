@@ -204,17 +204,17 @@ export default function DataTable<T>({
       </div>
 
       {/* Desktop/tablet table */}
-      <div className="hidden overflow-x-auto rounded-xl border border-white/40 dark:border-slate-700/40 sm:block">
+      <div className="hidden max-h-[calc(100vh-19rem)] overflow-auto rounded-xl border border-white/40 dark:border-slate-700/40 sm:block scrollbar-thin">
         <div className="min-w-[640px]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50/80 dark:bg-slate-800/80">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 dark:bg-slate-800 backdrop-blur supports-[backdrop-filter]:bg-slate-100/80 dark:supports-[backdrop-filter]:bg-slate-800/90 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]">
               {table.getHeaderGroups().map(hg => (
                 <tr key={hg.id}>
                   {hg.headers.map(header => (
                     <th
                       key={header.id}
                       onClick={header.column.getToggleSortingHandler()}
-                      className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide cursor-pointer select-none whitespace-nowrap"
+                      className="px-3 sm:px-4 py-2.5 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide cursor-pointer select-none whitespace-nowrap"
                     >
                       <div className="flex items-center gap-1">
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -240,7 +240,7 @@ export default function DataTable<T>({
                 table.getRowModel().rows.map((row, idx) => (
                   <tr key={row.id} className={`transition-colors hover:bg-primary-50/70 dark:hover:bg-primary-900/20 ${idx % 2 === 0 ? 'bg-white/60 dark:bg-slate-800/30' : 'bg-slate-50/60 dark:bg-slate-800/60'}`}>
                     {row.getVisibleCells().map(cell => (
-                      <td key={cell.id} className="px-3 sm:px-4 py-3 text-slate-700 dark:text-slate-300">
+                      <td key={cell.id} className="px-3 sm:px-4 py-2 text-slate-700 dark:text-slate-300">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}

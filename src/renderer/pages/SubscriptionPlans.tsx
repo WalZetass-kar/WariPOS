@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Plus, Pencil, Power, Crown, Zap, Star, Check,
-  Package, TrendingUp, Clock, DollarSign, Sparkles, Trash2,
+  Package, TrendingUp, Clock, DollarSign, Award, Trash2,
 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -249,7 +249,7 @@ export default function SubscriptionPlans() {
         </Card>
         <Card className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white shrink-0 shadow-lg">
-            <Sparkles size={20} />
+            <Award size={20} />
           </div>
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">Rekomendasi</p>

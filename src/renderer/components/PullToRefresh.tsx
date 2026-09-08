@@ -18,7 +18,9 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
     if (disabled || refreshing) return
-    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop
+    const target = e.currentTarget as HTMLElement
+    const scrollParent = target.closest('main') || target.parentElement || document.documentElement
+    const scrollTop = scrollParent ? scrollParent.scrollTop : (document.documentElement.scrollTop || document.body.scrollTop)
     if (scrollTop > 0) return
     startY.current = e.touches[0].clientY
     setPulling(true)
@@ -26,6 +28,14 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
     if (!pulling || disabled || refreshing) return
+    const target = e.currentTarget as HTMLElement
+    const scrollParent = target.closest('main') || target.parentElement || document.documentElement
+    const scrollTop = scrollParent ? scrollParent.scrollTop : (document.documentElement.scrollTop || document.body.scrollTop)
+    if (scrollTop > 0) {
+      setPulling(false)
+      setPullDistance(0)
+      return
+    }
     const diff = e.touches[0].clientY - startY.current
     if (diff < 0) {
       setPullDistance(0)

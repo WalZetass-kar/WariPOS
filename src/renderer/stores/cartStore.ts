@@ -1,7 +1,7 @@
-import { create } from 'zustand'
+import { useSyncExternalStore } from 'react'
 import type { CartItem, Customer } from '../../shared/types'
 
-interface CartStore {
+export interface CartStoreState {
   cart: CartItem[]
   selectedCustomer: Customer | null
   jenisBayar: 'TUNAI' | 'TRANSFER' | 'QRIS'
@@ -9,19 +9,9 @@ interface CartStore {
   promoCode: string
   promoDiskon: number
   promoMsg: string
-  
-  addToCart: (item: CartItem) => void
-  removeFromCart: (kdBarang: string) => void
-  updateQty: (kdBarang: string, qty: number) => void
-  clearCart: () => void
-  setSelectedCustomer: (customer: Customer | null) => void
-  setJenisBayar: (jenis: 'TUNAI' | 'TRANSFER' | 'QRIS') => void
-  setBayar: (bayar: string) => void
-  setPromo: (code: string, diskon: number, msg: string) => void
-  clearPromo: () => void
 }
 
-export const useCartStore = create<CartStore>()((set) => ({
+let currentCartState: CartStoreState = {
   cart: [],
   selectedCustomer: null,
   jenisBayar: 'TUNAI',
@@ -29,35 +19,97 @@ export const useCartStore = create<CartStore>()((set) => ({
   promoCode: '',
   promoDiskon: 0,
   promoMsg: '',
+}
 
-  addToCart: (newItem) =>
-    set((state) => {
-      const existing = state.cart.find((i) => i.kd_barang === newItem.kd_barang)
+const cartListeners = new Set<() => void>()
+
+function emitCartChange() {
+  cartListeners.forEach((listener) => listener())
+}
+
+export function useCartStore() {
+  const state = useSyncExternalStore(
+    (onStoreChange) => {
+      cartListeners.add(onStoreChange)
+      return () => {
+        cartListeners.delete(onStoreChange)
+      }
+    },
+    () => currentCartState,
+    () => currentCartState
+  )
+
+  return {
+    ...state,
+    addToCart: (newItem: CartItem) => {
+      const existing = currentCartState.cart.find((i) => i.kd_barang === newItem.kd_barang)
       if (existing) {
-        return {
-          cart: state.cart.map((i) =>
+        currentCartState = {
+          ...currentCartState,
+          cart: currentCartState.cart.map((i) =>
             i.kd_barang === newItem.kd_barang ? { ...i, qty: i.qty + 1 } : i
           ),
         }
+      } else {
+        currentCartState = { ...currentCartState, cart: [...currentCartState.cart, newItem] }
       }
-      return { cart: [...state.cart, newItem] }
-    }),
+      emitCartChange()
+    },
 
-  removeFromCart: (kdBarang) =>
-    set((state) => ({ cart: state.cart.filter((i) => i.kd_barang !== kdBarang) })),
+    removeFromCart: (kdBarang: string) => {
+      currentCartState = {
+        ...currentCartState,
+        cart: currentCartState.cart.filter((i) => i.kd_barang !== kdBarang),
+      }
+      emitCartChange()
+    },
 
-  updateQty: (kdBarang, qty) =>
-    set((state) => ({
-      cart:
-        qty <= 0
-          ? state.cart.filter((i) => i.kd_barang !== kdBarang)
-          : state.cart.map((i) => (i.kd_barang === kdBarang ? { ...i, qty } : i)),
-    })),
+    updateQty: (kdBarang: string, qty: number) => {
+      currentCartState = {
+        ...currentCartState,
+        cart:
+          qty <= 0
+            ? currentCartState.cart.filter((i) => i.kd_barang !== kdBarang)
+            : currentCartState.cart.map((i) => (i.kd_barang === kdBarang ? { ...i, qty } : i)),
+      }
+      emitCartChange()
+    },
 
-  clearCart: () => set({ cart: [], bayar: '', promoCode: '', promoDiskon: 0, promoMsg: '' }),
-  setSelectedCustomer: (customer) => set({ selectedCustomer: customer }),
-  setJenisBayar: (jenis) => set({ jenisBayar: jenis }),
-  setBayar: (bayar) => set({ bayar }),
-  setPromo: (code, diskon, msg) => set({ promoCode: code, promoDiskon: diskon, promoMsg: msg }),
-  clearPromo: () => set({ promoCode: '', promoDiskon: 0, promoMsg: '' }),
-}))
+    clearCart: () => {
+      currentCartState = {
+        ...currentCartState,
+        cart: [],
+        bayar: '',
+        promoCode: '',
+        promoDiskon: 0,
+        promoMsg: '',
+      }
+      emitCartChange()
+    },
+
+    setSelectedCustomer: (customer: Customer | null) => {
+      currentCartState = { ...currentCartState, selectedCustomer: customer }
+      emitCartChange()
+    },
+
+    setJenisBayar: (jenis: 'TUNAI' | 'TRANSFER' | 'QRIS') => {
+      currentCartState = { ...currentCartState, jenisBayar: jenis }
+      emitCartChange()
+    },
+
+    setBayar: (bayar: string) => {
+      currentCartState = { ...currentCartState, bayar }
+      emitCartChange()
+    },
+
+    setPromo: (code: string, diskon: number, msg: string) => {
+      currentCartState = { ...currentCartState, promoCode: code, promoDiskon: diskon, promoMsg: msg }
+      emitCartChange()
+    },
+
+    clearPromo: () => {
+      currentCartState = { ...currentCartState, promoCode: '', promoDiskon: 0, promoMsg: '' }
+      emitCartChange()
+    },
+  }
+}

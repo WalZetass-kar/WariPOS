@@ -15,6 +15,7 @@ interface PaymentPanelProps {
   promoLoading: boolean
   pajakPersen: number
   pajakAmount: number
+  storePajakPersen?: number
   totalBayar: number
   jenisBayar: 'TUNAI' | 'TRANSFER' | 'QRIS'
   bayar: string
@@ -23,6 +24,7 @@ interface PaymentPanelProps {
   kembalian: number
   qrisCanPay: boolean
   loading: boolean
+  onChangePajakPersen?: (rate: number) => void
   onChangePromoCode: (code: string) => void
   onApplyPromo: () => void
   onRemovePromo: () => void
@@ -32,10 +34,12 @@ interface PaymentPanelProps {
 }
 
 export default function PaymentPanel({
-  cart, subTotal, promoCode, promoDiskon, promoMsg, promoLoading, pajakPersen, pajakAmount, totalBayar,
+  cart, subTotal, promoCode, promoDiskon, promoMsg, promoLoading, pajakPersen, pajakAmount, storePajakPersen, totalBayar,
   jenisBayar, bayar, bayarInputRef, paidAmount, kembalian, qrisCanPay, loading,
-  onChangePromoCode, onApplyPromo, onRemovePromo, onChangeBayar, onChangeJenisBayar, onHandleBayar
+  onChangePajakPersen, onChangePromoCode, onApplyPromo, onRemovePromo, onChangeBayar, onChangeJenisBayar, onHandleBayar
 }: PaymentPanelProps) {
+  const effectiveStoreRate = storePajakPersen !== undefined ? storePajakPersen : (pajakPersen > 0 ? pajakPersen : 0)
+  const taxRates = Array.from(new Set([0, effectiveStoreRate > 0 ? effectiveStoreRate : 11]))
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3 shadow-sm">
       <div className="flex justify-between text-xs font-semibold">
@@ -86,12 +90,31 @@ export default function PaymentPanel({
         </div>
       )}
 
-      {pajakPersen > 0 && (
-        <div className="flex justify-between text-xs text-amber-600 font-bold">
-          <span>PPN ({pajakPersen}%)</span>
-          <span>+{formatRupiah(pajakAmount)}</span>
+      {/* PPN Control */}
+      <div className="flex items-center justify-between text-xs py-0.5">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-600 dark:text-slate-300">PPN</span>
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 text-[10px] font-bold">
+            {taxRates.map(r => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => onChangePajakPersen && onChangePajakPersen(r)}
+                className={`px-2 py-0.5 rounded-md transition-all ${
+                  pajakPersen === r
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {r === 0 ? 'Non-PPN' : `PPN ${r}%`}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+        <span className={`font-bold ${pajakAmount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+          {pajakAmount > 0 ? `+${formatRupiah(pajakAmount)}` : 'Rp 0'}
+        </span>
+      </div>
 
       <div className="flex justify-between text-base font-black border-t border-slate-100 dark:border-slate-800 pt-2.5">
         <span className="text-slate-900 dark:text-white">TOTAL BAYAR</span>

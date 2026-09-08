@@ -295,14 +295,30 @@ export class ReturnController {
     return { success: true, message: 'Return ditolak' }
   }
   
-  static delete(id: number) {
+  static async delete(id: number) {
     ensureTables()
     const ret = sqlite.prepare('SELECT status FROM mediasoft_returns WHERE id = ?').get(id) as { status?: string } | undefined
     if (!ret) return { success: false, message: 'Return tidak ditemukan' }
-    if (ret.status === 'APPROVED') return { success: false, message: 'Return approved tidak dapat dihapus' }
 
-    sqlite.prepare('DELETE FROM mediasoft_return_details WHERE return_id = ?').run(id)
-    sqlite.prepare('DELETE FROM mediasoft_returns WHERE id = ?').run(id)
-    return { success: true, message: 'Return dihapus' }
+    const details = sqlite.prepare('SELECT barang_id, quantity FROM mediasoft_return_details WHERE return_id = ?').all(id) as Array<{
+      barang_id: string
+      quantity: number
+    }>
+
+    const result = await withTransaction(() => {
+      // If the return was approved, revert the added stock
+      if (ret.status === 'APPROVED') {
+        for (const detail of details) {
+          sqlite.prepare('UPDATE mediasoft_barang SET stok = MAX(0, COALESCE(stok, 0) - ?) WHERE kd_barang = ?')
+            .run(toNumber(detail.quantity), detail.barang_id)
+        }
+      }
+
+      sqlite.prepare('DELETE FROM mediasoft_return_details WHERE return_id = ?').run(id)
+      sqlite.prepare('DELETE FROM mediasoft_returns WHERE id = ?').run(id)
+    })
+
+    if (!result.success) return { success: false, message: result.error }
+    return { success: true, message: ret.status === 'APPROVED' ? 'Return berhasil dihapus dan stok barang telah disesuaikan kembali' : 'Return berhasil dihapus' }
   }
 }

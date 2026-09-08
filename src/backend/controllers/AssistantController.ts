@@ -184,7 +184,7 @@ async function askOpenAiCompatible(settings: IndustrySettings, prompt: string) {
   }
   if (isOpenRouter && referer) {
     headers['HTTP-Referer'] = referer
-    headers['X-Title'] = 'Zetass Pos'
+    headers['X-Title'] = 'WariPOS'
   }
 
   const body: Record<string, unknown> = {
@@ -246,7 +246,7 @@ async function listOpenAiCompatibleModels(settings: IndustrySettings) {
   }
   if (isOpenRouter && referer) {
     headers['HTTP-Referer'] = referer
-    headers['X-Title'] = 'Zetass Pos'
+    headers['X-Title'] = 'WariPOS'
   }
 
   const response = await requestJson<ModelsResponse>('GET', modelsUrl, headers)

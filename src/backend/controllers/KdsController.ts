@@ -70,6 +70,30 @@ export class KdsController {
     }
   }
 
+  static async deleteOrder(id: number) {
+    const authError = await requireAuth()
+    if (authError) return authError
+
+    try {
+      KdsModel.deleteOrder(id)
+      return { success: true, message: 'Pesanan dapur berhasil dihapus' }
+    } catch (error) {
+      return { success: false, message: 'Gagal menghapus pesanan dapur: ' + (error as Error).message }
+    }
+  }
+
+  static async clearOrders(status?: string) {
+    const authError = await requireAuth()
+    if (authError) return authError
+
+    try {
+      KdsModel.clearOrders(status)
+      return { success: true, message: 'Riwayat pesanan dapur berhasil dibersihkan' }
+    } catch (error) {
+      return { success: false, message: 'Gagal membersihkan riwayat dapur: ' + (error as Error).message }
+    }
+  }
+
   static async addOrderItem(data: {
     kds_order_id: number
     kd_barang: string
@@ -443,6 +467,38 @@ export class KdsController {
       return { success: true, message: 'Reservasi berhasil dibatalkan' }
     } catch (error) {
       return { success: false, message: 'Gagal membatalkan reservasi: ' + (error as Error).message }
+    }
+  }
+
+  static async updateReservation(id: number, data: any, username?: string) {
+    const authError = await requireAuth()
+    if (authError) return authError
+
+    try {
+      const reservation = KdsModel.getReservationById(id)
+      if (!reservation) {
+        return { success: false, message: 'Reservasi tidak ditemukan' }
+      }
+      KdsModel.updateReservation(id, data)
+      return { success: true, message: 'Reservasi berhasil diperbarui' }
+    } catch (error) {
+      return { success: false, message: 'Gagal memperbarui reservasi: ' + (error as Error).message }
+    }
+  }
+
+  static async deleteReservation(id: number, username?: string) {
+    const authError = await requireAuth()
+    if (authError) return authError
+
+    try {
+      const reservation = KdsModel.getReservationById(id)
+      if (!reservation) {
+        return { success: false, message: 'Reservasi tidak ditemukan' }
+      }
+      KdsModel.deleteReservation(id)
+      return { success: true, message: 'Reservasi berhasil dihapus' }
+    } catch (error) {
+      return { success: false, message: 'Gagal menghapus reservasi: ' + (error as Error).message }
     }
   }
 

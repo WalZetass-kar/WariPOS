@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.zetass.pos',
-  appName: 'Zetass Pos',
+  appId: 'com.wari.pos',
+  appName: 'WariPOS',
   webDir: 'dist',
   bundledWebRuntime: false,
   android: {
@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
     backgroundColor: '#0f172a',
   },
   ios: {
-    scheme: 'ZetassPos',
+    scheme: 'WariPOS',
   },
   server: {
     androidScheme: 'https',

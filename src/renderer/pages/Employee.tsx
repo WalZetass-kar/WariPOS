@@ -44,7 +44,11 @@ interface Employee {
   updated_at: string
 }
 
-type EmployeeForm = Omit<Employee, 'id_karyawan' | 'created_at' | 'updated_at'>
+type EmployeeForm = Omit<Employee, 'id_karyawan' | 'created_at' | 'updated_at' | 'gaji_pokok' | 'tunjangan' | 'jam_kerja_per_hari'> & {
+  gaji_pokok: number | ''
+  tunjangan: number | ''
+  jam_kerja_per_hari: number | ''
+}
 
 const emptyForm: EmployeeForm = {
   nik: '', nama_lengkap: '', tempat_lahir: '', tgl_lahir: '', jenis_kelamin: 'L',
@@ -52,7 +56,7 @@ const emptyForm: EmployeeForm = {
   pendidikan_terakhir: '', jurusan: '', nama_ibu: '', no_rekening: '', bank: '',
   bpjs_kesehatan: '', bpjs_ketenagakerjaan: '', npwp: '', tgl_masuk: '',
   status_karyawan: 'AKTIF', jabatan: '', departemen: '',
-  gaji_pokok: 0, tunjangan: 0, jam_kerja_per_hari: 8, catatan: ''
+  gaji_pokok: '', tunjangan: '', jam_kerja_per_hari: 8, catatan: ''
 }
 
 export default function Employee() {
@@ -107,10 +111,18 @@ export default function Employee() {
 
   const handleSave = async () => {
     if (!form.nik || !form.nama_lengkap) return toast('NIK dan Nama Lengkap wajib diisi', 'error')
+    
+    const sanitizedPayload = {
+      ...form,
+      gaji_pokok: Number(form.gaji_pokok) || 0,
+      tunjangan: Number(form.tunjangan) || 0,
+      jam_kerja_per_hari: Number(form.jam_kerja_per_hari) || 8,
+    }
+
     setLoading(true)
     const r = editingId
-      ? await api('employee:update', editingId, form)
-      : await api('employee:create', form)
+      ? await api('employee:update', editingId, sanitizedPayload)
+      : await api('employee:create', sanitizedPayload)
     setLoading(false)
     if (r.success) {
       toast(r.message as string)
@@ -276,9 +288,9 @@ export default function Employee() {
               <Input label="Tanggal Masuk" type="date" value={form.tgl_masuk} onChange={e => setForm(p => ({ ...p, tgl_masuk: e.target.value }))} />
               <Input label="Jabatan" value={form.jabatan} onChange={e => setForm(p => ({ ...p, jabatan: e.target.value }))} placeholder="Jabatan" />
               <Input label="Departemen" value={form.departemen} onChange={e => setForm(p => ({ ...p, departemen: e.target.value }))} placeholder="Departemen" />
-              <Input label="Gaji Pokok" type="number" value={String(form.gaji_pokok)} onChange={e => setForm(p => ({ ...p, gaji_pokok: parseFloat(e.target.value) || 0 }))} placeholder="0" />
-              <Input label="Tunjangan" type="number" value={String(form.tunjangan)} onChange={e => setForm(p => ({ ...p, tunjangan: parseFloat(e.target.value) || 0 }))} placeholder="0" />
-              <Input label="Jam Kerja per Hari" type="number" value={String(form.jam_kerja_per_hari)} onChange={e => setForm(p => ({ ...p, jam_kerja_per_hari: parseFloat(e.target.value) || 8 }))} placeholder="8" />
+              <Input label="Gaji Pokok" type="number" value={form.gaji_pokok} onChange={e => setForm(p => ({ ...p, gaji_pokok: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)) }))} placeholder="0" />
+              <Input label="Tunjangan" type="number" value={form.tunjangan} onChange={e => setForm(p => ({ ...p, tunjangan: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)) }))} placeholder="0" />
+              <Input label="Jam Kerja per Hari" type="number" value={form.jam_kerja_per_hari} onChange={e => setForm(p => ({ ...p, jam_kerja_per_hari: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)) }))} placeholder="8" />
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Status Karyawan</label>
                 <select value={form.status_karyawan} onChange={e => setForm(p => ({ ...p, status_karyawan: e.target.value as any }))}

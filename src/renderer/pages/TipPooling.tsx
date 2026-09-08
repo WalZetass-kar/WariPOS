@@ -46,7 +46,7 @@ export default function TipPooling() {
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [modal, setModal] = useState<'add' | 'distribute' | 'history' | null>(null)
-  const [form, setForm] = useState({ tgl: new Date().toISOString().split('T')[0], total_tip: 0 })
+  const [form, setForm] = useState({ tgl: new Date().toISOString().split('T')[0], total_tip: '' })
   const [distributeTarget, setDistributeTarget] = useState<TipPool | null>(null)
   const [distributions, setDistributions] = useState<Distribution[]>([])
   const [historyTarget, setHistoryTarget] = useState<TipPool | null>(null)
@@ -64,14 +64,15 @@ export default function TipPooling() {
   useEffect(() => { load() }, [])
 
   const handleCreate = async () => {
-    if (!form.tgl || form.total_tip <= 0) return toast('Tanggal dan total tip wajib diisi', 'error')
+    const total = Number(form.total_tip) || 0
+    if (!form.tgl || total <= 0) return toast('Tanggal dan total tip (minimal Rp 1) wajib diisi', 'error')
     setLoading(true)
-    const r = await api('tip:create', form.tgl, form.total_tip)
+    const r = await api('tip:create', form.tgl, total)
     setLoading(false)
     if (r.success) {
       toast(r.message as string)
       setModal(null)
-      setForm({ tgl: new Date().toISOString().split('T')[0], total_tip: 0 })
+      setForm({ tgl: new Date().toISOString().split('T')[0], total_tip: '' })
       load()
     } else {
       toast(r.message as string, 'error')
@@ -115,7 +116,13 @@ export default function TipPooling() {
           <Card>
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <div className="flex-1" />
-              <Button icon={<Plus size={16} />} onClick={() => setModal('add')}>
+              <Button
+                icon={<Plus size={16} />}
+                onClick={() => {
+                  setForm({ tgl: new Date().toISOString().split('T')[0], total_tip: '' })
+                  setModal('add')
+                }}
+              >
                 Buat Tip Pooling
               </Button>
             </div>
@@ -179,7 +186,21 @@ export default function TipPooling() {
             }>
             <div className="space-y-3">
               <Input label="Tanggal *" type="date" value={form.tgl} onChange={e => setForm(p => ({ ...p, tgl: e.target.value }))} />
-              <Input label="Total Tip *" type="number" value={String(form.total_tip)} onChange={e => setForm(p => ({ ...p, total_tip: parseFloat(e.target.value) || 0 }))} placeholder="0" />
+              <div>
+                <Input
+                  label="Total Tip (Rp) *"
+                  type="text"
+                  inputMode="numeric"
+                  value={form.total_tip}
+                  onChange={e => setForm(p => ({ ...p, total_tip: e.target.value.replace(/[^0-9]/g, '') }))}
+                  placeholder="0"
+                />
+                {Boolean(form.total_tip && Number(form.total_tip) > 0) && (
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 ml-0.5">
+                    Nominal: {formatRupiah(Number(form.total_tip))}
+                  </p>
+                )}
+              </div>
             </div>
           </Modal>
 

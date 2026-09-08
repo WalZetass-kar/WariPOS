@@ -214,7 +214,7 @@ export class SystemController {
         { kd: 'SUP-003', nama: 'Distributor Sembako Jaya', telp: '021-8889900', alamat: 'Tangerang' },
       ]
       const insertSup = sqlite.prepare(`
-        INSERT OR REPLACE INTO mediasoft_supplier (kd_supplier, nama_supplier, no_telp, alamat, status)
+        INSERT OR REPLACE INTO mediasoft_supplier (kd_suplier, nama_suplier, no_telp_hp, alamat_suplier, status)
         VALUES (?, ?, ?, ?, 'Aktif')
       `)
       for (const s of suppliers) {

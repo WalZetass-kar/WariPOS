@@ -1,10 +1,10 @@
 {
-  "name": "zetass-pos",
+  "name": "waripos",
   "version": "2.1.0",
-  "description": "Zetass Pos - Desktop Point of Sale Application",
+  "description": "WariPOS - Desktop & Mobile Point of Sale Application",
   "type": "module",
   "main": "dist-electron/main/index.js",
-  "author": "Zetass",
+  "author": "WariPOS",
   "license": "MIT",
   "scripts": {
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
@@ -78,6 +78,7 @@
     "@capacitor/core": "^8.3.4",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/ios": "^8.3.4",
+    "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
     "@capgo/capacitor-native-biometric": "^8.1.0",
     "@opentelemetry/api": "^1.9.1",
@@ -151,8 +152,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.zetass.pos",
-    "productName": "Zetass Pos",
+    "appId": "com.wari.pos",
+    "productName": "WariPOS",
     "npmRebuild": false,
     "directories": {
       "output": "release"
@@ -178,8 +179,9 @@
     ],
     "protocols": [
       {
-        "name": "Zetass Pos",
+        "name": "WariPOS",
         "schemes": [
+          "waripos",
           "zetasspos"
         ]
       }
@@ -194,7 +196,7 @@
     "publish": {
       "provider": "github",
       "owner": "WalZetass-kar",
-      "repo": "LCC-Web-Design",
+      "repo": "WariPOS",
       "releaseType": "release"
     },
     "linux": {
@@ -205,11 +207,11 @@
         "tar.gz"
       ],
       "category": "Office",
-      "maintainer": "Zetass",
+      "maintainer": "WariPOS",
       "icon": "build/icon.png",
       "desktop": {
-        "Name": "Zetass Pos",
-        "Comment": "Desktop Point of Sale Application",
+        "Name": "WariPOS",
+        "Comment": "WariPOS Desktop Point of Sale Application",
         "Categories": "Office;Finance;",
         "Keywords": "pos;point-of-sale;cashier;retail;"
       }
@@ -252,7 +254,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Zetass Pos",
+      "shortcutName": "WariPOS",
       "deleteAppDataOnUninstall": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
@@ -266,7 +268,7 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Zetass Pos"
+      "shortcutName": "WariPOS"
     }
   }
 }

@@ -18,7 +18,6 @@ import {
   RefreshCw,
   Rocket,
   ShieldCheck,
-  Sparkles,
   Star,
   Users,
   Wrench,
@@ -223,7 +222,7 @@ export default function RemoteLicensePopup() {
       : `${plan.duration_days} Hari Penuh`
 
     const message = [
-      'Halo Admin Zetass POS, saya ingin membeli lisensi resmi:',
+      'Halo Admin WariPOS, saya ingin membeli lisensi resmi:',
       '',
       `Paket: ${plan.name} (${plan.code || plan.id})`,
       `Harga: ${formatPlanPrice(plan)} / ${getPlanPeriodLabel(plan)}`,
@@ -243,6 +242,8 @@ export default function RemoteLicensePopup() {
         email: user?.email ?? undefined,
         customer_id: user?.remote_customer_id ?? undefined,
         plan_code: plan.code,
+        amount: plan.price,
+        name: user?.nama_lengkap ?? user?.nama_pengguna ?? user?.email?.split('@')[0],
       })
       if (result.success && result.data) {
         setInvoice(result.data)
@@ -261,7 +262,7 @@ export default function RemoteLicensePopup() {
 
   return (
     <div
-      className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-4 backdrop-blur-xl animate-in fade-in duration-200"
+      className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md modal-backdrop-animate"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           close()
@@ -269,7 +270,7 @@ export default function RemoteLicensePopup() {
       }}
     >
       <div
-        className="relative my-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/95 text-white shadow-2xl ring-1 ring-white/10 p-5 sm:p-6"
+        className="relative my-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/95 text-white shadow-2xl ring-1 ring-white/10 p-5 sm:p-6 modal-card-animate"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle Ambient Glow */}
@@ -292,7 +293,7 @@ export default function RemoteLicensePopup() {
           {/* ─── Header Minimalis ───────────────────────────────────── */}
           <div className="text-center space-y-1">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-bold tracking-wide mb-1">
-              <Sparkles size={12} className="text-amber-400" />
+              <ShieldCheck size={13} className="text-amber-400" />
               <span>UPGRADE LISENSI RESMI</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
@@ -506,7 +507,7 @@ export default function RemoteLicensePopup() {
                   type="button"
                   onClick={() => handleCheckout(selectedPlan)}
                   disabled={creatingPlan === selectedPlan.code}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-xs sm:text-sm font-extrabold transition shadow-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40 active:scale-[0.98]"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-xs sm:text-sm font-extrabold transition shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white active:scale-[0.98]"
                 >
                   {creatingPlan === selectedPlan.code ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

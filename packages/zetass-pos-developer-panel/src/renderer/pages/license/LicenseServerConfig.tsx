@@ -10,7 +10,7 @@ type LicenseConfig = {
 }
 
 const DEFAULT_LICENSE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
-const DEFAULT_ADMIN_EMAIL = import.meta.env.VITE_LICENSE_ADMIN_EMAIL || 'admin@lcc-web-design.local'
+const DEFAULT_ADMIN_EMAIL = import.meta.env.VITE_LICENSE_ADMIN_EMAIL || 'admin@waripos.local'
 
 export default function LicenseServerConfig() {
   const toast = useToast()

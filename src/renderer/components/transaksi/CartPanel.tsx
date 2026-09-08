@@ -81,7 +81,7 @@ export default function CartPanel({
         </div>
       </div>
 
-      <div className={`overflow-y-auto scrollbar-thin space-y-2 pr-1 ${isMobileSheet ? 'max-h-60' : 'max-h-44 xl:max-h-52'}`}>
+      <div className={`overflow-y-auto scrollbar-thin space-y-2 pr-1 ${isMobileSheet ? 'max-h-60' : 'max-h-[34vh] xl:max-h-[40vh] 2xl:max-h-[46vh]'}`}>
         {cart.length === 0 ? (
           <div className="py-6 text-center text-slate-400 space-y-1">
             <ShoppingCart size={24} className="mx-auto opacity-30" />
@@ -113,24 +113,25 @@ export default function CartPanel({
                     <button
                       type="button"
                       onClick={() => onUpdateQty(item.kd_barang, -1)}
-                      className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-700 dark:text-slate-200 active:scale-90 transition-all"
                     >
-                      <Minus size={12} />
+                      <Minus size={14} />
                     </button>
-                    <span className="w-7 text-center text-xs font-extrabold text-slate-900 dark:text-white">{item.qty}</span>
+                    <span className="w-7 text-center text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">{item.qty}</span>
                     <button
                       type="button"
                       onClick={() => onUpdateQty(item.kd_barang, 1)}
-                      className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-700 dark:text-slate-200 active:scale-90 transition-all"
                     >
-                      <Plus size={12} />
+                      <Plus size={14} />
                     </button>
                     <button
                       type="button"
                       onClick={() => onRemoveItem(item.kd_barang)}
-                      className="ml-1 w-6 h-6 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-colors"
+                      className="ml-1 w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-colors"
+                      title="Hapus Item"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </motion.div>

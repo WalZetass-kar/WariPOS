@@ -78,6 +78,66 @@ serve(async (req) => {
       });
     }
 
+    // 2.0 Auth Refresh — renew an expired access token (admin/developer session).
+    if (pathname.endsWith("/auth/refresh") && req.method === "POST") {
+      const refreshToken = body.refresh_token || body.refreshToken;
+      if (!refreshToken) {
+        return new Response(JSON.stringify({ success: false, message: "refresh_token wajib diisi", error_code: "NO_REFRESH_TOKEN" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+
+      if (refreshError || !refreshed?.session) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: refreshError?.message || "Sesi tidak dapat diperbarui. Login ulang.",
+          error_code: "SESSION_EXPIRED",
+        }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          access_token: refreshed.session.access_token,
+          refresh_token: refreshed.session.refresh_token,
+        },
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2.0b Device heartbeat — keep customer_devices.last_seen_at fresh so the
+    // Developer Panel shows an accurate online/offline badge.
+    if (pathname.endsWith("/heartbeat") && req.method === "POST") {
+      const hbEmail = (body.email || body.username || "").toLowerCase().trim();
+      const hbDeviceId = body.deviceId || body.device?.deviceId;
+      if (hbDeviceId) {
+        const patch: Record<string, unknown> = { last_seen_at: new Date().toISOString() };
+        if (body.device?.osName || body.osName) patch.os_name = body.device?.osName || body.osName;
+        if (body.device?.appVersion || body.appVersion) patch.app_version = body.device?.appVersion || body.appVersion;
+
+        let query = supabase.from("customer_devices").update(patch).eq("device_id", hbDeviceId);
+        if (hbEmail) {
+          const { data: hbCustomer } = await supabase
+            .from("license_customers")
+            .select("id")
+            .eq("email", hbEmail)
+            .single();
+          if (hbCustomer) query = query.eq("customer_id", hbCustomer.id);
+        }
+        await query;
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // 2.1 Register Trial / New Buyer Account from Mobile / Web
     if ((pathname.endsWith("/register-trial") || pathname.endsWith("/customer/register") || pathname.endsWith("/auth/register-demo")) && req.method === "POST") {
       const { email, password, name, phone, device } = body;
@@ -282,7 +342,10 @@ serve(async (req) => {
 
     // 2.3 Check License / Sync
     if ((pathname.endsWith("/check-license") || pathname.endsWith("/license/check")) && req.method === "POST") {
-      const { email, deviceId, username } = body;
+      const { email, username } = body;
+      // Client sends the device either flat (deviceId) or nested (device.deviceId).
+      const device = body.device || {};
+      const deviceId = body.deviceId || device.deviceId || null;
       const searchEmail = (email || username || '').toLowerCase().trim();
 
       if (searchEmail) {
@@ -299,14 +362,59 @@ serve(async (req) => {
           .single();
 
         if (customer) {
+          let deviceStatus: string | null = null;
+
           if (deviceId) {
-            await supabase.from('customer_devices').update({
-              last_seen_at: new Date().toISOString(),
-            }).eq('customer_id', customer.id).eq('device_id', deviceId);
+            const { data: existDev } = await supabase
+              .from('customer_devices')
+              .select('id, status')
+              .eq('customer_id', customer.id)
+              .eq('device_id', deviceId)
+              .maybeSingle();
+
+            if (existDev) {
+              deviceStatus = existDev.status;
+              await supabase.from('customer_devices').update({
+                last_seen_at: new Date().toISOString(),
+                ...(device.deviceName ? { device_name: device.deviceName } : {}),
+                ...(device.osName ? { os_name: device.osName } : {}),
+                ...(device.appVersion ? { app_version: device.appVersion } : {}),
+              }).eq('id', existDev.id);
+            } else {
+              // Re-register a device that was never persisted (e.g. only ever
+              // seen a periodic check, never a login) so it shows up for the developer.
+              deviceStatus = 'active';
+              await supabase.from('customer_devices').insert({
+                customer_id: customer.id,
+                device_id: deviceId,
+                device_name: device.deviceName || device.osName || 'Device',
+                os_name: device.osName || null,
+                app_version: device.appVersion || null,
+                status: 'active',
+                first_seen_at: new Date().toISOString(),
+                last_seen_at: new Date().toISOString(),
+              });
+            }
           }
 
           const sub = (customer.customer_subscriptions || [])[0];
           const plan = sub?.subscription_plans;
+          const expired = !!sub?.expires_at && new Date(sub.expires_at).getTime() < Date.now();
+
+          // Developer blocked this specific device → hard stop on the client.
+          if (deviceStatus === 'blocked') {
+            return new Response(JSON.stringify({
+              success: false,
+              message: "Perangkat ini diblokir oleh developer. Hubungi admin.",
+              data: {
+                error_code: "DEVICE_BLOCKED",
+                status: "blocked",
+                subscription: sub ? { id: sub.id, status: sub.status, expires_at: sub.expires_at, plan: plan || null } : null,
+              },
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
 
           return new Response(JSON.stringify({
             success: true,
@@ -320,6 +428,7 @@ serve(async (req) => {
               force_popup_code: customer.force_popup_code,
               force_popup_until: customer.force_popup_until,
               status: customer.status,
+              ...(expired ? { error_code: "EXPIRED", expired: true } : {}),
             }
           }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -376,7 +485,7 @@ serve(async (req) => {
         query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
       }
       if (status) {
-        query = query.eq('status', status.toUpperCase());
+        query = query.ilike('status', `%${status}%`);
       }
 
       const { data: customers, error: custError } = await query;
@@ -405,6 +514,89 @@ serve(async (req) => {
       });
 
       return new Response(JSON.stringify({ success: true, data: formatted }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 4.0 Admin Create User (Developer / Buyer / Admin)
+    if (pathname.endsWith("/admin/users") && req.method === "POST") {
+      const { name, email, password, phone, role, plan_code, duration_days } = body;
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const cleanName = String(name || cleanEmail);
+      const userRole = String(role || 'developer').toLowerCase();
+
+      if (!cleanEmail) {
+        return new Response(JSON.stringify({ success: false, message: "Email atau username wajib diisi" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // 1. Create or ensure Auth User in Supabase Auth if email format
+      let authUserId: string | null = null;
+      if (cleanEmail.includes('@')) {
+        try {
+          const { data: authUser } = await supabase.auth.admin.createUser({
+            email: cleanEmail,
+            password: password || "12345678",
+            email_confirm: true,
+            user_metadata: { name: cleanName, role: userRole },
+          });
+          if (authUser?.user) authUserId = authUser.user.id;
+        } catch {
+          // Auth user might already exist
+        }
+      }
+
+      // 2. Insert or update license_customers
+      const { data: existingCust } = await supabase
+        .from('license_customers')
+        .select('id')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      let customerId = existingCust?.id;
+      if (!customerId) {
+        const { data: newCust, error: custErr } = await supabase
+          .from('license_customers')
+          .insert({
+            name: cleanName,
+            email: cleanEmail,
+            phone: phone || null,
+            status: 'active',
+            metadata: { role: userRole, auth_user_id: authUserId },
+          })
+          .select('id')
+          .single();
+        if (custErr) throw custErr;
+        customerId = newCust?.id;
+      }
+
+      // 3. If plan_code provided, link customer_subscriptions
+      if (customerId && plan_code && userRole !== 'developer') {
+        const { data: plan } = await supabase
+          .from('subscription_plans')
+          .select('id, duration_days')
+          .eq('code', plan_code)
+          .maybeSingle();
+
+        const duration = duration_days !== undefined ? Number(duration_days) : (plan?.duration_days ?? 365);
+        const expiresAt = duration === 0 ? null : new Date(Date.now() + duration * 86400000).toISOString();
+
+        await supabase.from('customer_subscriptions').upsert({
+          customer_id: customerId,
+          plan_id: plan?.id,
+          status: 'active',
+          started_at: new Date().toISOString(),
+          expires_at: expiresAt,
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: `Akun ${userRole} "${cleanName}" berhasil dibuat`,
+        data: { id: customerId, name: cleanName, email: cleanEmail, role: userRole }
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -704,38 +896,322 @@ serve(async (req) => {
       });
     }
 
-    // 8. Admin Payments list
-    if (pathname.endsWith("/admin/payments") && req.method === "GET") {
-      const { data: payments, error: payError } = await supabase
-        .from('license_payments')
-        .select(`
-          id, invoice_number, amount, status, payment_method, proof_url, created_at, updated_at,
-          license_customers ( id, name, email ),
-          subscription_plans ( id, code, name )
-        `)
-        .order('created_at', { ascending: false });
+    // 7.1 Customer Payment Request (from Mobile / Desktop)
+    if ((pathname.endsWith("/payments/manual-request") || pathname.endsWith("/payments/create")) && req.method === "POST") {
+      const { email, plan_code, plan_id, amount, notes, method, customer_id, name } = body;
+      const cleanEmail = (email || '').toLowerCase().trim();
 
-      if (payError) {
-        // If table doesn't exist yet, return empty list cleanly
-        return new Response(JSON.stringify({ success: true, data: [] }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      // 1. Find customer by email or customer_id
+      let customer: any = null;
+      if (cleanEmail) {
+        const { data: custs } = await supabase
+          .from('license_customers')
+          .select('id, name, email, phone')
+          .eq('email', cleanEmail)
+          .limit(1);
+        customer = custs && custs[0];
+      } else if (customer_id) {
+        const { data: custs } = await supabase
+          .from('license_customers')
+          .select('id, name, email, phone')
+          .eq('id', customer_id)
+          .limit(1);
+        customer = custs && custs[0];
       }
 
-      const formatted = (payments || []).map((p: any) => ({
-        id: String(p.id),
-        invoice_number: p.invoice_number || `INV-${p.id}`,
-        amount: Number(p.amount || 0),
-        status: p.status || 'pending',
-        payment_method: p.payment_method || 'transfer',
-        proof_url: p.proof_url || null,
-        created_at: p.created_at,
-        user_name: p.license_customers?.name || 'Customer',
-        user_email: p.license_customers?.email || '-',
-        plan_name: p.subscription_plans?.name || 'Plan',
-      }));
+      // If customer not in DB yet, create one
+      if (!customer && cleanEmail) {
+        const { data: newCust } = await supabase
+          .from('license_customers')
+          .insert({
+            email: cleanEmail,
+            name: name || cleanEmail.split('@')[0] || 'Pembeli',
+            status: 'active',
+            metadata: { registered_from: 'payment_request' }
+          })
+          .select('id, name, email, phone')
+          .single();
+        customer = newCust;
+      }
+
+      // 2. Find plan
+      let plan: any = null;
+      if (plan_code) {
+        const cleanCode = String(plan_code).trim();
+        const { data: plans } = await supabase
+          .from('subscription_plans')
+          .select('id, code, name, price, duration_days')
+          .or(`code.ilike.${cleanCode},name.ilike.%${cleanCode}%`)
+          .limit(1);
+        plan = plans && plans[0];
+      }
+      if (!plan && plan_id) {
+        const { data: plans } = await supabase
+          .from('subscription_plans')
+          .select('id, code, name, price, duration_days')
+          .eq('id', plan_id)
+          .limit(1);
+        plan = plans && plans[0];
+      }
+      if (!plan) {
+        const { data: plans } = await supabase
+          .from('subscription_plans')
+          .select('id, code, name, price, duration_days')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true })
+          .limit(1);
+        plan = plans && plans[0];
+      }
+
+      const paymentAmount = Number(amount || plan?.price || 0);
+      const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+
+      // 3. Insert payment record into license_payments table
+      let createdPayment: any = null;
+      const cleanPaymentRecord = {
+        customer_id: customer?.id || null,
+        plan_id: plan?.id || null,
+        invoice_number: invoiceNumber,
+        amount: paymentAmount,
+        payment_method: method || 'manual_transfer',
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      try {
+        const { data: lpRes, error: lpErr } = await supabase
+          .from('license_payments')
+          .insert(cleanPaymentRecord)
+          .select('id, invoice_number, amount, status')
+          .single();
+        if (!lpErr && lpRes) createdPayment = lpRes;
+        else if (lpErr) console.error("Insert license_payments error:", lpErr);
+      } catch (e) {
+        console.error("license_payments exception:", e);
+      }
+
+      if (!createdPayment) {
+        try {
+          const { data: pRes } = await supabase
+            .from('payments')
+            .insert({
+              customer_id: customer?.id || null,
+              plan_id: plan?.id || null,
+              amount: paymentAmount,
+              method: method || 'manual_transfer',
+              status: 'pending',
+              external_ref: invoiceNumber,
+              created_at: new Date().toISOString(),
+            })
+            .select()
+            .single();
+          if (pRes) createdPayment = pRes;
+        } catch {}
+      }
+
+      const waNumber = '6281234567890';
+      const waMsg = `Halo Admin Zetass POS, saya ingin konfirmasi pembayaran lisensi:\n\n` +
+        `Invoice: ${invoiceNumber}\n` +
+        `Akun: ${customer?.name || cleanEmail}\n` +
+        `Email: ${cleanEmail}\n` +
+        `Paket: ${plan?.name || plan_code} (Rp ${paymentAmount.toLocaleString('id-ID')})\n\n` +
+        `Mohon persetujuan dan aktivasi lisensi. Terima kasih.`;
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Permintaan lisensi berhasil dibuat dan menunggu persetujuan admin",
+        data: {
+          id: createdPayment?.id || invoiceNumber,
+          invoice_number: invoiceNumber,
+          external_ref: invoiceNumber,
+          amount: paymentAmount,
+          status: 'pending',
+          whatsapp_number: waNumber,
+          whatsapp_message: waMsg,
+          payment_url: `https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`,
+          customer: customer || null,
+          plan: plan || null,
+        }
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 8. Admin Payments list (Persetujuan Lisensi)
+    if (pathname.endsWith("/admin/payments") && req.method === "GET") {
+      let formatted: any[] = [];
+
+      // 1. Try querying `license_payments`
+      try {
+        const { data: payments, error: payError } = await supabase
+          .from('license_payments')
+          .select(`
+            id, invoice_number, amount, status, payment_method, proof_url, created_at, updated_at,
+            license_customers ( id, name, email ),
+            subscription_plans ( id, code, name )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!payError && Array.isArray(payments) && payments.length > 0) {
+          formatted = payments.map((p: any) => ({
+            id: String(p.id),
+            invoice_number: p.invoice_number || `INV-${p.id}`,
+            amount: Number(p.amount || 0),
+            status: (p.status || 'pending').toLowerCase(),
+            method: p.payment_method || 'transfer',
+            provider: p.payment_method || 'Manual Transfer',
+            proof_url: p.proof_url || null,
+            created_at: p.created_at,
+            user_name: p.license_customers?.name || 'Customer',
+            user_email: p.license_customers?.email || '-',
+            plan_name: p.subscription_plans?.name || 'Plan',
+            plan_code: p.subscription_plans?.code || 'STANDARD',
+          }));
+        }
+      } catch {}
+
+      // 2. If empty, try querying `payments` table
+      if (formatted.length === 0) {
+        try {
+          const { data: payments, error: payError } = await supabase
+            .from('payments')
+            .select(`
+              id, external_ref, amount, status, method, proof_url, created_at, notes, customer_id, plan_id,
+              license_customers ( id, name, email ),
+              subscription_plans ( id, code, name )
+            `)
+            .order('created_at', { ascending: false });
+
+          if (!payError && Array.isArray(payments) && payments.length > 0) {
+            formatted = payments.map((p: any) => ({
+              id: String(p.id),
+              invoice_number: p.external_ref || p.invoice_number || `INV-${p.id}`,
+              amount: Number(p.amount || 0),
+              status: (p.status || 'pending').toLowerCase(),
+              method: p.method || 'transfer',
+              provider: p.method || 'Manual Transfer',
+              proof_url: p.proof_url || null,
+              created_at: p.created_at,
+              user_name: p.license_customers?.name || 'Customer',
+              user_email: p.license_customers?.email || '-',
+              plan_name: p.subscription_plans?.name || 'Plan',
+              plan_code: p.subscription_plans?.code || 'STANDARD',
+            }));
+          }
+        } catch {}
+      }
 
       return new Response(JSON.stringify({ success: true, data: formatted }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 8.1 Admin Create Manual Payment
+    if (pathname.endsWith("/admin/payments") && req.method === "POST") {
+      const { user_id, customer_id, plan_code, amount, method, status } = body;
+      const custId = customer_id || user_id;
+
+      let planId: any = null;
+      if (plan_code) {
+        const { data: plans } = await supabase.from('subscription_plans').select('id, duration_days').eq('code', plan_code).limit(1);
+        if (plans && plans[0]) planId = plans[0].id;
+      }
+
+      const inv = `INV-MANUAL-${Date.now().toString(36).toUpperCase()}`;
+      const { data: newP, error: adminPayErr } = await supabase.from('license_payments').insert({
+        customer_id: custId,
+        plan_id: planId,
+        invoice_number: inv,
+        amount: Number(amount || 0),
+        payment_method: method || 'manual_transfer',
+        status: status || 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).select().single();
+
+      if (adminPayErr) {
+        console.error('Admin create payment error:', adminPayErr);
+      }
+
+      return new Response(JSON.stringify({ success: true, message: "Persetujuan manual dicatat", data: newP }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 8.2 Admin Approve Payment
+    if (pathname.includes("/admin/payments/") && pathname.endsWith("/approve") && req.method === "POST") {
+      const parts = pathname.split("/");
+      const paymentId = parts[parts.length - 2];
+
+      await supabase.from('payments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', paymentId);
+      await supabase.from('license_payments').update({ status: 'paid', updated_at: new Date().toISOString() }).eq('id', paymentId);
+
+      // Fetch payment details to activate subscription
+      let custId: string | null = null;
+      let planId: string | null = null;
+
+      const { data: p1 } = await supabase.from('payments').select('customer_id, plan_id').eq('id', paymentId).single();
+      if (p1) {
+        custId = p1.customer_id;
+        planId = p1.plan_id;
+      } else {
+        const { data: p2 } = await supabase.from('license_payments').select('customer_id, plan_id').eq('id', paymentId).single();
+        if (p2) {
+          custId = p2.customer_id;
+          planId = p2.plan_id;
+        }
+      }
+
+      if (custId && planId) {
+        const { data: plan } = await supabase.from('subscription_plans').select('id, code, duration_days').eq('id', planId).single();
+        const duration = plan?.duration_days ?? 30;
+        const expiresAt = duration === 0 ? null : new Date(Date.now() + duration * 86400000).toISOString();
+
+        // Update active subscription
+        const { data: existingSubs } = await supabase
+          .from('customer_subscriptions')
+          .select('id')
+          .eq('customer_id', custId)
+          .limit(1);
+
+        if (existingSubs && existingSubs.length > 0) {
+          await supabase
+            .from('customer_subscriptions')
+            .update({
+              plan_id: planId,
+              status: 'active',
+              started_at: new Date().toISOString(),
+              expires_at: expiresAt,
+            })
+            .eq('id', existingSubs[0].id);
+        } else {
+          await supabase
+            .from('customer_subscriptions')
+            .insert({
+              customer_id: custId,
+              plan_id: planId,
+              status: 'active',
+              started_at: new Date().toISOString(),
+              expires_at: expiresAt,
+            });
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, message: "Pembayaran berhasil disetujui dan lisensi pengguna telah aktif" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 8.3 Admin Delete Payment
+    if (pathname.includes("/admin/payments/") && req.method === "DELETE") {
+      const parts = pathname.split("/");
+      const paymentId = parts[parts.length - 1];
+
+      await supabase.from('payments').delete().eq('id', paymentId);
+      await supabase.from('license_payments').delete().eq('id', paymentId);
+
+      return new Response(JSON.stringify({ success: true, message: "Persetujuan lisensi berhasil dihapus" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

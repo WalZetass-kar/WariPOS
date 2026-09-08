@@ -129,6 +129,7 @@ function toSession(user: AuthUserRecord, auth?: {
     nama_pengguna: user.nama_pengguna,
     nama_lengkap: user.nama_lengkap,
     email: user.email ?? null,
+    foto: (user as any).foto ?? null,
     hak_akses: user.hak_akses || 'kasir',
     access_expires_at: expiresAt,
     access_days_remaining: getAccessDaysRemaining(expiresAt),

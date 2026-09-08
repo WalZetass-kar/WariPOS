@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown, Clock } from 'lucide-react'
+import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown, Clock, Wifi, WifiOff, LogOut, Settings as SettingsIcon } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { api } from '../utils/api'
 import { isDemoMode } from '../utils/demo'
 import type { Identitas, Notifikasi } from '../../shared/types'
@@ -20,7 +21,7 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/customer': { label: 'Customer', parent: 'Relasi' },
   '/kas': { label: 'Kas', parent: 'Keuangan' },
   '/accounting': { label: 'Akuntansi', parent: 'Keuangan' },
-  '/shifts': { label: 'Shift', parent: 'Keuangan' },
+  '/shifts': { label: 'Shift Kasir', parent: 'Kasir & Penjualan' },
   '/debts': { label: 'Hutang/Piutang', parent: 'Keuangan' },
   '/returns': { label: 'Return', parent: 'Keuangan' },
   '/laporan': { label: 'Laporan', parent: 'Keuangan' },
@@ -45,7 +46,8 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/whatsapp': { label: 'WhatsApp', parent: 'Alat Bantu' },
   '/print-queue': { label: 'Antrian Print', parent: 'Alat Bantu' },
   '/payment-automation': { label: 'Pembayaran Digital', parent: 'Keuangan' },
-  '/customer-display-page': { label: 'Customer Display', parent: 'Utama' },
+  '/customer-display-page': { label: 'Display & Antrian', parent: 'Utama' },
+  '/queue-display': { label: 'Layar TV Antrian', parent: 'Utama' },
   '/daily-notes': { label: 'Daily Notes', parent: 'Utama' },
   '/price-list': { label: 'Price List', parent: 'Inventaris' },
   '/stock-history': { label: 'Riwayat Stok', parent: 'Inventaris' },
@@ -96,11 +98,14 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const navigate = useNavigate()
   const { mode, toggleMode } = useTheme()
   const { user } = useAuth()
-  const [storeName, setStoreName] = useState('Zetass Pos')
+  const { isOnline } = useNetworkStatus()
+  const [storeName, setStoreName] = useState('WariPOS')
   const [notifs, setNotifs] = useState<Notifikasi[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotif, setShowNotif] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
+  const profileRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     api<Identitas>('identitas:get').then(r => {
@@ -134,6 +139,9 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setShowNotif(false)
       }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -165,7 +173,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
 
   const normalizedPath = pathname.replace(/^\/app(?=\/|$)/, '') || '/'
   const route = ROUTE_MAP[normalizedPath]
-  const pageLabel = route?.label ?? 'Zetass Pos'
+  const pageLabel = route?.label ?? 'WariPOS'
   const parentLabel = route?.parent
 
   const initials = (user?.nama_lengkap ?? user?.nama_pengguna ?? 'U')
@@ -228,6 +236,18 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           <span className="hidden sm:inline">Shift</span>
         </button>
 
+        <span
+          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold ${
+            isOnline
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-amber-600 dark:text-amber-400 bg-amber-500/10'
+          }`}
+          title={isOnline ? 'Online — tersinkron dengan lisensi & developer' : 'Offline — data tersimpan di perangkat, akan disinkronkan saat online'}
+        >
+          {isOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
+          <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
+        </span>
+
         <button onClick={toggleMode} aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
           {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
@@ -249,7 +269,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
 
           {/* Dropdown */}
           {showNotif && (
-            <div className="fixed left-1/2 top-16 z-50 w-[min(calc(100vw-2rem),360px)] -translate-x-1/2 glass-card shadow-2xl rounded-2xl overflow-hidden border border-white/40 dark:border-slate-700/40">
+            <div className="fixed left-1/2 top-16 z-50 w-[min(calc(100vw-2rem),360px)] -translate-x-1/2 glass-card shadow-2xl rounded-2xl overflow-hidden border border-white/40 dark:border-slate-700/40 dropdown-popover-animate">
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">
@@ -303,11 +323,73 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           )}
         </div>
 
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center text-white text-xs font-bold ml-1 cursor-default select-none shadow-md shadow-primary-500/20 overflow-hidden" title={user?.nama_lengkap ?? user?.nama_pengguna ?? ''}>
-          {user?.foto ? (
-            <img src={user.foto} alt="" className="w-full h-full object-cover" />
-          ) : (
-            initials
+        <div ref={profileRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setShowProfileMenu(v => !v)}
+            aria-label="Menu profil dan akun"
+            className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center text-white text-xs font-bold ml-1 cursor-pointer select-none shadow-md shadow-primary-500/20 overflow-hidden hover:ring-2 hover:ring-primary-500/50 transition-all active:scale-95"
+            title={`Profil: ${user?.nama_lengkap ?? user?.nama_pengguna ?? ''}`}
+          >
+            {user?.foto ? (
+              <img src={user.foto} alt="" className="w-full h-full object-cover" />
+            ) : (
+              initials
+            )}
+          </button>
+
+          {showProfileMenu && (
+            <div className="fixed right-3 top-16 sm:absolute sm:right-0 sm:top-11 z-50 w-60 glass-card shadow-2xl rounded-2xl overflow-hidden border border-white/40 dark:border-slate-700/40 p-2 dropdown-popover-animate">
+              <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                  {user?.nama_lengkap || user?.nama_pengguna || 'Pengguna'}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[10px] font-mono text-slate-400 truncate">@{user?.nama_pengguna}</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 uppercase">
+                    {user?.hak_akses ?? 'kasir'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="py-1 space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileMenu(false)
+                    navigate('/settings?category=akun')
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                >
+                  <SettingsIcon size={15} className="text-slate-400" />
+                  <span>Pengaturan Akun</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileMenu(false)
+                    navigate('/shifts')
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                >
+                  <Clock size={15} className="text-slate-400" />
+                  <span>Shift Kasir</span>
+                </button>
+                <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false)
+                      window.dispatchEvent(new CustomEvent('auth:request-logout'))
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left"
+                  >
+                    <LogOut size={15} className="text-rose-500" />
+                    <span>Keluar Akun</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

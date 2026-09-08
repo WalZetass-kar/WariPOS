@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Zetass Pos</string>
-    <string name="title_activity_main">Zetass Pos</string>
-    <string name="package_name">com.zetass.pos</string>
-    <string name="custom_url_scheme">com.zetass.pos</string>
+    <string name="app_name">WariPOS</string>
+    <string name="title_activity_main">WariPOS</string>
+    <string name="package_name">com.wari.pos</string>
+    <string name="custom_url_scheme">com.wari.pos</string>
 </resources>

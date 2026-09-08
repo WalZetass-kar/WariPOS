@@ -52,17 +52,21 @@ function generateCustomShades(hex: string) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [color, setColorState] = useState<ThemeColor>(
-    () => (secureStorage.getItem('theme-color') as ThemeColor) || 'pink'
-  )
-  const [mode, setModeState] = useState<ThemeMode>(
-    () => {
-      const stored = secureStorage.getItem('theme-mode') as ThemeMode | null
-      if (stored === 'light' || stored === 'dark') return stored
-      if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
-      return 'light'
+  const [color, setColorState] = useState<ThemeColor>(() => {
+    try {
+      return (localStorage.getItem('theme-color') || secureStorage.getItem('theme-color') as ThemeColor) || 'pink'
+    } catch {
+      return 'pink'
     }
-  )
+  })
+
+  const [mode, setModeState] = useState<ThemeMode>(() => {
+    try {
+      const stored = localStorage.getItem('theme-mode') || secureStorage.getItem('theme-mode') as ThemeMode | null
+      if (stored === 'light' || stored === 'dark') return stored
+    } catch {}
+    return 'light'
+  })
 
   useEffect(() => {
     if (PRESETS.includes(color)) {
@@ -97,12 +101,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       document.documentElement.style.setProperty('--glass-shadow-rgb', rgb)
       document.documentElement.style.setProperty('--chart-bar-color', color)
     }
-    secureStorage.setItem('theme-color', color)
+    try {
+      localStorage.setItem('theme-color', color)
+    } catch {}
+    try {
+      secureStorage.setItem('theme-color', color)
+    } catch {}
   }, [color])
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', mode === 'dark')
-    secureStorage.setItem('theme-mode', mode)
+    const isDark = mode === 'dark'
+    if (isDark) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+    try {
+      localStorage.setItem('theme-mode', mode)
+    } catch {}
+    try {
+      secureStorage.setItem('theme-mode', mode)
+    } catch {}
   }, [mode])
 
   const setColor = (c: ThemeColor) => setColorState(c)

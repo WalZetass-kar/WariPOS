@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, useMemo, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import type { UserSession } from '../../shared/types'
 import { api } from '../utils/api'
 import { secureStorage } from '../utils/secureStorage'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { subscribeLicense, syncBuyerLicense, heartbeat as supabaseHeartbeat } from '../../shared/supabase/license'
 import { logActivity } from '../../shared/supabase/logging'
 
@@ -118,6 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isDemo = useMemo(() => user?.hak_akses === 'demo', [user])
 
+  const { isOnline } = useNetworkStatus()
+  const wasOnlineRef = useRef(isOnline)
+
   const logout = useCallback(() => {
     const stored = restoreSession()
     // Notify main process to clear server-side session
@@ -225,12 +229,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [logout])
 
+  const lastHeartbeatRef = useRef(0)
+
   useEffect(() => {
     if (!user?.nama_pengguna) return
 
     let cancelled = false
     const sendHeartbeat = () => {
       if (cancelled) return
+      const now = Date.now()
+      if (now - lastHeartbeatRef.current < 45 * 1000) return
+      lastHeartbeatRef.current = now
+
       const deviceInfo = collectAuthDeviceInfo()
       void supabaseHeartbeat({
         email: user.email ?? user.nama_pengguna,
@@ -242,12 +252,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sendHeartbeat()
     const heartbeat = window.setInterval(sendHeartbeat, 60 * 1000)
     window.addEventListener('focus', sendHeartbeat)
-    document.addEventListener('visibilitychange', sendHeartbeat)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') sendHeartbeat()
+    })
     return () => {
       cancelled = true
       window.clearInterval(heartbeat)
       window.removeEventListener('focus', sendHeartbeat)
-      document.removeEventListener('visibilitychange', sendHeartbeat)
     }
   }, [user?.nama_pengguna, user?.email, user?.remote_auth_user_id, user?.remote_customer_id, user?.remote_license_token])
 
@@ -298,7 +309,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
 
         const data: any = r?.data ?? {}
-        if (r?.success) {
+        const reachedServer = String(data?.error_code ?? '').toUpperCase() !== 'OFFLINE'
+        // Only refresh the "last verified" timestamp when we actually reached the
+        // server. The offline fallback returns success:true with error_code
+        // OFFLINE and must NOT keep resetting the grace clock.
+        if (r?.success && reachedServer) {
           secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
         }
 
@@ -396,6 +411,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', sync)
     }
   }, [user?.nama_pengguna, logout])
+
+  // Connectivity transitions: re-validate license + refresh device heartbeat the
+  // moment the internet comes back, instead of waiting for the 12s poll / focus.
+  useEffect(() => {
+    const wasOnline = wasOnlineRef.current
+    wasOnlineRef.current = isOnline
+
+    if (wasOnline === isOnline) return
+
+    if (isOnline) {
+      if (user?.nama_pengguna) {
+        window.dispatchEvent(new Event('license:sync-now'))
+        void supabaseHeartbeat({
+          email: user.email ?? user.nama_pengguna,
+          customerId: user.remote_customer_id ?? undefined,
+          deviceInfo: collectAuthDeviceInfo(),
+        })
+        window.dispatchEvent(new CustomEvent('toast:show', {
+          detail: { message: 'Kembali online — sinkronisasi lisensi...', type: 'success' },
+        }))
+      }
+    } else if (user?.nama_pengguna) {
+      window.dispatchEvent(new CustomEvent('toast:show', {
+        detail: { message: 'Mode offline — data tersimpan di perangkat', type: 'info' },
+      }))
+    }
+  }, [isOnline, user?.nama_pengguna, user?.email, user?.remote_customer_id])
 
   useEffect(() => {
     if (!user?.nama_pengguna) return

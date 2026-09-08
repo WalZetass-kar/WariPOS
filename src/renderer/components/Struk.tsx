@@ -114,7 +114,7 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
             <img src={identitas.logo} alt="Logo" className="w-12 h-12 mx-auto mb-2 object-contain" />
           )}
           <p className={`font-bold ${settings.layout_type === 'modern' ? 'text-sm' : 'text-xs'}`}>
-            {identitas.namatoko || 'Zetass Pos'}
+            {identitas.namatoko || 'WariPOS'}
           </p>
           {settings.show_alamat && identitas.alamattoko && (
             <p className="text-slate-500 text-[9px]">{identitas.alamattoko}</p>

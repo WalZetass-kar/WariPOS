@@ -452,14 +452,17 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── USER MANAGEMENT ──────────────────────────────────────────────
   handle(ipcMain, 'user:getAll', () => UserController.getAll())
   handle(ipcMain, 'user:create', (data: any) => {
-    if (!data?.nama_pengguna || !data?.kata_sandi) {
+    const plainPassword = data?.kata_sandi || data?.password
+    if (!data?.nama_pengguna || !plainPassword) {
       return { success: false, message: 'Username dan password wajib diisi' }
     }
-    if (data.kata_sandi.length < 6) {
+    if (String(plainPassword).length < 6) {
       return { success: false, message: 'Password minimal 6 karakter' }
     }
     return UserController.create({
       ...data,
+      kata_sandi: plainPassword,
+      password: plainPassword,
       nama_pengguna: sanitizeString(data.nama_pengguna, 50),
       _caller: demoSession.getUsername() ?? data?._caller,
     })
@@ -695,6 +698,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── TAX ───────────────────────────────────────────────────────────
   handle(ipcMain, 'tax:getActive', () => TaxController.getActive())
   handle(ipcMain, 'tax:getActiveRate', () => ({ success: true, data: { rate: TaxController.getActiveRate() } }))
+  handle(ipcMain, 'tax:setActiveRate', (rate: number) => TaxController.setActiveRate(rate))
   handle(ipcMain, 'tax:getAll', () => TaxController.getAll())
   handle(ipcMain, 'tax:setActive', (id: number) => TaxController.setActive(id))
   handle(ipcMain, 'tax:create', (data: any) => TaxController.create(data))
@@ -840,7 +844,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'priceList:get', (kdKategori?: number, search?: string) => FeatureHubController.getPriceList(kdKategori, search))
   handle(ipcMain, 'cashFlow:getAll', (startDate?: string, endDate?: string) => FeatureHubController.getCashFlow(startDate, endDate))
   handle(ipcMain, 'taxReport:getSummary', (startDate?: string, endDate?: string) => FeatureHubController.getTaxSummary(startDate, endDate))
-  handle(ipcMain, 'salesCommission:getAll', (search?: string) => FeatureHubController.getSalesCommissions(search))
+  handle(ipcMain, 'salesCommission:getAll', (search?: string, month?: number, year?: number, customRates?: any) => FeatureHubController.getSalesCommissions(search, month, year, customRates))
+  handle(ipcMain, 'salesCommission:getStaffDetail', (username: string, month?: number, year?: number) => FeatureHubController.getStaffSalesDetail(username, month, year))
   handle(ipcMain, 'supplierRating:getAll', (search?: string) => FeatureHubController.getSupplierRatings(search))
   handle(ipcMain, 'membership:getAll', (search?: string) => FeatureHubController.getMemberships(search))
   handle(ipcMain, 'stockHistory:getAll', (search?: string, filterJenis?: string) => FeatureHubController.getStockHistory(search, filterJenis))
@@ -1025,9 +1030,41 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // Attendance
   handle(ipcMain, 'attendance:getAll', (date?: string) => EmployeeController.getAttendance(date || new Date().toISOString().split('T')[0]))
   handle(ipcMain, 'attendance:getByEmployee', (employeeId: number, startDate: string, endDate: string) => EmployeeController.getAttendanceByEmployee(employeeId, startDate, endDate))
-  handle(ipcMain, 'attendance:clockIn', (data: any) => EmployeeController.clockIn(data))
-  handle(ipcMain, 'attendance:clockOut', (id: number, data: any) => EmployeeController.clockOut(id, data))
-  handle(ipcMain, 'attendance:getSummary', (employeeId: number, month: number, year: number) => EmployeeController.getAttendanceSummary(employeeId, month, year))
+  handle(ipcMain, 'attendance:clockIn', (...args: any[]) => {
+    if (typeof args[0] === 'object' && args[0] !== null) {
+      return EmployeeController.clockIn(args[0])
+    }
+    const employee_id = Number(args[0])
+    const tgl = typeof args[1] === 'string' && args[1].includes('-') ? args[1] : new Date().toISOString().split('T')[0]
+    const jam_masuk = typeof args[2] === 'string' && args[2].includes(':') ? args[2] : new Date().toTimeString().slice(0, 5)
+    const status = typeof args[3] === 'string' ? args[3] : 'HADIR'
+    const catatan = typeof args[4] === 'string' ? args[4] : ''
+    return EmployeeController.clockIn({ employee_id, tgl, jam_masuk, status, catatan })
+  })
+  handle(ipcMain, 'attendance:clockOut', (...args: any[]) => {
+    const id = Number(args[0])
+    if (typeof args[1] === 'object' && args[1] !== null) {
+      return EmployeeController.clockOut(id, args[1])
+    }
+    const jam_keluar = typeof args[1] === 'string' && args[1].includes(':') ? args[1] : new Date().toTimeString().slice(0, 5)
+    const catatan = typeof args[2] === 'string' ? args[2] : ''
+    return EmployeeController.clockOut(id, { jam_keluar, catatan })
+  })
+  handle(ipcMain, 'attendance:getSummary', (...args: any[]) => {
+    let employeeId = 0
+    let month = new Date().getMonth() + 1
+    let year = new Date().getFullYear()
+    if (typeof args[0] === 'string' && args[0].includes('-')) {
+      const parts = args[0].split('-')
+      year = parseInt(parts[0]) || year
+      month = parseInt(parts[1]) || month
+    } else if (typeof args[0] === 'number') {
+      employeeId = args[0]
+      if (args[1]) month = Number(args[1]) || month
+      if (args[2]) year = Number(args[2]) || year
+    }
+    return EmployeeController.getAttendanceSummary(employeeId, month, year)
+  })
   // Payroll
   handle(ipcMain, 'payroll:getAll', (month: number, year: number) => EmployeeController.getPayroll(month, year))
   handle(ipcMain, 'payroll:getByEmployee', (employeeId: number, month: number, year: number) => EmployeeController.getPayrollByEmployee(employeeId, month, year))
@@ -1054,6 +1091,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'kds:getOrderById', (id: number) => KdsController.getOrderById(id))
   handle(ipcMain, 'kds:createOrder', (data: any) => KdsController.createOrder(data))
   handle(ipcMain, 'kds:updateOrderStatus', (id: number, status: string, waktu?: string) => KdsController.updateOrderStatus(id, status, waktu))
+  handle(ipcMain, 'kds:deleteOrder', (id: number) => KdsController.deleteOrder(id))
+  handle(ipcMain, 'kds:clearOrders', (status?: string) => KdsController.clearOrders(status))
   handle(ipcMain, 'kds:getOrderItems', (orderId: number) => KdsController.getOrderItems(orderId))
   handle(ipcMain, 'kds:addOrderItem', (data: any) => KdsController.addOrderItem(data))
   handle(ipcMain, 'kds:updateOrderItemStatus', (id: number, status: string, waktu?: string) => KdsController.updateOrderItemStatus(id, status, waktu))
@@ -1079,7 +1118,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'reservation:getAll', (date?: string) => KdsController.getReservations(date))
   handle(ipcMain, 'reservation:getById', (id: number) => KdsController.getReservationById(id))
   handle(ipcMain, 'reservation:create', (data: any) => KdsController.createReservation(data))
+  handle(ipcMain, 'reservation:update', (id: number, data: any) => KdsController.updateReservation(id, data))
   handle(ipcMain, 'reservation:updateStatus', (id: number, status: string) => KdsController.updateReservationStatus(id, status))
+  handle(ipcMain, 'reservation:delete', (id: number) => KdsController.deleteReservation(id))
   handle(ipcMain, 'reservation:cancel', (id: number) => KdsController.cancelReservation(id))
   handle(ipcMain, 'reservation:getActive', () => KdsController.getActiveReservations())
   handle(ipcMain, 'reservation:getUpcoming', (limit?: number) => KdsController.getUpcomingReservations(limit))
@@ -1238,8 +1279,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   })
   ipcMain.handle('print:execute', withDemoGuard('print:execute', printExecute))
 
-  // ─── WINDOW / CUSTOMER DISPLAY ─────────────────────────────────────
+  // ─── WINDOW / CUSTOMER DISPLAY & QUEUE DISPLAY ───────────────────
   let customerDisplayWindow: BrowserWindow | null = null
+  let queueDisplayWindow: BrowserWindow | null = null
 
   const openCustomerDisplay = registerChannel('window:openCustomerDisplay', async () => {
     try {
@@ -1259,7 +1301,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
         height: 700,
         minWidth: 800,
         minHeight: 500,
-        title: 'Zetass Pos - Customer Display',
+        title: 'WariPOS - Customer Display',
         webPreferences: {
           preload: preloadPath,
           contextIsolation: true,
@@ -1288,4 +1330,52 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     }
   })
   ipcMain.handle('window:openCustomerDisplay', withDemoGuard('window:openCustomerDisplay', openCustomerDisplay))
+
+  const openQueueDisplay = registerChannel('window:openQueueDisplay', async () => {
+    try {
+      if (queueDisplayWindow && !queueDisplayWindow.isDestroyed()) {
+        queueDisplayWindow.show()
+        queueDisplayWindow.focus()
+        return { success: true, message: 'Layar TV Antrian sudah terbuka' }
+      }
+
+      const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+      const preloadPath = isDev 
+        ? path.join(process.cwd(), 'src', 'main', 'preload.cjs')
+        : path.join(app.getAppPath(), 'dist-electron', 'main', 'preload.cjs')
+
+      queueDisplayWindow = new BrowserWindow({
+        width: 1280,
+        height: 720,
+        minWidth: 900,
+        minHeight: 550,
+        title: 'WariPOS - Layar TV Antrian Publik',
+        webPreferences: {
+          preload: preloadPath,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          webSecurity: true,
+        },
+        backgroundColor: '#020617',
+        autoHideMenuBar: true,
+      })
+
+      if (isDev) {
+        await queueDisplayWindow.loadURL('http://localhost:5173/#/queue-display')
+      } else {
+        const rendererIndexPath = path.join(app.getAppPath(), 'dist', 'index.html')
+        await queueDisplayWindow.loadFile(rendererIndexPath, { hash: '/queue-display' })
+      }
+
+      queueDisplayWindow.on('closed', () => {
+        queueDisplayWindow = null
+      })
+
+      return { success: true, message: 'Layar TV Antrian berhasil dibuka' }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  })
+  ipcMain.handle('window:openQueueDisplay', withDemoGuard('window:openQueueDisplay', openQueueDisplay))
 }

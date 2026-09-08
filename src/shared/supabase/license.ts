@@ -151,7 +151,7 @@ export const heartbeat = async (params: { email: string; customerId?: string; de
   if (params.deviceInfo?.deviceId) {
     const updateData: Record<string, unknown> = {
       last_seen_at: new Date().toISOString(),
-      os_name: params.deviceInfo.os,
+      os_name: params.deviceInfo.osName ?? params.deviceInfo.os,
       app_version: params.deviceInfo.appVersion,
     }
     logSupabaseQuery('UPDATE', 'customer_devices', 'last_seen_at,os_name,app_version', { device_id: params.deviceInfo.deviceId })
@@ -162,3 +162,128 @@ export const heartbeat = async (params: { email: string; customerId?: string; de
   }
   return { success: true }
 }
+
+export const registerTrialCustomerInSupabase = async (params: {
+  email: string
+  password?: string
+  nama_lengkap: string
+  no_telp?: string | null
+  deviceInfo?: any
+}) => {
+  const cleanEmail = (params.email || '').trim().toLowerCase()
+  const cleanName = (params.nama_lengkap || '').trim()
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    return { success: false, message: 'Email tidak valid untuk pendaftaran' }
+  }
+
+  // 1. Primary & Recommended: Call Supabase Edge Function with service_role privileges
+  try {
+    const edgeUrl = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license/register-trial'
+    const anonKey = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY)
+      || (typeof process !== 'undefined' && (process as any).env?.VITE_SUPABASE_ANON_KEY)
+      || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4'
+
+    const efRes = await fetch(edgeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: params.password || 'Trial12345!',
+        name: cleanName || cleanEmail.split('@')[0],
+        phone: params.no_telp || null,
+        device: params.deviceInfo,
+      })
+    })
+
+    const efData = await efRes.json()
+    if (efData && typeof efData.success === 'boolean') {
+      return efData
+    }
+  } catch (efErr: any) {
+    console.warn('[registerTrialInSupabase] Edge function network error, attempting direct client fallback:', efErr)
+  }
+
+  // 2. Secondary fallback: Direct Supabase client
+  try {
+    let customerId = ''
+    let authUserId: string | null = null
+
+    if (params.password) {
+      try {
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: params.password,
+          options: {
+            data: {
+              name: cleanName,
+              phone: params.no_telp || null,
+            }
+          }
+        })
+        if (!authErr && authData?.user) {
+          authUserId = authData.user.id
+        }
+      } catch (authException) {
+        console.warn('[registerTrialInSupabase] Auth signUp warning:', authException)
+      }
+    }
+
+    const { data: existingCustomers } = await (supabase
+      .from('license_customers') as any)
+      .select('id, name, email, status')
+      .eq('email', cleanEmail)
+
+    if (existingCustomers && existingCustomers.length > 0) {
+      customerId = existingCustomers[0].id
+    } else {
+      const insertCustomerData = {
+        name: cleanName,
+        email: cleanEmail,
+        phone: params.no_telp || null,
+        status: 'ACTIVE',
+        auth_user_id: authUserId,
+        metadata: {
+          registered_from: params.deviceInfo?.platform || 'pos_app',
+          device_name: params.deviceInfo?.deviceName || null,
+          created_at: new Date().toISOString(),
+        }
+      }
+      const { data: createdCustomer } = await (supabase
+        .from('license_customers') as any)
+        .insert(insertCustomerData)
+        .select('id')
+        .single()
+
+      if (createdCustomer?.id) {
+        customerId = createdCustomer.id
+      }
+    }
+
+    if (customerId) {
+      const trialDays = 3
+      const expiresAt = new Date(Date.now() + trialDays * 86400000).toISOString()
+
+      return {
+        success: true,
+        message: 'Registrasi trial berhasil tersinkronisasi ke server pusat',
+        data: {
+          customer_id: customerId,
+          subscription: {
+            expires_at: expiresAt,
+            days_remaining: trialDays,
+          }
+        }
+      }
+    }
+
+    return { success: false, message: 'Gagal mendaftar ke license server. Periksa koneksi internet Anda.' }
+  } catch (err: any) {
+    console.error('[registerTrialInSupabase] Exception:', err)
+    return { success: false, message: err?.message || 'Gagal sinkronisasi pendaftaran ke server' }
+  }
+}
+

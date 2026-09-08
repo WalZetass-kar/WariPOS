@@ -5,30 +5,47 @@ interface Props {
   onAmount: (amount: number) => void
 }
 
-function getQuickAmounts(total: number): number[] {
+export function getSmartCashAmounts(total: number): number[] {
+  if (total <= 0) return []
   const amounts = new Set<number>()
 
+  // 1. Selalu sertakan total ("Uang Pas")
   amounts.add(total)
 
-  const roundUps = [1000, 5000, 10000, 20000, 50000, 100000, 200000, 500000]
-  for (const r of roundUps) {
-    const rounded = Math.ceil(total / r) * r
-    if (rounded >= total && rounded <= total * 3) {
+  // 2. Round-up pecahan umum belanja Indonesia (1k, 2k, 5k, 10k, 20k, 50k, 100k)
+  const roundSteps = [1000, 2000, 5000, 10000, 20000, 50000, 100000]
+  for (const step of roundSteps) {
+    const rounded = Math.ceil(total / step) * step
+    if (rounded > total) {
       amounts.add(rounded)
     }
   }
 
-  const presets = [50000, 100000, 200000, 500000]
-  for (const p of presets) {
-    if (p >= total) amounts.add(p)
+  // 3. Pecahan uang kertas Rupiah standar yang lebih besar dari total belanja
+  const banknotes = [2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000]
+  for (const note of banknotes) {
+    if (note > total) {
+      amounts.add(note)
+    }
   }
 
+  // 4. Jika total >= 100.000, tambahkan kelipatan 50.000 dan 100.000 berikutnya
+  if (total >= 100000) {
+    const next50k = Math.ceil(total / 50000) * 50000
+    const next100k = (Math.floor(total / 100000) + 1) * 100000
+    const next200k = (Math.floor(total / 100000) + 2) * 100000
+    if (next50k > total) amounts.add(next50k)
+    amounts.add(next100k)
+    amounts.add(next200k)
+  }
+
+  // Urutkan dari terkecil ke terbesar, ambil maksimal 6 opsi (1 Uang Pas + 5 pecahan cepat)
   return Array.from(amounts).sort((a, b) => a - b).slice(0, 6)
 }
 
 export default function QuickAmountButtons({ total, onAmount }: Props) {
   if (total <= 0) return null
-  const amounts = getQuickAmounts(total)
+  const amounts = getSmartCashAmounts(total)
   if (amounts.length === 0) return null
 
   return (

@@ -40,6 +40,7 @@ const LicenseCenter = lazy(() => import('./pages/LicenseCenter'))
 const PaymentInvoice = lazy(() => import('./pages/PaymentInvoice'))
 const PaymentAutomation = lazy(() => import('./pages/PaymentAutomation'))
 const CustomerDisplay = lazy(() => import('./pages/CustomerDisplay'))
+const QueueDisplay = lazy(() => import('./pages/QueueDisplay'))
 const StockTransfer = lazy(() => import('./pages/StockTransfer'))
 const CustomerDisplayPage = lazy(() => import('./pages/CustomerDisplayPage'))
 const DailyNotes = lazy(() => import('./pages/DailyNotes'))
@@ -81,7 +82,7 @@ function StandaloneLoadingFallback() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 gap-3">
       <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-      <span className="text-xs font-semibold text-slate-500">Memuat antarmuka...</span>
+      <span className="text-xs font-semibold text-slate-500">Memuat...</span>
     </div>
   )
 }
@@ -205,6 +206,7 @@ export default function AppRoutes() {
           <Route path="/storefront" element={<RequireOperationalAdmin><Storefront /></RequireOperationalAdmin>} />
         </Route>
         <Route path="/customer-display" element={<CustomerDisplay />} />
+        <Route path="/queue-display" element={<QueueDisplay />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

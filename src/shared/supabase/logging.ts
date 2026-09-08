@@ -1,11 +1,15 @@
 import { supabase } from './config.js'
 
+const isDebug = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_DEBUG_SUPABASE === 'true'
+
 export function logSupabaseQuery(method: string, table: string, select: string, filter: Record<string, unknown>) {
-  console.log(`[Supabase] ${method} ${table}`, {
-    select,
-    filter,
-    timestamp: new Date().toISOString(),
-  })
+  if (isDebug) {
+    console.log(`[Supabase] ${method} ${table}`, {
+      select,
+      filter,
+      timestamp: new Date().toISOString(),
+    })
+  }
 }
 
 export function logSupabaseResponse(table: string, method: string, status: number | undefined, error: any, data: any) {
@@ -18,7 +22,7 @@ export function logSupabaseResponse(table: string, method: string, status: numbe
       hint: (error as any)?.hint ?? 'N/A',
       timestamp: new Date().toISOString(),
     })
-  } else {
+  } else if (isDebug) {
     console.log(`[Supabase] OK ${method} ${table}`, {
       status,
       rows: Array.isArray(data) ? data.length : data ? 1 : 0,

@@ -943,20 +943,24 @@ export class FeatureHubController {
     }
   }
 
-  static getSalesCommissions(search?: string) {
+  static getSalesCommissions(search?: string, month?: number, year?: number, customRates?: Record<string, { komisi_persen?: number; target_bulanan?: number }>) {
     try {
-      const monthStart = new Date()
-      monthStart.setDate(1)
-      const monthKey = normalizeDate(monthStart.toISOString())
+      const targetYear = year || new Date().getFullYear()
+      const targetMonth = month || (new Date().getMonth() + 1)
+      const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`
+      const nextMonth = targetMonth === 12 ? 1 : targetMonth + 1
+      const nextYear = targetMonth === 12 ? targetYear + 1 : targetYear
+      const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
       const salesRows = sqlite.prepare(`
         SELECT
           username_transaksi AS username,
           COUNT(*) AS total_transaksi,
           COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)), 0) AS total_penjualan
         FROM mediasoft_penjualan
-        WHERE date(tgl_wkt_transaksi) >= date(?)
+        WHERE date(tgl_wkt_transaksi) >= date(?) AND date(tgl_wkt_transaksi) < date(?)
         GROUP BY username_transaksi
-      `).all(monthKey) as AnyRow[]
+      `).all(startDate, endDate) as AnyRow[]
 
       const salesMap = new Map<string, { total_transaksi: number; total_penjualan: number }>()
       for (const row of salesRows) {
@@ -976,10 +980,12 @@ export class FeatureHubController {
 
       const rows = users
         .map(user => {
-          const sales = salesMap.get(String(user.nama_pengguna ?? '')) ?? { total_transaksi: 0, total_penjualan: 0 }
+          const uName = String(user.nama_pengguna ?? '')
+          const sales = salesMap.get(uName) ?? { total_transaksi: 0, total_penjualan: 0 }
           const role = String(user.hak_akses ?? '').toLowerCase()
-          const komisiPersen = role === 'kasir' ? 2 : role === 'operator' ? 1.5 : role === 'admin' ? 1 : 0
-          const targetBulanan = role === 'kasir' ? 10000000 : role === 'operator' ? 15000000 : role === 'admin' ? 5000000 : 0
+          const custom = customRates?.[uName]
+          const komisiPersen = custom?.komisi_persen !== undefined ? custom.komisi_persen : (role === 'kasir' ? 2 : role === 'operator' ? 1.5 : role === 'admin' ? 1 : 0)
+          const targetBulanan = custom?.target_bulanan !== undefined ? custom.target_bulanan : (role === 'kasir' ? 10000000 : role === 'operator' ? 15000000 : role === 'admin' ? 5000000 : 0)
           const totalKomisi = Math.round((sales.total_penjualan * komisiPersen) / 100)
           const pencapaian = targetBulanan > 0 ? (sales.total_penjualan / targetBulanan) * 100 : 0
 
@@ -1000,6 +1006,34 @@ export class FeatureHubController {
       return { success: true, data: rows }
     } catch (error) {
       return { success: false, message: 'Gagal mengambil komisi sales: ' + (error as Error).message }
+    }
+  }
+
+  static getStaffSalesDetail(username: string, month?: number, year?: number) {
+    try {
+      const targetYear = year || new Date().getFullYear()
+      const targetMonth = month || (new Date().getMonth() + 1)
+      const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`
+      const nextMonth = targetMonth === 12 ? 1 : targetMonth + 1
+      const nextYear = targetMonth === 12 ? targetYear + 1 : targetYear
+      const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
+      const rows = sqlite.prepare(`
+        SELECT
+          kd_penjualan,
+          tgl_wkt_transaksi,
+          nama_customer,
+          jenis_pembayaran,
+          sub_total,
+          discount_amount,
+          yang_dibayar
+        FROM mediasoft_penjualan
+        WHERE username_transaksi = ? AND date(tgl_wkt_transaksi) >= date(?) AND date(tgl_wkt_transaksi) < date(?)
+        ORDER BY tgl_wkt_transaksi DESC
+      `).all(username, startDate, endDate)
+      return { success: true, data: rows }
+    } catch (e) {
+      return { success: false, message: String(e) }
     }
   }
 

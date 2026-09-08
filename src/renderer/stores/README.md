@@ -1,6 +1,6 @@
-# Zustand Stores
+# WariPOS Stores
 
-State management global untuk Zetass POS menggunakan Zustand.
+State management global untuk WariPOS.
 
 ## Stores
 

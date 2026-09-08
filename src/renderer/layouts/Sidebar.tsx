@@ -13,6 +13,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
+import { useAppStore } from '../stores'
 import { api } from '../utils/api'
 import appLogo from '../assets/app-logo.png'
 import { canOpenDeveloperPanel, hasRole, type AppRole } from '../../shared/config/rbac'
@@ -29,6 +30,7 @@ export interface MenuItem {
 
 interface MenuGroup {
   label: string
+  isRestaurantOnly?: boolean
   items: MenuItem[]
 }
 
@@ -38,117 +40,76 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', code: 'nav_dashboard' },
       { to: '/assistant', icon: Bot, label: 'Asisten AI', code: 'nav_dashboard' },
-      { to: '/transaksi', icon: ShoppingCart, label: 'Kasir', code: 'nav_penjualan' },
+      { to: '/transaksi', icon: ShoppingCart, label: 'Kasir POS', code: 'nav_penjualan' },
       { to: '/shifts', icon: Clock, label: 'Shift Kasir', code: 'nav_penjualan' },
-      { to: '/riwayat', icon: History, label: 'Riwayat', code: 'nav_penjualan' },
-      { to: '/customer-display-page', icon: Monitor, label: 'Customer Display', code: 'nav_dashboard' },
-      { to: '/daily-notes', icon: FileText, label: 'Daily Notes', code: 'nav_dashboard' },
+      { to: '/riwayat', icon: History, label: 'Riwayat Transaksi', code: 'nav_penjualan' },
+      { to: '/customer-display-page', icon: Monitor, label: 'Display & Antrian', code: 'nav_dashboard' },
+      { to: '/daily-notes', icon: FileText, label: 'Catatan Harian', code: 'nav_dashboard' },
     ],
   },
   {
-    label: 'Inventaris',
+    label: 'Inventaris & Stok',
     items: [
-      { to: '/produk', icon: Package, label: 'Produk', code: 'nav_barang' },
+      { to: '/produk', icon: Package, label: 'Katalog Produk', code: 'nav_barang' },
       { to: '/kategori', icon: Tag, label: 'Kategori', code: 'nav_barang' },
-      { to: '/satuan', icon: Ruler, label: 'Satuan', code: 'nav_barang' },
-      { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian', code: 'nav_pembelian' },
+      { to: '/satuan', icon: Ruler, label: 'Satuan Unit', code: 'nav_barang' },
+      { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian Stok', code: 'nav_pembelian' },
       { to: '/stock-opname', icon: ClipboardCheck, label: 'Stok Opname', code: 'nav_barang', feature: 'stock_opname' },
-      { to: '/branch', icon: Building2, label: 'Cabang/Gudang', code: 'nav_branch', roles: ['developer', 'super_admin', 'admin'], feature: 'multi_branch' },
-      { to: '/stock-transfer', icon: ArrowRightLeft, label: 'Transfer Stok', code: 'nav_branch', roles: ['developer', 'super_admin', 'admin'], feature: 'multi_branch' },
-      { to: '/price-list', icon: ClipboardList, label: 'Price List', code: 'nav_barang' },
-      { to: '/stock-history', icon: History, label: 'Riwayat Stok', code: 'nav_barang' },
-      { to: '/supplier-rating', icon: Star, label: 'Supplier Rating', code: 'nav_supplier' },
+      { to: '/branch', icon: Building2, label: 'Cabang & Transfer', code: 'nav_branch', roles: ['developer', 'super_admin', 'admin'], feature: 'multi_branch' },
+      { to: '/price-list', icon: ClipboardList, label: 'Daftar Harga', code: 'nav_barang' },
     ],
   },
   {
-    label: 'Relasi',
+    label: 'Keuangan & Laporan',
     items: [
-      { to: '/supplier', icon: Truck, label: 'Supplier', code: 'nav_supplier' },
-      { to: '/customer', icon: UserCircle, label: 'Customer', code: 'nav_supplier' },
-      { to: '/loyalty', icon: Award, label: 'Loyalty', code: 'nav_loyalty' },
-      { to: '/membership-card', icon: CreditCard, label: 'Membership Card', code: 'nav_supplier' },
+      { to: '/laporan', icon: BarChart2, label: 'Laporan Keuangan', code: 'nav_pembelian', feature: 'reports' },
+      { to: '/kas', icon: Wallet, label: 'Arus Kas & Petty Cash', code: 'nav_pembelian' },
+      { to: '/debts', icon: DollarSign, label: 'Hutang / Piutang', code: 'nav_pembelian', feature: 'debt_management' },
+      { to: '/accounting', icon: BookOpenCheck, label: 'Buku Akuntansi', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'], feature: 'reports' },
+      { to: '/returns', icon: RotateCcw, label: 'Retur Barang', code: 'nav_penjualan', feature: 'return_refund' },
+      { to: '/payment', icon: Crown, label: 'Status & Langganan', code: 'nav_plans' },
+      { to: '/promo', icon: Gift, label: 'Promo & Diskon', code: 'nav_promo' },
+    ],
+  },
+  {
+    label: 'Relasi & Member',
+    items: [
+      { to: '/customer', icon: UserCircle, label: 'Pelanggan & Poin', code: 'nav_supplier' },
+      { to: '/supplier', icon: Truck, label: 'Pemasok / Supplier', code: 'nav_supplier' },
       { to: '/sales-commission', icon: TrendingUp, label: 'Komisi Sales', code: 'nav_pengguna' },
     ],
   },
   {
-    label: 'SDM & HR',
+    label: 'SDM & Karyawan',
     items: [
-      { to: '/employee', icon: UserPlus, label: 'Karyawan', code: 'nav_pengguna' },
-      { to: '/employee-contract', icon: ScrollText, label: 'Kontrak Karyawan', code: 'nav_pengguna' },
-      { to: '/attendance', icon: Clock, label: 'Absensi', code: 'nav_pengguna' },
-      { to: '/payroll', icon: Briefcase, label: 'Penggajian', code: 'nav_pengguna', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/employee', icon: UserPlus, label: 'Data Karyawan', code: 'nav_pengguna' },
+      { to: '/attendance', icon: Clock, label: 'Absensi & Jadwal', code: 'nav_pengguna' },
+      { to: '/payroll', icon: Briefcase, label: 'Penggajian / Payroll', code: 'nav_pengguna', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/tip-pooling', icon: HandCoins, label: 'Tip Pooling', code: 'nav_pengguna' },
-      { to: '/shift-schedule', icon: Clock4, label: 'Jadwal Shift', code: 'nav_pengguna' },
     ],
   },
   {
-    label: 'F&B / Operational',
+    label: 'Operasional & F&B',
+    isRestaurantOnly: true,
     items: [
-      { to: '/kitchen-display', icon: UtensilsCrossed, label: 'KDS Dapur', code: 'nav_penjualan' },
-      { to: '/table-management', icon: Grid3X3, label: 'Meja & Layout', code: 'nav_penjualan' },
-      { to: '/reservation', icon: CalendarCheck, label: 'Reservasi', code: 'nav_penjualan' },
-      { to: '/recipe', icon: ScrollText, label: 'Resep & BOM', code: 'nav_barang' },
+      { to: '/kitchen-display', icon: UtensilsCrossed, label: 'Kitchen Display (KDS)', code: 'nav_penjualan' },
+      { to: '/table-management', icon: Grid3X3, label: 'Meja & Tata Letak', code: 'nav_penjualan' },
+      { to: '/reservation', icon: CalendarCheck, label: 'Reservasi Meja', code: 'nav_penjualan' },
+      { to: '/recipe', icon: ScrollText, label: 'Resep & Bahan Baku', code: 'nav_barang' },
+      { to: '/delivery', icon: Bike, label: 'Kurir & Pengiriman', code: 'nav_pembelian' },
     ],
   },
   {
-    label: 'Logistik',
+    label: 'Alat & Sistem',
     items: [
-      { to: '/delivery', icon: Bike, label: 'Pengiriman', code: 'nav_pembelian' },
-    ],
-  },
-  {
-    label: 'Keuangan',
-    items: [
-      { to: '/kas', icon: Wallet, label: 'Kas', code: 'nav_pembelian' },
-      { to: '/accounting', icon: BookOpenCheck, label: 'Akuntansi', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'], feature: 'reports' },
-      { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian', feature: 'shift_management' },
-      { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian', feature: 'debt_management' },
-      { to: '/bank-account', icon: Landmark, label: 'Rekening Bank', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/fixed-asset', icon: Hammer, label: 'Aset Tetap', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/budget', icon: PiggyBank, label: 'Anggaran', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/payment', icon: Crown, label: 'Status & Langganan', code: 'nav_plans' },
-      { to: '/payment-automation', icon: CreditCard, label: 'Pembayaran Digital', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan', feature: 'return_refund' },
-      { to: '/promo', icon: Gift, label: 'Promo', code: 'nav_promo' },
-      { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian', feature: 'reports' },
-      { to: '/tax-report', icon: FileText, label: 'Laporan Pajak', code: 'nav_pembelian', feature: 'reports' },
-      { to: '/petty-cash', icon: Wallet, label: 'Petty Cash', code: 'nav_pembelian' },
-      { to: '/cash-flow', icon: ArrowUpDown, label: 'Arus Kas', code: 'nav_pembelian', feature: 'reports' },
-    ],
-  },
-  {
-    label: 'Marketing',
-    items: [
-      { to: '/gift-card', icon: Ticket, label: 'Gift Card', code: 'nav_promo' },
-      { to: '/customer-feedback', icon: MessageSquare, label: 'Feedback', code: 'nav_promo' },
-      { to: '/campaign', icon: Megaphone, label: 'Kampanye', code: 'nav_promo', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/storefront', icon: Globe2, label: 'Toko Online', code: 'nav_promo', roles: ['developer', 'super_admin', 'admin'] },
-    ],
-  },
-  {
-    label: 'Alat Bantu',
-    items: [
-      { to: '/tutorials', icon: BookOpen, label: 'Tutorial', code: 'nav_tutorials' },
+      { to: '/whatsapp', icon: MessageCircle, label: 'WhatsApp Notifikasi', code: 'nav_whatsapp' },
       { to: '/hpp', icon: Calculator, label: 'Kalkulator HPP', code: 'nav_hpp' },
-      { to: '/whatsapp', icon: MessageCircle, label: 'WhatsApp', code: 'nav_whatsapp' },
-      { to: '/print-queue', icon: Printer, label: 'Antrian Print', code: 'nav_print_queue' },
-      { to: '/label-print', icon: Tag, label: 'Label Cetak', code: 'nav_print_queue' },
-      { to: '/notification-settings', icon: Bell, label: 'Notifikasi', code: 'nav_identitas' },
-      { to: '/integrations', icon: Plug, label: 'Integrasi', code: 'nav_identitas' },
-    ],
-  },
-  {
-    label: 'Administrasi',
-    items: [
-      { to: '/users', icon: Users, label: 'Pengguna', code: 'nav_pengguna', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', roles: ['developer', 'super_admin', 'admin'], feature: 'backup' },
-      { to: '/activity-log', icon: Activity, label: 'Aktivitas Pengguna', code: 'nav_activity_log', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/security', icon: Shield, label: 'Keamanan', code: 'nav_security', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/ecommerce-api', icon: Globe, label: 'E-commerce API', code: 'nav_ecommerce_api', roles: ['developer', 'super_admin', 'admin'], feature: 'api_access' },
-      { to: '/marketplace', icon: Store, label: 'Marketplace', code: 'nav_ecommerce_api', roles: ['developer', 'super_admin', 'admin'], feature: 'api_access' },
-      { to: '/audit-trail', icon: Shield, label: 'Audit Trail', code: 'nav_activity_log', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/tutorials', icon: BookOpen, label: 'Tutorial & Panduan', code: 'nav_tutorials' },
+      { to: '/users', icon: Users, label: 'Kelola Pengguna', code: 'nav_pengguna', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/backup', icon: Database, label: 'Backup Database', code: 'nav_export_db', roles: ['developer', 'super_admin', 'admin'], feature: 'backup' },
+      { to: '/security', icon: Shield, label: 'Log Keamanan', code: 'nav_security', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/license-admin', icon: ShieldCheck, label: 'Developer Panel', code: 'nav_license_admin', roles: ['developer', 'super_admin'] },
-      { to: '/settings', icon: Settings, label: 'Pengaturan', code: 'nav_identitas' },
+      { to: '/settings', icon: Settings, label: 'Pengaturan Sistem', code: 'nav_identitas' },
     ],
   },
 ]
@@ -166,6 +127,7 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }: SidebarProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { posMode, setPosMode } = useAppStore()
   const { isDemo: isDemoGuard, showPricing, remainingUsage } = useDemoGuard()
   const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null)
   const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({})
@@ -184,8 +146,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   }, [user?.nama_pengguna])
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
+    window.dispatchEvent(new CustomEvent('auth:request-logout'))
   }
 
   const handleNavClick = () => {
@@ -204,6 +165,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   })()
   const canShowItem = (item: MenuItem) => {
     if (item.adminOnly && !isDeveloper) return false
+    if (item.to === '/tutorials' && typeof window !== 'undefined' && window.innerWidth < 1024) return false
     if (item.roles && !hasRole(user?.hak_akses, item.roles)) return false
     if (isSimpleMode && !SIMPLE_MENU_PATHS.has(item.to)) return false
     if (permissions && !isDeveloper && item.code && permissions[item.code] === false) return false
@@ -227,9 +189,9 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
       {/* Header with Logo & Burger Menu Button */}
       <div className={`border-b border-white/30 dark:border-slate-700/30 ${isCollapsed ? 'lg:flex lg:flex-col lg:items-center lg:gap-2.5 lg:px-2 lg:py-3.5 px-4 py-4' : 'flex items-center justify-between gap-3 px-4 py-4'}`}>
         <div className={`flex items-center min-w-0 ${isCollapsed ? 'lg:justify-center' : 'gap-3'}`}>
-          <img src={appLogo} alt="Zetass Pos" className={`${isCollapsed ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 rounded-xl object-cover shadow-sm`} />
+          <img src={appLogo} alt="WariPOS" className={`${isCollapsed ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 object-contain drop-shadow-sm`} />
           <div className={`${isCollapsed ? 'lg:hidden' : ''}`}>
-            <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">Zetass Pos</p>
+            <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">WariPOS</p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Point of Sale</p>
           </div>
         </div>
@@ -254,13 +216,75 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
         </div>
       </div>
 
+      {/* Mode Bisnis Switcher (Toko Retail ⇄ Restoran F&B) */}
+      <div className={`border-b border-slate-200/60 dark:border-slate-800/80 transition-colors ${
+        posMode === 'restaurant'
+          ? 'bg-amber-500/5 dark:bg-amber-500/10'
+          : 'bg-slate-50/50 dark:bg-slate-900/40'
+      } ${isCollapsed ? 'p-2 flex justify-center' : 'px-3 py-2.5'}`}>
+        {isCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setPosMode(posMode === 'retail' ? 'restaurant' : 'retail')}
+            className={`p-2 rounded-xl border transition-all ${
+              posMode === 'restaurant'
+                ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs'
+                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+            }`}
+            title={posMode === 'retail' ? 'Mode Toko Retail (Klik ganti ke Restoran F&B)' : 'Mode Restoran F&B (Klik ganti ke Toko Retail)'}
+          >
+            {posMode === 'retail' ? <Store size={16} /> : <UtensilsCrossed size={16} />}
+          </button>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex items-center p-1 bg-slate-200/60 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/60 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setPosMode('retail')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                  posMode === 'retail'
+                    ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200/60 dark:border-slate-600 scale-[1.01]'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Store size={13} />
+                <span>Mode Toko</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPosMode('restaurant')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                  posMode === 'restaurant'
+                    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30 scale-[1.01]'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <UtensilsCrossed size={13} />
+                <span>Restoran</span>
+              </button>
+            </div>
+            <div className="px-1 text-[10px] font-semibold">
+              <span className={posMode === 'restaurant' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-slate-400'}>
+                {posMode === 'restaurant' ? 'Operasional F&B Resto Aktif' : 'Operasional Toko Retail'}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Nav */}
-      <nav className={`flex-1 py-4 overflow-y-auto scrollbar-thin ${isCollapsed ? 'lg:px-2 px-3 lg:space-y-2' : 'px-3 space-y-4'}`}>
+      <nav className={`flex-1 py-3 overflow-y-auto scrollbar-thin ${isCollapsed ? 'lg:px-2 px-3 space-y-2.5' : 'px-3 space-y-3'}`}>
         {quickItems.length > 0 && (
-          <div>
-            <p className={`px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 ${isCollapsed ? 'lg:hidden' : ''}`}>
-              Cepat
-            </p>
+          <div className={`rounded-2xl border transition-all duration-200 ${
+            isCollapsed
+              ? 'lg:p-1.5 p-2 bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-700/50'
+              : 'p-2 bg-slate-50/80 dark:bg-slate-800/40 border-slate-200/70 dark:border-slate-700/60 shadow-xs'
+          }`}>
+            <div className={`px-2 py-1 mb-1 flex items-center justify-between border-b border-slate-200/50 dark:border-slate-700/40 ${isCollapsed ? 'lg:hidden' : ''}`}>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Menu Cepat
+              </span>
+            </div>
             <div className="space-y-0.5">
               {quickItems.map(({ to, icon: Icon, label }) => (
                 <NavLink
@@ -270,15 +294,15 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
                   onClick={handleNavClick}
                   title={isCollapsed ? label : undefined}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
-                    ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}
+                    `flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150
+                    ${isCollapsed ? 'lg:justify-center lg:px-0 lg:py-2' : ''}
                     ${isActive
-                      ? 'bg-primary-600 text-white'
-                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary-600 dark:hover:text-primary-400'
+                      ? 'bg-primary-600 text-white shadow-sm shadow-primary-500/30 font-bold'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700/70 hover:text-primary-600 dark:hover:text-primary-400'
                     }`
                   }
                 >
-                  <Icon size={18} className="shrink-0" />
+                  <Icon size={17} className="shrink-0" />
                   <span className={`${isCollapsed ? 'lg:hidden' : ''}`}>{label}</span>
                 </NavLink>
               ))}
@@ -286,13 +310,36 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
           </div>
         )}
         {MENU_GROUPS.map(group => {
+          if (group.isRestaurantOnly && posMode !== 'restaurant') return null
           const visibleItems = group.items.filter(item => canShowItem(item) && !QUICK_MENU_PATHS.includes(item.to))
           if (visibleItems.length === 0) return null
           return (
-            <div key={group.label}>
-              <p className={`px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 ${isCollapsed ? 'lg:hidden' : ''}`}>
-                {group.label}
-              </p>
+            <div
+              key={group.label}
+              className={`rounded-2xl border transition-all duration-300 ${
+                group.isRestaurantOnly
+                  ? 'border-amber-400/40 bg-amber-50/40 dark:bg-amber-950/20 dark:border-amber-800/40 ring-1 ring-amber-400/20'
+                  : isCollapsed
+                    ? 'lg:p-1.5 p-2 bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-700/50'
+                    : 'p-2 bg-slate-50/80 dark:bg-slate-800/40 border-slate-200/70 dark:border-slate-700/60 shadow-xs'
+              } ${isCollapsed && group.isRestaurantOnly ? 'lg:p-1.5 p-2' : group.isRestaurantOnly ? 'p-2 shadow-xs' : ''}`}
+            >
+              <div className={`px-2 py-1 mb-1 flex items-center justify-between border-b ${
+                group.isRestaurantOnly
+                  ? 'border-amber-300/40 dark:border-amber-800/40'
+                  : 'border-slate-200/50 dark:border-slate-700/40'
+              } ${isCollapsed ? 'lg:hidden' : ''}`}>
+                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                  group.isRestaurantOnly ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400'
+                }`}>
+                  {group.label}
+                </span>
+                {group.isRestaurantOnly && (
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
+                    F&B Resto
+                  </span>
+                )}
+              </div>
               <div className="space-y-0.5">
                 {visibleItems.map(({ to, icon: Icon, label }) => (
                   <NavLink
@@ -302,15 +349,15 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
                     onClick={handleNavClick}
                     title={isCollapsed ? label : undefined}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
-                      ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}
+                      `flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150
+                      ${isCollapsed ? 'lg:justify-center lg:px-0 lg:py-2' : ''}
                       ${isActive
-                        ? 'bg-primary-600 text-white'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary-600 dark:hover:text-primary-400'
+                        ? 'bg-primary-600 text-white shadow-sm shadow-primary-500/30 font-bold'
+                        : 'text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700/70 hover:text-primary-600 dark:hover:text-primary-400'
                       }`
                     }
                   >
-                    <Icon size={18} className="shrink-0" />
+                    <Icon size={17} className="shrink-0" />
                     <span className={`${isCollapsed ? 'lg:hidden' : ''}`}>{label}</span>
                   </NavLink>
                 ))}
@@ -321,7 +368,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
       </nav>
 
       {/* User + Logout */}
-      <div className={`px-3 py-4 border-t border-white/30 dark:border-slate-700/30 space-y-2 ${isCollapsed ? 'lg:px-2' : ''}`}>
+      <div className={`px-3 py-3.5 border-t border-slate-200/60 dark:border-slate-800/80 space-y-2 bg-slate-50/50 dark:bg-slate-900/30 ${isCollapsed ? 'lg:px-2' : ''}`}>
         {isDemo && (
           <div className={`${isCollapsed ? 'lg:hidden' : ''}`}>
             <button
@@ -370,8 +417,16 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
             )}
           </div>
         )}
-        <div className={`flex items-center gap-2 px-2 ${isCollapsed ? 'lg:justify-center' : ''}`}>
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden ${isDemo ? 'bg-red-500' : 'bg-primary-600'}`}>
+        <button
+          type="button"
+          onClick={() => {
+            navigate('/settings?category=akun')
+            if (window.innerWidth < 1024) onClose()
+          }}
+          className={`w-full flex items-center gap-2 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer group ${isCollapsed ? 'lg:justify-center lg:p-1' : ''}`}
+          title="Buka Pengaturan Profil & Akun"
+        >
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden group-hover:ring-2 group-hover:ring-primary-500/50 transition-all ${isDemo ? 'bg-red-500' : 'bg-primary-600'}`}>
             {user?.foto ? (
               <img src={user.foto} alt="" className="w-full h-full object-cover" />
             ) : (
@@ -379,10 +434,10 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
             )}
           </div>
           <div className={`min-w-0 flex-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
-            <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{user?.nama_lengkap ?? user?.nama_pengguna}</p>
-            <p className={`text-xs truncate ${isDemo ? 'text-red-400 font-semibold' : 'text-slate-400'}`}>{user?.hak_akses?.toUpperCase() ?? 'KASIR'}</p>
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">{user?.nama_lengkap ?? user?.nama_pengguna}</p>
+            <p className={`text-[10px] truncate ${isDemo ? 'text-red-400 font-bold' : 'text-slate-400 font-medium'}`}>{user?.hak_akses?.toUpperCase() ?? 'KASIR'}</p>
           </div>
-        </div>
+        </button>
         <button
           onClick={handleLogout}
           title={isCollapsed ? 'Keluar' : undefined}

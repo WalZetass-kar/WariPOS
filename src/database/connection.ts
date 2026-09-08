@@ -54,7 +54,8 @@ function runMigrations() {
         must_change_password INTEGER DEFAULT 0,
         pin_hash TEXT,
         pin_hash_type TEXT DEFAULT 'bcrypt',
-        pin_enabled INTEGER DEFAULT 0
+        pin_enabled INTEGER DEFAULT 0,
+        foto TEXT
       )
     `)
 
@@ -134,6 +135,7 @@ function runMigrations() {
     ensurePenggunaColumn('pin_hash', 'TEXT')
     ensurePenggunaColumn('pin_hash_type', "TEXT DEFAULT 'bcrypt'")
     ensurePenggunaColumn('pin_enabled', 'INTEGER DEFAULT 0')
+    ensurePenggunaColumn('foto', 'TEXT')
 
     const activityColumns = sqlite.prepare("PRAGMA table_info(mediasoft_activity_log)").all() as Array<{ name: string }>
     const ensureActivityColumn = (name: string, definition: string) => {
@@ -669,53 +671,82 @@ runMigrations()
   addCol('mediasoft_subscription_plans', 'max_users', 'INTEGER DEFAULT 1')
   addCol('mediasoft_subscription_plans', 'feature_flags', "TEXT DEFAULT '{}'")
 
-  sqlite.prepare(`
-    UPDATE mediasoft_subscription_plans
-    SET max_devices = 1,
-        max_transactions_per_day = 20,
-        max_products = 30,
-        max_users = 1,
-        feature_flags = ?
-    WHERE name = 'Harian' AND (feature_flags IS NULL OR feature_flags = '{}')
-  `).run(JSON.stringify({
-    reports: false,
+  // Weekly Plan
+  const weeklyFlags = JSON.stringify({
+    reports: true,
     export_excel: false,
-    export_pdf: false,
-    multi_user: false,
-    backup: false,
+    export_pdf: true,
+    multi_user: true,
+    backup: true,
+    restore: false,
     stock_opname: false,
     debt_management: false,
-    shift_management: false,
+    shift_management: true,
     api_access: false,
-  }))
+  })
+  const weeklyPlan = sqlite.prepare("SELECT id FROM mediasoft_subscription_plans WHERE name = 'Mingguan' OR code = 'WEEKLY' LIMIT 1").get() as { id: number } | undefined
+  if (!weeklyPlan) {
+    sqlite.prepare(`
+      INSERT INTO mediasoft_subscription_plans
+        (code, name, price, duration_days, features, is_active, is_recommended, created_at,
+         max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'WEEKLY',
+      'Mingguan',
+      19000,
+      7,
+      JSON.stringify(['Paket 7 hari', 'Max 1 perangkat', 'Max 2 kasir/pengguna', 'Batas 100 transaksi/hari', 'Cetak struk & laporan']),
+      1,
+      0,
+      new Date().toISOString(),
+      1,
+      100,
+      100,
+      2,
+      weeklyFlags
+    )
+  }
+
   sqlite.prepare(`
     UPDATE mediasoft_subscription_plans
-    SET max_devices = 2,
-        max_transactions_per_day = -1,
-        max_products = 500,
+    SET code = 'WEEKLY',
+        duration_days = 7,
+        max_devices = 1,
+        max_transactions_per_day = 100,
+        max_products = 100,
         max_users = 2,
         feature_flags = ?
-    WHERE name = 'Bulanan' AND (feature_flags IS NULL OR feature_flags = '{}')
-  `).run(JSON.stringify({
+    WHERE name = 'Mingguan' OR code = 'WEEKLY'
+  `).run(weeklyFlags)
+
+  // Monthly Plan
+  const monthlyFlags = JSON.stringify({
     reports: true,
     export_excel: true,
     export_pdf: true,
     multi_user: true,
     backup: true,
+    restore: false,
     stock_opname: false,
-    debt_management: false,
-    shift_management: false,
+    debt_management: true,
+    shift_management: true,
     api_access: false,
-  }))
+  })
   sqlite.prepare(`
     UPDATE mediasoft_subscription_plans
-    SET max_devices = -1,
+    SET code = 'PRO_MONTHLY',
+        duration_days = 30,
+        max_devices = 3,
         max_transactions_per_day = -1,
-        max_products = -1,
-        max_users = -1,
+        max_products = 1000,
+        max_users = 5,
         feature_flags = ?
-    WHERE name = 'Tahunan' AND (feature_flags IS NULL OR feature_flags = '{}')
-  `).run(JSON.stringify({
+    WHERE name = 'Bulanan' OR code = 'PRO_MONTHLY' OR code = 'MONTHLY'
+  `).run(monthlyFlags)
+
+  // Yearly Plan (10 devices, 15 users as explicitly requested by user)
+  const yearlyFlags = JSON.stringify({
     reports: true,
     export_excel: true,
     export_pdf: true,
@@ -728,7 +759,18 @@ runMigrations()
     api_access: true,
     multi_branch: true,
     return_refund: true,
-  }))
+  })
+  sqlite.prepare(`
+    UPDATE mediasoft_subscription_plans
+    SET code = 'PRO_ANNUAL',
+        duration_days = 365,
+        max_devices = 10,
+        max_transactions_per_day = -1,
+        max_products = -1,
+        max_users = 15,
+        feature_flags = ?
+    WHERE name = 'Tahunan' OR code = 'PRO_ANNUAL' OR code = 'YEARLY'
+  `).run(yearlyFlags)
 
   const lifetimeFlags = JSON.stringify({
     reports: true,
@@ -745,21 +787,23 @@ runMigrations()
     return_refund: true,
   })
   const lifetimePlan = sqlite.prepare(
-    `SELECT id FROM mediasoft_subscription_plans WHERE name = 'Sekali Beli Seumur Hidup' LIMIT 1`
+    `SELECT id FROM mediasoft_subscription_plans WHERE name = 'Sekali Beli Seumur Hidup' OR code = 'LIFETIME' LIMIT 1`
   ).get() as { id: number } | undefined
   if (!lifetimePlan) {
     sqlite.prepare(`
       INSERT INTO mediasoft_subscription_plans
-        (name, price, duration_days, features, is_active, is_recommended, created_at,
+        (code, name, price, duration_days, features, is_active, is_recommended, created_at,
          max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
+      'LIFETIME',
       'Sekali Beli Seumur Hidup',
-      4999000,
+      2500000,
       0,
       JSON.stringify([
         'Sekali bayar',
         'Akses permanen tanpa tanggal habis',
+        'Max 20 perangkat & 50 pengguna',
         'Semua fitur operasional aktif',
         'Multi-user dan multi cabang',
         'Backup/restore, laporan, retur, hutang/piutang, shift, dan API',
@@ -767,23 +811,28 @@ runMigrations()
       1,
       1,
       new Date().toISOString(),
-      5,
+      20,
       -1,
       -1,
-      10,
+      50,
       lifetimeFlags,
     )
   }
   sqlite.prepare(`
     UPDATE mediasoft_subscription_plans
-    SET is_recommended = CASE WHEN name = 'Sekali Beli Seumur Hidup' THEN 1 ELSE 0 END
+    SET is_recommended = CASE WHEN name = 'Sekali Beli Seumur Hidup' OR code = 'LIFETIME' THEN 1 ELSE 0 END
   `).run()
   sqlite.prepare(`
     UPDATE mediasoft_subscription_plans
-    SET duration_days = 0,
+    SET code = 'LIFETIME',
+        duration_days = 0,
+        max_devices = 20,
+        max_users = 50,
+        max_transactions_per_day = -1,
+        max_products = -1,
         is_active = 1,
         feature_flags = ?
-    WHERE name = 'Sekali Beli Seumur Hidup'
+    WHERE name = 'Sekali Beli Seumur Hidup' OR code = 'LIFETIME'
   `).run(lifetimeFlags)
 
   const trialFlags = JSON.stringify({

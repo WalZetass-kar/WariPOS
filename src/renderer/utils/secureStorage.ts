@@ -125,7 +125,27 @@ export const secureStorage = {
     const storage = getStorage()
     if (!storage) return
     const encryptedValue = encodePayload(value)
-    storage.setItem(key, encryptedValue)
+    try {
+      storage.setItem(key, encryptedValue)
+    } catch (err: any) {
+      console.warn(`[secureStorage] QuotaExceededError when setting key "${key}". Cleaning non-essential storage...`, err)
+      try {
+        // Remove only non-critical bulky keys
+        const safeToRemove = ['customer_display_data', 'zetass_ai_sessions_v1', 'temp_receipt_preview', 'cache_products']
+        for (const k of safeToRemove) {
+          storage.removeItem(k)
+        }
+        for (let i = 0; i < storage.length; i++) {
+          const storageKey = storage.key(i)
+          if (storageKey && (storageKey.startsWith('cache_') || storageKey.startsWith('temp_'))) {
+            storage.removeItem(storageKey)
+          }
+        }
+        storage.setItem(key, encryptedValue)
+      } catch {
+        // Fallback gracefully without throwing uncaught exception
+      }
+    }
     mirrorToNativePreferences(key, encryptedValue)
   },
 

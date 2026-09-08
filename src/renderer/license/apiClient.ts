@@ -1,5 +1,5 @@
 /**
- * License client API & secure storage for Zetass Pos.
+ * License client API & secure storage for WariPOS.
  *
  * Bertanggung jawab atas:
  * - Memanggil license server (login, refresh, /user/features, /account/status, dll)

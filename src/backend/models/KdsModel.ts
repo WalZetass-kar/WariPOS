@@ -61,6 +61,24 @@ export class KdsModel {
     return db.update(kdsOrders).set(updateData).where(eq(kdsOrders.id, id)).run()
   }
 
+  static deleteOrder(id: number) {
+    db.delete(kdsOrderItems).where(eq(kdsOrderItems.kds_order_id, id)).run()
+    return db.delete(kdsOrders).where(eq(kdsOrders.id, id)).run()
+  }
+
+  static clearOrders(status?: string) {
+    if (status && status !== 'SEMUA') {
+      const ordersToDelete = db.select({ id: kdsOrders.id }).from(kdsOrders).where(eq(kdsOrders.status, status)).all()
+      for (const o of ordersToDelete) {
+        db.delete(kdsOrderItems).where(eq(kdsOrderItems.kds_order_id, o.id)).run()
+      }
+      return db.delete(kdsOrders).where(eq(kdsOrders.status, status)).run()
+    } else {
+      db.delete(kdsOrderItems).run()
+      return db.delete(kdsOrders).run()
+    }
+  }
+
   static addOrderItem(data: {
     kds_order_id: number
     kd_barang: string
@@ -345,6 +363,42 @@ export class KdsModel {
       status: 'BATAL',
       updated_at: new Date().toISOString(),
     }).where(eq(reservations.id, id)).run()
+  }
+
+  static updateReservation(id: number, data: {
+    nama_pelanggan?: string
+    no_telp?: string | null
+    email?: string | null
+    jumlah_tamu?: number
+    tgl_reservasi?: string
+    jam_reservasi?: string
+    jam_berakhir?: string | null
+    table_id?: number | null
+    catatan?: string | null
+    status?: string
+    deposit?: number
+  }) {
+    const old = this.getReservationById(id)
+    if (old?.table_id && data.table_id !== undefined && old.table_id !== data.table_id) {
+      db.update(tables).set({ status: 'KOSONG' }).where(eq(tables.id, old.table_id)).run()
+      if (data.table_id) {
+        const nextStatus = data.status === 'HADIR' ? 'TERISI' : 'RESERVASI'
+        db.update(tables).set({ status: nextStatus }).where(eq(tables.id, data.table_id)).run()
+      }
+    }
+    const updateData: Record<string, any> = {
+      ...data,
+      updated_at: new Date().toISOString(),
+    }
+    return db.update(reservations).set(updateData).where(eq(reservations.id, id)).run()
+  }
+
+  static deleteReservation(id: number) {
+    const r = this.getReservationById(id)
+    if (r?.table_id && (r.status === 'KONFIRMASI' || r.status === 'HADIR')) {
+      db.update(tables).set({ status: 'KOSONG' }).where(eq(tables.id, r.table_id)).run()
+    }
+    return db.delete(reservations).where(eq(reservations.id, id)).run()
   }
 
   static getActiveReservations() {

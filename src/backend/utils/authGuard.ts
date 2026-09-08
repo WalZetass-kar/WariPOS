@@ -4,9 +4,9 @@ import type { IpcResponse } from '../../shared/types.js';
 
 const MIN_ROLE_FOR_ACCESS: Record<string, AppRole> = {
   // System & admin functions
-  'system:resetData': 'developer',
+  'system:resetData': 'admin',
   'user:create': 'admin',
-  'user:update': 'admin',
+  'user:update': 'kasir',
   'user:delete': 'admin',
   'user:managePermissions': 'developer',
   'backup:create': 'admin',

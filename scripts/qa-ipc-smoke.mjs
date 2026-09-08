@@ -42,8 +42,8 @@ async function main() {
   const sourceDbPath = path.join(repoRoot, 'sistem_pos.db')
   assert(fs.existsSync(sourceDbPath), `Database sumber tidak ditemukan: ${sourceDbPath}`)
 
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lcc-ipc-smoke-'))
-  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lcc-electron-profile-'))
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'waripos-ipc-smoke-'))
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'waripos-electron-profile-'))
   const cloneDbPath = path.join(workDir, 'sistem_pos.db')
 
   log(`Source DB: ${sourceDbPath}`)

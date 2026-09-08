@@ -209,12 +209,12 @@ export default function CameraBarcodeScannerModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 animate-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-md modal-backdrop-animate" onClick={onClose} />
 
       {/* Container */}
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh] modal-card-animate">
         {/* Header */}
         <div className="p-4 flex items-center justify-between border-b border-slate-800/80 bg-slate-900/90 text-white">
           <div className="flex items-center gap-2.5">

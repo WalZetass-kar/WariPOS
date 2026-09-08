@@ -26,7 +26,7 @@ export const DashboardPage: React.FC = () => {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-800 dark:text-white">Dashboard</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Ringkasan sistem lisensi Zetass Pos</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Ringkasan sistem lisensi WariPOS</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">

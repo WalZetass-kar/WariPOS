@@ -45,7 +45,7 @@ export default function CashFlow() {
     setExportLoading(true)
     const r = await api('export:cashFlowExcel', items, dateRange.start, dateRange.end)
     setExportLoading(false)
-    if (r.success) toast('Cash flow berhasil di-export', 'success')
+    if (r.success) toast(r.message || 'Cash flow berhasil di-export', 'success')
     else toast(r.message as string ?? 'Export gagal', 'error')
   }
 

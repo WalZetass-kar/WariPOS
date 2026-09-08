@@ -50,7 +50,7 @@ export default function PriceList() {
   const handleExportPDF = async () => {
     const r = await api('export:priceListPDF', products, kdKategori ? kategori.find(k => k.kd_kategori_barang === kdKategori)?.kategori_barang : 'Semua')
     if (r.success) {
-      toast('Price list berhasil di-export', 'success')
+      toast(r.message || 'Price list berhasil di-export', 'success')
     } else {
       toast(r.message as string ?? 'Export gagal', 'error')
     }

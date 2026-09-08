@@ -24,6 +24,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           {...props}
+          onFocus={e => {
+            if (props.type === 'number' || typeof props.value === 'number') {
+              e.target.select()
+            }
+            props.onFocus?.(e)
+          }}
           className={`w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800
             px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400
             focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500

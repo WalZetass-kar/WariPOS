@@ -1,18 +1,20 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toDataURL } from 'qrcode'
 import {
   Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle,
   Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2,
   Code2, ExternalLink, MessageCircle, ChevronLeft, Search, Monitor, Shield, HardDrive,
-  Info, User, Fingerprint, Sparkles,
+  Info, User, Fingerprint, PackagePlus, Trash2, UtensilsCrossed, LogOut,
 } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import appLogo from '../assets/app-logo.png'
 import { useTheme, type ThemeColor } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useAppStore } from '../stores'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { secureStorage } from '../utils/secureStorage'
@@ -109,8 +111,15 @@ export default function Settings() {
   const [profileForm, setProfileForm] = useState({ nama_lengkap: '', email: '', no_telp: '', foto: '' })
   const [savingProfile, setSavingProfile] = useState(false)
 
-  const [activeCategory, setActiveCategory] = useState<SettingCategory | null>(null)
+  const [searchParams] = useSearchParams()
+  const initialCategory = (searchParams.get('category') || searchParams.get('tab')) as SettingCategory | null
+  const [activeCategory, setActiveCategory] = useState<SettingCategory | null>(initialCategory)
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    const cat = (searchParams.get('category') || searchParams.get('tab')) as SettingCategory | null
+    if (cat) setActiveCategory(cat)
+  }, [searchParams])
 
   useEffect(() => {
     Promise.all([
@@ -131,7 +140,7 @@ export default function Settings() {
         foto: (user as any).foto ?? '',
       })
     }
-  }, [user?.nama_lengkap, user?.email])
+  }, [user?.nama_lengkap, user?.email, (user as any)?.foto, (user as any)?.no_telp])
 
   const loadSyncStatus = async () => {
     const r = await api<any>('sync:getStatus')
@@ -185,8 +194,8 @@ export default function Settings() {
   const getSyncPairingPayload = () => {
     const baseUrl = syncForm.baseUrl || (syncStatus?.urls ?? []).find((url: string) => !url.includes('127.0.0.1')) || syncStatus?.urls?.[0] || ''
     return JSON.stringify({
-      type: 'zetass-pos-sync',
-      app: 'Zetass Pos',
+      type: 'waripos-sync',
+      app: 'WariPOS',
       baseUrl,
       token: syncForm.token,
       generatedAt: new Date().toISOString(),
@@ -219,27 +228,14 @@ export default function Settings() {
   }
 
   const saveIndustrySettings = async () => {
-    if (industrySettings.aiEnabled && industrySettings.aiProvider !== 'local') {
-      setTestingAi(true)
-      try {
-        const test = await api('integrations:testAi', industrySettings)
-        if (!test.success) {
-          toast(test.message as string || 'Koneksi AI gagal. Periksa provider, base URL, model, dan API key.', 'error')
-          return
-        }
-      } finally {
-        setTestingAi(false)
-      }
-    }
-
     setIndustryLoading(true)
     try {
       const r = await api<IndustrySettings>('integrations:save', industrySettings)
       if (r.success && r.data) {
         setIndustrySettings(normalizeIndustrySettings(r.data))
-        toast('Pengaturan industri disimpan', 'success')
+        toast('Pengaturan berhasil disimpan', 'success')
       } else {
-        toast(r.message as string || 'Gagal menyimpan pengaturan industri', 'error')
+        toast(r.message as string || 'Gagal menyimpan pengaturan', 'error')
       }
     } finally {
       setIndustryLoading(false)
@@ -349,7 +345,7 @@ export default function Settings() {
   const applyPairingData = () => {
     try {
       const data = JSON.parse(pairingText)
-      if (data?.type !== 'zetass-pos-sync' || !data.baseUrl || !data.token) {
+      if ((data?.type !== 'waripos-sync' && data?.type !== 'zetass-pos-sync') || !data.baseUrl || !data.token) {
         throw new Error('Format pairing tidak valid')
       }
       const url = normalizeSyncServerUrl(String(data.baseUrl))
@@ -488,7 +484,7 @@ export default function Settings() {
     openWhatsApp(
       SUBSCRIPTION_UPGRADE_WA_NUMBER,
       [
-        'Halo Developer, saya lupa sandi akun Zetass Pos.',
+        'Halo Developer, saya lupa sandi akun WariPOS.',
         `Username: ${user?.nama_pengguna ?? '-'}`,
         '',
         'Mohon bantu reset sandi akun saya.',
@@ -587,6 +583,95 @@ export default function Settings() {
   }, [searchQuery])
 
   if (initialLoading) return <SkeletonPage rows={6} />
+
+  const resetModalNode = (
+    <Modal
+      open={confirmReset}
+      onClose={() => {
+        setConfirmReset(false)
+        setConfirmText('')
+      }}
+      title="PERINGATAN - ZONA BERBAHAYA!"
+      size="lg"
+    >
+      <div className="space-y-4">
+        <div className="p-4 rounded-xl bg-red-500 text-white animate-pulse">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={32} className="shrink-0" />
+            <div>
+              <p className="font-bold text-lg">TINDAKAN TIDAK DAPAT DIBATALKAN!</p>
+              <p className="text-sm opacity-90">Semua data akan dihapus permanen</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
+          <p className="font-bold text-red-700 dark:text-red-400 mb-3 flex items-center gap-2">
+            <Database size={18} />
+            Data yang akan DIHAPUS PERMANEN:
+          </p>
+          <div className="grid grid-cols-2 gap-2 text-sm text-red-600 dark:text-red-400">
+            {['Transaksi Penjualan', 'Transaksi Pembelian', 'Data Produk & Stok', 'Data Customer', 'Data Supplier', 'Data Kas & Shift', 'Hutang & Piutang', 'Backup & Activity Log'].map(item => (
+              <div key={item} className="flex items-center gap-2">
+                <span className="text-red-500">X</span>
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+          <p className="text-sm text-blue-700 dark:text-blue-400">
+            <strong>Data yang TETAP tersimpan:</strong> User & Identitas Toko
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">
+            Ketik <span className="text-red-600 dark:text-red-400 font-mono bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">RESET SEMUA DATA</span> untuk konfirmasi:
+          </label>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="Ketik: RESET SEMUA DATA"
+            className="w-full px-4 py-3 rounded-xl border-2 border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono"
+            autoFocus
+          />
+          {confirmText && confirmText !== 'RESET SEMUA DATA' && (
+            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+              <AlertTriangle size={12} />
+              Teks tidak sesuai! Harus persis: RESET SEMUA DATA
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setConfirmReset(false)
+              setConfirmText('')
+            }}
+            className="flex-1"
+            disabled={resetting}
+          >
+            Batal
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleReset}
+            loading={resetting}
+            disabled={confirmText !== 'RESET SEMUA DATA'}
+            className="flex-1"
+          >
+            <AlertTriangle size={16} />
+            {resetting ? 'Menghapus...' : 'Ya, Reset Semua Data'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
 
   if (activeCategory) {
     return (
@@ -702,139 +787,73 @@ export default function Settings() {
               openAppsScript={openAppsScript}
             />
           )}
-          {activeCategory === 'tentang' && <TentangSettings />}
+          {activeCategory === 'tentang' && <TentangSettings openResetDialog={openResetDialog} />}
         </div>
+        {resetModalNode}
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 select-none">
+      {/* Header Info */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Pengaturan Sistem</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+            Kelola identitas toko, format struk, tema aplikasi, keamanan, hingga sinkronisasi data.
+          </p>
+        </div>
+      </div>
+
+      {/* Search Input */}
       <div className="relative">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Cari pengaturan..."
-          className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+          placeholder="Cari pengaturan (toko, printer, tema, akun, backup)..."
+          className="w-full h-11 pl-10 pr-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 shadow-sm transition-all"
         />
       </div>
 
-      <div className="space-y-1">
+      {/* Grouped Settings Cards with Dividers */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
         {filteredCategories.map(cat => (
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left group"
+            className="flex items-center gap-3.5 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-red-600/60 hover:shadow-md transition-all text-left group active:scale-[0.99]"
           >
-            <div className={`w-10 h-10 rounded-xl ${cat.color} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+            <div className={`w-11 h-11 rounded-xl ${cat.color} flex items-center justify-center text-white shrink-0 shadow-sm`}>
               {cat.icon}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">{cat.label}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{cat.description}</p>
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors truncate">
+                  {cat.label}
+                </p>
+                <ChevronLeft size={15} className="text-slate-300 dark:text-slate-600 rotate-180 group-hover:text-red-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                {cat.description}
+              </p>
             </div>
-            <ChevronLeft size={16} className="text-slate-300 dark:text-slate-600 rotate-180 group-hover:text-primary-500 transition-colors shrink-0" />
           </button>
         ))}
       </div>
 
       {filteredCategories.length === 0 && (
-        <div className="text-center py-12">
+        <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
           <Search size={32} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tidak ada pengaturan ditemukan</p>
         </div>
       )}
 
-      <p className="text-xs text-slate-400 text-center pt-2">Zetass Pos - Preferensi disimpan otomatis</p>
+      <p className="text-[11px] text-slate-400 text-center pt-2">WariPOS • Semua perubahan preferensi disimpan secara otomatis</p>
 
-      <Modal
-        open={confirmReset}
-        onClose={() => {
-          setConfirmReset(false)
-          setConfirmText('')
-        }}
-        title="PERINGATAN - ZONA BERBAHAYA!"
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-red-500 text-white animate-pulse">
-            <div className="flex items-center gap-3">
-              <AlertTriangle size={32} className="shrink-0" />
-              <div>
-                <p className="font-bold text-lg">TINDAKAN TIDAK DAPAT DIBATALKAN!</p>
-                <p className="text-sm opacity-90">Semua data akan dihapus permanen</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
-            <p className="font-bold text-red-700 dark:text-red-400 mb-3 flex items-center gap-2">
-              <Database size={18} />
-              Data yang akan DIHAPUS PERMANEN:
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-sm text-red-600 dark:text-red-400">
-              {['Transaksi Penjualan', 'Transaksi Pembelian', 'Data Produk & Stok', 'Data Customer', 'Data Supplier', 'Data Kas & Shift', 'Hutang & Piutang', 'Backup & Activity Log'].map(item => (
-                <div key={item} className="flex items-center gap-2">
-                  <span className="text-red-500">X</span>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-700 dark:text-blue-400">
-              <strong>Data yang TETAP tersimpan:</strong> User & Identitas Toko
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">
-              Ketik <span className="text-red-600 dark:text-red-400 font-mono bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">RESET SEMUA DATA</span> untuk konfirmasi:
-            </label>
-            <input
-              type="text"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="Ketik: RESET SEMUA DATA"
-              className="w-full px-4 py-3 rounded-xl border-2 border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono"
-              autoFocus
-            />
-            {confirmText && confirmText !== 'RESET SEMUA DATA' && (
-              <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                <AlertTriangle size={12} />
-                Teks tidak sesuai! Harus persis: RESET SEMUA DATA
-              </p>
-            )}
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setConfirmReset(false)
-                setConfirmText('')
-              }}
-              className="flex-1"
-              disabled={resetting}
-            >
-              Batal
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleReset}
-              loading={resetting}
-              disabled={confirmText !== 'RESET SEMUA DATA'}
-              className="flex-1"
-            >
-              <AlertTriangle size={16} />
-              {resetting ? 'Menghapus...' : 'Ya, Reset Semua Data'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {resetModalNode}
     </div>
   )
 }
@@ -1065,6 +1084,23 @@ function AkunSettings({ user, profileForm, setProfileForm, savingProfile, handle
           </Button>
         </div>
       </div>
+
+      <SectionTitle>Sesi & Akun</SectionTitle>
+      <div className="rounded-2xl border border-red-200 dark:border-red-900/40 bg-red-50/40 dark:bg-red-950/20 p-4 space-y-3">
+        <div>
+          <p className="text-xs font-bold text-red-700 dark:text-red-400">Keluar dari Akun</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Selesaikan shift kerja dan akhiri sesi login pada perangkat ini.</p>
+        </div>
+        <Button
+          type="button"
+          variant="danger"
+          onClick={() => window.dispatchEvent(new CustomEvent('auth:request-logout'))}
+          icon={<LogOut size={15} />}
+          className="w-full"
+        >
+          Keluar dari Akun
+        </Button>
+      </div>
     </div>
   )
 }
@@ -1202,8 +1238,73 @@ function SinkronisasiSettings({ syncStatus, syncForm, setSyncForm, syncLoading, 
 }
 
 function TokoSettings({ identitas, f, loading, saveIdentitas }: any) {
+  const { posMode, setPosMode } = useAppStore()
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <SectionTitle>Mode Operasional Bisnis</SectionTitle>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Mode Toko Retail */}
+        <div
+          onClick={() => setPosMode('retail')}
+          className={`cursor-pointer rounded-2xl p-4 border transition-all ${
+            posMode === 'retail'
+              ? 'border-2 border-red-600 bg-red-50/40 dark:bg-red-950/20 ring-1 ring-red-600/30 shadow-sm'
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${posMode === 'retail' ? 'bg-red-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+                <Store size={20} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Mode Toko / Retail</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Minimarket, Fashion, Retail</p>
+              </div>
+            </div>
+            {posMode === 'retail' && (
+              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">
+                AKTIF
+              </span>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            Layout kasir cepat, scan barcode langsung, tanpa opsi nomor meja & menyembunyikan menu dapur F&B.
+          </p>
+        </div>
+
+        {/* Mode Restoran & Kafe */}
+        <div
+          onClick={() => setPosMode('restaurant')}
+          className={`cursor-pointer rounded-2xl p-4 border transition-all ${
+            posMode === 'restaurant'
+              ? 'border-2 border-red-600 bg-red-50/40 dark:bg-red-950/20 ring-1 ring-red-600/30 shadow-sm'
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${posMode === 'restaurant' ? 'bg-red-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+                <UtensilsCrossed size={20} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Mode Restoran & F&B</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Resto, Cafe, Rumah Makan</p>
+              </div>
+            </div>
+            {posMode === 'restaurant' && (
+              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">
+                AKTIF
+              </span>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            Mengaktifkan tata letak denah meja, reservasi meja, resep makanan & pesanan Dine-in.
+          </p>
+        </div>
+      </div>
+
       <SectionTitle>Identitas Toko</SectionTitle>
       <div className="space-y-3">
         <Input label="Nama Toko" value={identitas.namatoko ?? ''} onChange={e => f('namatoko', e.target.value)} />
@@ -1410,9 +1511,28 @@ function JaringanSettings({ industrySettings, changeIndustrySetting, changeAiPro
   )
 }
 
-function TentangSettings() {
+function TentangSettings({ openResetDialog }: { openResetDialog?: () => void }) {
   const toast = useToast()
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [seeding, setSeeding] = useState(false)
+  const [confirmSeed, setConfirmSeed] = useState(false)
+  const [supportWa, setSupportWa] = useState(() => {
+    try {
+      return localStorage.getItem('zetass_support_wa_number') || SUBSCRIPTION_UPGRADE_WA_NUMBER
+    } catch {
+      return SUBSCRIPTION_UPGRADE_WA_NUMBER
+    }
+  })
+
+  const handleSaveSupportWa = () => {
+    try {
+      localStorage.setItem('zetass_support_wa_number', supportWa.trim())
+      toast('Nomor WhatsApp Admin / CS berhasil disimpan!', 'success')
+    } catch {
+      toast('Gagal menyimpan nomor WhatsApp', 'error')
+    }
+  }
 
   const handleSeed = async () => {
     setSeeding(true)
@@ -1420,6 +1540,7 @@ function TentangSettings() {
       const r = await api<any>('system:seedSampleData')
       if (r.success) {
         toast(r.message || 'Data contoh toko berhasil dimuat!', 'success')
+        setConfirmSeed(false)
       } else {
         toast(r.message || 'Gagal memuat data demo', 'error')
       }
@@ -1429,61 +1550,123 @@ function TentangSettings() {
   }
 
   return (
-    <div className="space-y-3">
-      <SectionTitle>Aplikasi</SectionTitle>
-      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-4">
-          <img src={appLogo} alt="Zetass POS" className="w-14 h-14 rounded-2xl object-cover shadow-md shadow-red-500/20 border border-slate-200 dark:border-slate-700 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Zetass POS</h3>
-              <span className="px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 border border-red-500/20 text-[10px] font-bold uppercase">v2.0.1</span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Sistem Point of Sale (POS)</p>
-            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-red-600 text-white text-xs font-bold shadow-sm shadow-red-600/20">
-              <span>Developer By WalZetass-Kar</span>
-            </div>
+    <div className="space-y-4">
+      {/* App Info Minimal Card */}
+      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-center space-y-3">
+        <img src={appLogo} alt="WariPOS" className="w-16 h-16 object-contain drop-shadow-sm mx-auto" />
+        <div>
+          <div className="flex items-center justify-center gap-2">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">WariPOS</h3>
+            <span className="px-2.5 py-0.5 rounded-full bg-primary-500/10 text-primary-600 dark:text-primary-400 border border-primary-500/20 text-[10px] font-bold">v.1.0.0</span>
           </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Sistem Kasir & Pembukuan Pintar</p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+          <span className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+            Pengembang: WalZetass-Kar
+          </span>
+          <span className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+            Offline-First SQLite
+          </span>
         </div>
       </div>
 
-      <SectionTitle>Data & Demo Pengujian</SectionTitle>
-      <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 space-y-3">
+      {/* Developer Panel Quick Access for Developer Role */}
+      {(user?.hak_akses === 'developer' || user?.hak_akses === 'super_admin') && (
+        <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-2.5">
+          <div className="flex items-center gap-2 text-indigo-800 dark:text-indigo-300 font-bold text-xs">
+            <Shield size={16} className="text-indigo-600" />
+            <span>Developer Panel & Lisensi (Mobile/Desktop)</span>
+          </div>
+          <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 leading-relaxed">
+            Kelola pelanggan, aktivasi lisensi, reset password user toko, dan ubah paket langganan langsung dari aplikasi ini.
+          </p>
+          <Button
+            onClick={() => navigate('/license-admin')}
+            icon={<ExternalLink size={14} />}
+            className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm"
+          >
+            Buka Developer Panel
+          </Button>
+        </div>
+      )}
+
+      {/* Support WhatsApp Configuration (Restricted to Developer/SuperAdmin) */}
+      {(user?.hak_akses === 'developer' || user?.hak_akses === 'super_admin') && (
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 space-y-2.5">
+          <div>
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <MessageCircle size={14} className="text-emerald-500" />
+              <span>Nomor WhatsApp Bantuan / Admin CS (Developer Only)</span>
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Nomor tujuan saat pelanggan atau kasir mengklik tombol bantuan / upgrade paket (default: 08988098238).
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={supportWa}
+              onChange={e => setSupportWa(e.target.value)}
+              placeholder="08988098238"
+              className="text-xs"
+            />
+            <Button
+              variant="secondary"
+              onClick={handleSaveSupportWa}
+              className="shrink-0 text-xs font-bold"
+            >
+              Simpan Nomor
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Demo Seeding */}
+      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 space-y-2.5">
         <div>
-          <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">Muat Data Contoh / Demo Toko</h4>
-          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-            Otomatis mengisi 20+ produk lengkap, meja restoran, customer, resep BOM, dan 7 hari riwayat transaksi untuk simulasi dan demo.
+          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">Muat Data Contoh / Demo Toko</h4>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            Otomatis mengisi 20+ produk, meja restoran, customer, dan riwayat transaksi untuk simulasi.
           </p>
         </div>
         <Button
           variant="secondary"
-          icon={<Sparkles size={15} className="text-amber-600 dark:text-amber-400" />}
-          onClick={handleSeed}
-          loading={seeding}
-          className="w-full font-bold border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+          icon={<PackagePlus size={14} />}
+          onClick={() => setConfirmSeed(true)}
+          className="w-full text-xs font-bold"
         >
-          Muat Data Contoh Toko Sekarang
+          Muat Data Contoh Toko
         </Button>
+
+        <ConfirmDialog
+          open={confirmSeed}
+          onClose={() => setConfirmSeed(false)}
+          onConfirm={handleSeed}
+          title="Muat Data Contoh Toko"
+          message="Apakah Anda yakin ingin memuat data contoh toko? Tindakan ini akan menambahkan 20+ produk, meja restoran, customer, supplier, dan transaksi simulasi ke sistem."
+          confirmText="Ya, Muat Data Contoh"
+          variant="warning"
+          loading={seeding}
+        />
       </div>
 
-      <SectionTitle>Detail Teknis</SectionTitle>
-      <div className="grid grid-cols-1 gap-2">
-        <SettingRow>
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Pengembang</p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">WalZetass-Kar</p>
-            <p className="text-[11px] text-slate-400">Principal Engineer & Lead Architect</p>
-          </div>
-          <User size={20} className="text-primary-500" />
-        </SettingRow>
-        <SettingRow>
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Teknologi</p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">Vite + React + Capacitor</p>
-            <p className="text-[11px] text-slate-400">SQLite - Drizzle ORM - TailwindCSS</p>
-          </div>
-          <Code2 size={20} className="text-emerald-500" />
-        </SettingRow>
+      {/* Factory Reset Zone with Sound Warning */}
+      <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 space-y-2.5">
+        <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-xs">
+          <AlertTriangle size={16} className="text-red-500" />
+          <span>Zona Berbahaya - Reset Data Toko</span>
+        </div>
+        <p className="text-[11px] text-red-600/80 dark:text-red-400/80 leading-relaxed">
+          Menghapus seluruh transaksi penjualan, pembelian, produk, stok, dan kas kembali ke kondisi awal.
+        </p>
+        <Button
+          onClick={openResetDialog}
+          icon={<Trash2 size={14} />}
+          className="w-full text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm shadow-red-600/30"
+        >
+          Reset Semua Data (Factory Reset)
+        </Button>
       </div>
     </div>
   )

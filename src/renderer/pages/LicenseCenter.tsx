@@ -41,74 +41,105 @@ import { api } from '../utils/api'
 import developerPanelIcon from '../assets/developer-panel-icon.png'
 import { SkeletonPage } from '../components/Skeleton'
 
-type LicenseTab = 'dashboard' | 'connection' | 'users' | 'devices' | 'updates' | 'errors' | 'announcements' | 'revenue' | 'plans' | 'features' | 'popups' | 'payments' | 'localUsers' | 'backup' | 'security' | 'activityLog' | 'ecommerceApi'
+export type LicenseTab =
+  | 'dashboard'
+  | 'connection'
+  | 'users'
+  | 'devices'
+  | 'updates'
+  | 'errors'
+  | 'announcements'
+  | 'revenue'
+  | 'plans'
+  | 'features'
+  | 'popups'
+  | 'payments'
+  | 'localUsers'
+  | 'backup'
+  | 'security'
+  | 'activityLog'
+  | 'ecommerceApi'
 
-const TABS: Array<{
+interface TabDef {
   id: LicenseTab
   label: string
   hint: string
-  icon: typeof ServerCog
+  icon: any
+}
+
+const TABS: TabDef[] = [
+  { id: 'dashboard', label: 'Dashboard', hint: 'Statistik dan ringkasan lisensi', icon: LayoutDashboard },
+  { id: 'connection', label: 'Koneksi Server', hint: 'Konfigurasi Supabase & sync', icon: ServerCog },
+  { id: 'revenue', label: 'Pendapatan', hint: 'Pertumbuhan & total revenue', icon: TrendingUp },
+  { id: 'users', label: 'Data Pembeli', hint: 'Akun pembeli, lisensi & password', icon: Users },
+  { id: 'devices', label: 'Perangkat', hint: 'Monitoring & blokir device', icon: MonitorSmartphone },
+  { id: 'payments', label: 'Persetujuan Lisensi', hint: 'Verifikasi permintaan checkout', icon: CreditCard },
+  { id: 'plans', label: 'Paket Lisensi', hint: 'Master paket & penetapan harga', icon: BadgeDollarSign },
+  { id: 'features', label: 'Fitur Premium', hint: 'Master feature flags aplikasi', icon: ListChecks },
+  { id: 'popups', label: 'Popup Upgrade', hint: 'Pesan banner promosi & upgrade', icon: Megaphone },
+  { id: 'updates', label: 'Update Aplikasi', hint: 'Versi rilis & force update', icon: Wrench },
+  { id: 'announcements', label: 'Broadcast Pesan', hint: 'Pengumuman & info maintenance', icon: Bell },
+  { id: 'errors', label: 'Log Error', hint: 'Crash report & log error sistem', icon: FileWarning },
+  { id: 'localUsers', label: 'Pengguna Lokal', hint: 'Akun kasir & hak akses toko', icon: Users },
+  { id: 'backup', label: 'Backup Database', hint: 'Cadangan data & restore SQLite', icon: Database },
+  { id: 'security', label: 'Log Keamanan', hint: 'Aktivitas sesi & login user', icon: Shield },
+  { id: 'activityLog', label: 'Activity Log', hint: 'Audit trail transaksi sistem', icon: Activity },
+  { id: 'ecommerceApi', label: 'E-commerce API', hint: 'Integrasi API online store', icon: Globe },
+]
+
+const GROUPS: Array<{
+  id: string
+  label: string
+  icon: any
+  tabs: LicenseTab[]
 }> = [
-  { id: 'dashboard', label: 'Dashboard', hint: 'Statistik dan revenue', icon: LayoutDashboard },
-  { id: 'connection', label: 'Koneksi', hint: 'Server, validasi, sync', icon: ServerCog },
-  { id: 'users', label: 'Pembeli', hint: 'Akun, password, paket', icon: Users },
-  { id: 'devices', label: 'Device', hint: 'Online, block, unblock', icon: MonitorSmartphone },
-  { id: 'updates', label: 'Update', hint: 'Optional dan force update', icon: Wrench },
-  { id: 'errors', label: 'Error', hint: 'Crash dan app error', icon: FileWarning },
-  { id: 'announcements', label: 'Broadcast', hint: 'Maintenance, promo, warning', icon: Bell },
-  { id: 'revenue', label: 'Revenue', hint: 'Pendapatan dan growth', icon: TrendingUp },
-  { id: 'plans', label: 'Paket', hint: 'Harga dan fitur paket', icon: BadgeDollarSign },
-  { id: 'features', label: 'Fitur', hint: 'Master fitur premium', icon: ListChecks },
-  { id: 'popups', label: 'Popup', hint: 'Pesan upgrade POS', icon: Megaphone },
-  { id: 'payments', label: 'Persetujuan Lisensi', hint: 'Setujui pembelian dari popup', icon: CreditCard },
-  { id: 'localUsers', label: 'Pengguna Lokal', hint: 'Akun POS dan hak akses', icon: Users },
-  { id: 'backup', label: 'Backup Database', hint: 'Backup, restore, import', icon: Database },
-  { id: 'security', label: 'Keamanan', hint: 'Login dan session aplikasi', icon: Shield },
-  { id: 'activityLog', label: 'Activity Log', hint: 'Audit aktivitas aplikasi', icon: Activity },
-  { id: 'ecommerceApi', label: 'E-commerce API', hint: 'Integrasi WooCommerce', icon: Globe },
+  { id: 'overview', label: 'Ringkasan & Server', icon: LayoutDashboard, tabs: ['dashboard', 'connection', 'revenue'] },
+  { id: 'customers', label: 'Pembeli & Lisensi', icon: Users, tabs: ['users', 'devices', 'payments'] },
+  { id: 'products', label: 'Produk & Paket', icon: BadgeDollarSign, tabs: ['plans', 'features', 'popups'] },
+  { id: 'operations', label: 'Operasional & Update', icon: Wrench, tabs: ['updates', 'announcements', 'errors'] },
+  { id: 'tools', label: 'Alat Sistem & Backup', icon: Database, tabs: ['localUsers', 'backup', 'security', 'activityLog', 'ecommerceApi'] },
 ]
 
-const TAB_GROUPS: Array<{ label: string; tabs: LicenseTab[] }> = [
-  { label: 'Kontrol', tabs: ['dashboard', 'connection'] },
-  { label: 'Pembeli', tabs: ['users', 'devices', 'payments'] },
-  { label: 'Produk Lisensi', tabs: ['plans', 'features', 'popups'] },
-  { label: 'Operasional', tabs: ['updates', 'announcements', 'errors', 'revenue'] },
-  { label: 'Tool Developer', tabs: ['localUsers', 'backup', 'security', 'activityLog', 'ecommerceApi'] },
-]
-
-const TAB_BY_ID = Object.fromEntries(TABS.map(tab => [tab.id, tab])) as Record<LicenseTab, typeof TABS[number]>
+const TAB_BY_ID = Object.fromEntries(TABS.map(t => [t.id, t])) as Record<LicenseTab, TabDef>
 
 export default function LicenseCenter() {
   const { user } = useAuth()
   const [tab, setTab] = useState<LicenseTab>('connection')
-  const [panelNavOpen, setPanelNavOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const activeTab = useMemo(() => TAB_BY_ID[tab] ?? TABS[0], [tab])
+  const [isConnected, setIsConnected] = useState(false)
 
-  const selectTab = (nextTab: LicenseTab) => {
-    setTab(nextTab)
-    setPanelNavOpen(false)
-  }
+  const activeGroup = useMemo(() => {
+    return GROUPS.find(g => g.tabs.includes(tab)) ?? GROUPS[0]
+  }, [tab])
+
+  const activeTabDef = useMemo(() => TAB_BY_ID[tab] ?? TABS[0], [tab])
 
   useEffect(() => {
     let cancelled = false
     api<{ connected: boolean; hasRefreshToken?: boolean }>('license:getConfig').then(result => {
       if (cancelled) return
-      if (result.success && result.data?.connected && result.data.hasRefreshToken) {
-        setTab('dashboard')
+      if (result.success && result.data?.connected) {
+        setIsConnected(true)
+        if (result.data.hasRefreshToken) {
+          setTab('dashboard')
+        }
       }
       setLoading(false)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   if (!user || user.hak_akses !== 'developer') {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="glass-card rounded-2xl p-10 text-center max-w-sm">
-          <div className="text-4xl mb-3">!</div>
-          <h2 className="heading-2 mb-1">Akses Ditolak</h2>
-          <p className="text-body">Halaman ini hanya untuk akun developer.</p>
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <div className="rounded-3xl border border-red-200 dark:border-red-900/50 bg-white dark:bg-slate-900 p-8 text-center max-w-md shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-red-600/10 text-red-600 flex items-center justify-center mx-auto mb-3 font-bold text-xl">
+            !
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white">Akses Dibatasi</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Halaman ini hanya dapat diakses oleh akun hak akses Developer.</p>
         </div>
       </div>
     )
@@ -116,128 +147,117 @@ export default function LicenseCenter() {
 
   if (loading) return <SkeletonPage rows={6} />
 
-  const ActiveIcon = activeTab.icon
+  const ActiveIcon = activeTabDef.icon
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-4 select-none pb-12">
+      {/* ─── Header Info & Status ────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div className="flex items-center gap-3">
-          <img src={developerPanelIcon} alt="Developer Panel" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary-500/25" />
+          <img
+            src={developerPanelIcon}
+            alt="Developer Panel"
+            className="h-11 w-11 rounded-2xl object-cover border border-slate-200 dark:border-slate-800 shadow-sm"
+          />
           <div>
-            <h1 className="heading-1">Developer Panel</h1>
-            <p className="text-caption">Pusat akun pembeli, lisensi, paket, popup, dan persetujuan lisensi Supabase.</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Developer Panel</h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[11px] font-bold border border-red-600/20">
+                Mode Master
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+              Pusat manajemen lisensi pembeli, paket harga, update aplikasi, dan kontrol database.
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPanelNavOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 xl:hidden"
-          >
-            <Menu className="w-4 h-4 text-primary-500" />
-            <span>Menu Panel</span>
-          </button>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-            <LayoutDashboard className="w-4 h-4 text-primary-500" />
-            <span>Mode developer</span>
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${
+            isConnected
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/60'
+              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900/60'
+          }`}>
+            <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <span>{isConnected ? 'Mode Master Aktif' : 'Server Offline / Belum Login'}</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-        {panelNavOpen && (
-          <div
-            className="fixed inset-0 z-[65] bg-slate-950/50 backdrop-blur-sm xl:hidden"
-            onClick={() => setPanelNavOpen(false)}
-          />
-        )}
-        <aside className={`fixed inset-y-0 left-0 z-[70] w-72 transform overflow-y-auto border-r border-slate-200 bg-white p-3 shadow-2xl transition-transform duration-300 dark:border-slate-800 dark:bg-slate-900 xl:sticky xl:top-0 xl:z-auto xl:w-auto xl:translate-x-0 xl:self-start xl:rounded-xl xl:border xl:p-2 xl:shadow-none xl:max-h-[calc(100vh-7rem)] scrollbar-thin ${panelNavOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800 xl:hidden">
-            <div>
-              <p className="text-sm font-bold text-slate-800 dark:text-white">Developer Panel</p>
-              <p className="text-xs text-slate-400">Menu administrasi lisensi</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPanelNavOpen(false)}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="space-y-4">
-            {TAB_GROUPS.map(group => (
-              <div key={group.label}>
-                <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                  {group.label}
-                </p>
-                <div className="space-y-1">
-                  {group.tabs.map(id => {
-                    const item = TAB_BY_ID[id]
-                    const Icon = item.icon
-                    const active = item.id === tab
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => selectTab(item.id)}
-                        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                          active
-                            ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300'
-                            : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold">{item.label}</span>
-                          <span className="block truncate text-[11px] opacity-70">{item.hint}</span>
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
+      {/* ─── Top Horizontal Navigation Bar (No Nested Sidebar!) ─────── */}
+      <div className="space-y-2">
+        {/* Tier 1: Primary Category Tabs */}
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none touch-pan-x">
+          {GROUPS.map(grp => {
+            const GroupIcon = grp.icon
+            const isGroupActive = activeGroup.id === grp.id
+            return (
+              <button
+                key={grp.id}
+                type="button"
+                onClick={() => setTab(grp.tabs[0])}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
+                  isGroupActive
+                    ? 'bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 shadow-sm border border-slate-200 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <GroupIcon size={15} />
+                <span>{grp.label}</span>
+              </button>
+            )
+          })}
+        </div>
 
-        <section className="min-w-0 space-y-4">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-            <button
-              type="button"
-              onClick={() => setPanelNavOpen(true)}
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-primary-600 dark:text-slate-300 dark:hover:bg-slate-800 xl:hidden"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-primary-600 dark:bg-slate-800 dark:text-primary-300">
-              <ActiveIcon className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold text-slate-800 dark:text-white">{activeTab.label}</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{activeTab.hint}</p>
-            </div>
-          </div>
+        {/* Tier 2: Sub-tabs of Active Group */}
+        <div className="flex items-center gap-2 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto scrollbar-none touch-pan-x">
+          {activeGroup.tabs.map(tabId => {
+            const item = TAB_BY_ID[tabId]
+            const ItemIcon = item.icon
+            const isTabActive = item.id === tab
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
+                  isTabActive
+                    ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                    : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'
+                }`}
+              >
+                <ItemIcon size={14} />
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
 
-          {tab === 'dashboard' && <LicenseDashboardPage />}
-          {tab === 'connection' && <LicenseServerConfig />}
-          {tab === 'users' && <LicenseUsersPage />}
-          {tab === 'devices' && <LicenseDevicesPage />}
-          {tab === 'updates' && <LicenseUpdatesPage />}
-          {tab === 'errors' && <LicenseErrorsPage />}
-          {tab === 'announcements' && <LicenseAnnouncementsPage />}
-          {tab === 'revenue' && <LicenseRevenuePage />}
-          {tab === 'plans' && <LicensePlansPage />}
-          {tab === 'features' && <LicenseFeaturesPage />}
-          {tab === 'popups' && <LicensePopupsPage />}
-          {tab === 'payments' && <LicensePaymentsPage />}
-          {tab === 'localUsers' && <LocalUsersPage />}
-          {tab === 'backup' && <BackupPage />}
-          {tab === 'security' && <SecurityPage />}
-          {tab === 'activityLog' && <ActivityLogPage />}
-          {tab === 'ecommerceApi' && <EcommerceApiPage />}
-        </section>
+          <div className="hidden lg:flex items-center gap-1.5 ml-auto text-[11px] text-slate-400 font-medium px-2 shrink-0">
+            <ActiveIcon size={13} className="text-red-600" />
+            <span className="truncate">{activeTabDef.hint}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Full-Width Content Container ───────────────────────────── */}
+      <div className="min-w-0 pt-1">
+        {tab === 'dashboard' && <LicenseDashboardPage />}
+        {tab === 'connection' && <LicenseServerConfig />}
+        {tab === 'users' && <LicenseUsersPage />}
+        {tab === 'devices' && <LicenseDevicesPage />}
+        {tab === 'updates' && <LicenseUpdatesPage />}
+        {tab === 'errors' && <LicenseErrorsPage />}
+        {tab === 'announcements' && <LicenseAnnouncementsPage />}
+        {tab === 'revenue' && <LicenseRevenuePage />}
+        {tab === 'plans' && <LicensePlansPage />}
+        {tab === 'features' && <LicenseFeaturesPage />}
+        {tab === 'popups' && <LicensePopupsPage />}
+        {tab === 'payments' && <LicensePaymentsPage />}
+        {tab === 'localUsers' && <LocalUsersPage />}
+        {tab === 'backup' && <BackupPage />}
+        {tab === 'security' && <SecurityPage />}
+        {tab === 'activityLog' && <ActivityLogPage />}
+        {tab === 'ecommerceApi' && <EcommerceApiPage />}
       </div>
     </div>
   )

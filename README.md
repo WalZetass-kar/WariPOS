@@ -93,8 +93,8 @@ Setelah semua software di atas terinstal:
 
 #### Langkah 1: Clone Repository
 ```bash
-git clone https://github.com/WalZetass-kar/LCC-Web-Design.git
-cd LCC-Web-Design
+git clone https://github.com/WalZetass-kar/WariPOS.git
+cd WariPOS
 ```
 
 #### Langkah 2: Instal Dependencies Proyek
@@ -263,7 +263,7 @@ Setelah setup, gunakan username & password tersebut untuk login.
 ##  Struktur Proyek
 
 ```
-LCC-Web-Design/
+WariPOS/
 ├── src/
 │   ├── main/              # Electron main process (Node.js)
 │   ├── renderer/          # React frontend (UI)
@@ -348,4 +348,4 @@ MIT License © 2026 [WalZetass-Kar](https://github.com/WalZetass-kar)
 
 **WalZetass-Kar**
 - GitHub: [@WalZetass-kar](https://github.com/WalZetass-kar)
-- Repository: [LCC-Web-Design](https://github.com/WalZetass-kar/LCC-Web-Design)
+- Repository: [WariPOS](https://github.com/WalZetass-kar/WariPOS)

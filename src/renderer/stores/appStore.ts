@@ -1,37 +1,84 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { useSyncExternalStore } from 'react'
 
-interface AppStore {
+export type PosMode = 'retail' | 'restaurant'
+
+export interface AppStoreState {
   sidebarCollapsed: boolean
   lastRoute: string
   activeShiftId: number | null
   pajakPersen: number
-
-  setSidebarCollapsed: (collapsed: boolean) => void
-  setLastRoute: (route: string) => void
-  setActiveShiftId: (id: number | null) => void
-  setPajakPersen: (rate: number) => void
+  posMode: PosMode
 }
 
-export const useAppStore = create<AppStore>()(
-  persist(
-    (set) => ({
-      sidebarCollapsed: false,
-      lastRoute: '/',
-      activeShiftId: null,
-      pajakPersen: 0,
+const STORAGE_KEY = 'waripos-app-storage'
 
-      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-      setLastRoute: (route) => set({ lastRoute: route }),
-      setActiveShiftId: (id) => set({ activeShiftId: id }),
-      setPajakPersen: (rate) => set({ pajakPersen: rate }),
-    }),
-    {
-      name: 'zetass-app-storage',
-      partialize: (state) => ({
-        sidebarCollapsed: state.sidebarCollapsed,
-        pajakPersen: state.pajakPersen,
-      }),
+function loadInitialState(): AppStoreState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('zetass-app-storage')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const data = parsed.state || parsed
+      return {
+        sidebarCollapsed: Boolean(data.sidebarCollapsed),
+        lastRoute: String(data.lastRoute || '/'),
+        activeShiftId: typeof data.activeShiftId === 'number' ? data.activeShiftId : null,
+        pajakPersen: Number(data.pajakPersen || 0),
+        posMode: data.posMode === 'restaurant' ? 'restaurant' : 'retail',
+      }
     }
+  } catch {}
+  return {
+    sidebarCollapsed: false,
+    lastRoute: '/',
+    activeShiftId: null,
+    pajakPersen: 0,
+    posMode: 'retail',
+  }
+}
+
+let currentState: AppStoreState = loadInitialState()
+const listeners = new Set<() => void>()
+
+function emitChange() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: currentState }))
+  } catch {}
+  listeners.forEach((listener) => listener())
+}
+
+export function useAppStore() {
+  const state = useSyncExternalStore(
+    (onStoreChange) => {
+      listeners.add(onStoreChange)
+      return () => {
+        listeners.delete(onStoreChange)
+      }
+    },
+    () => currentState,
+    () => currentState
   )
-)
+
+  return {
+    ...state,
+    setSidebarCollapsed: (collapsed: boolean) => {
+      currentState = { ...currentState, sidebarCollapsed: collapsed }
+      emitChange()
+    },
+    setLastRoute: (route: string) => {
+      currentState = { ...currentState, lastRoute: route }
+      emitChange()
+    },
+    setActiveShiftId: (id: number | null) => {
+      currentState = { ...currentState, activeShiftId: id }
+      emitChange()
+    },
+    setPajakPersen: (rate: number) => {
+      currentState = { ...currentState, pajakPersen: rate }
+      emitChange()
+    },
+    setPosMode: (posMode: PosMode) => {
+      currentState = { ...currentState, posMode }
+      emitChange()
+    },
+  }
+}

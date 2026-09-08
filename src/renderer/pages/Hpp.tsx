@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Calculator, History, Trash2, TrendingUp, Package,
-  AlertCircle, Sparkles, ChevronDown, ChevronUp, Rocket,
+  AlertCircle, ChevronDown, ChevronUp, Rocket,
 } from 'lucide-react'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
@@ -91,7 +91,7 @@ function ResultCard({ result }: ResultCardProps) {
     <div className="rounded-2xl border border-primary-200 dark:border-primary-800/30 bg-gradient-to-br from-primary-50 to-primary-50 dark:from-primary-900/10 dark:to-primary-900/10 p-5 space-y-4">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-xl bg-primary-500 flex items-center justify-center">
-          <Sparkles size={16} className="text-white" />
+          <Calculator size={16} className="text-white" />
         </div>
         <div>
           <p className="text-xs text-primary-600 dark:text-primary-400 font-semibold uppercase tracking-wide">Hasil Kalkulasi</p>

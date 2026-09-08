@@ -18,7 +18,6 @@ import {
   RefreshCw,
   Rocket,
   ShieldCheck,
-  Sparkles,
   Star,
   Users,
   XCircle,
@@ -74,8 +73,9 @@ const ALL_SYSTEM_FEATURES = [
   { key: 'api_access', label: 'Akses API E-Commerce' },
 ]
 
-function formatPlanPrice(plan: { price: number; currency?: string }): string {
-  const curr = !plan.currency || plan.currency.toUpperCase() === 'IDR' ? 'Rp' : plan.currency
+function formatPlanPrice(plan?: { price?: number; currency?: string } | null): string {
+  if (!plan) return 'Rp 0'
+  const curr = !plan.currency || String(plan.currency).toUpperCase() === 'IDR' ? 'Rp' : String(plan.currency)
   return `${curr} ${Number(plan.price || 0).toLocaleString('id-ID')}`
 }
 
@@ -84,12 +84,13 @@ function buildWhatsAppUrl(phone: string | null | undefined, message: string): st
   return `https://wa.me/${target}?text=${encodeURIComponent(message)}`
 }
 
-function getPlanDurationLabel(durationDays: number): string {
-  if (durationDays === 0) return 'Seumur Hidup'
-  if (durationDays <= 1) return '1 Hari'
-  if (durationDays >= 360) return '1 Tahun'
-  if (durationDays >= 28 && durationDays <= 31) return '1 Bulan'
-  return `${durationDays} Hari`
+function getPlanDurationLabel(durationDays?: number | null): string {
+  const days = Number(durationDays ?? 30)
+  if (days === 0) return 'Seumur Hidup'
+  if (days <= 1) return '1 Hari'
+  if (days >= 360) return '1 Tahun'
+  if (days >= 28 && days <= 31) return '1 Bulan'
+  return `${days} Hari`
 }
 
 export default function PaymentInvoice() {
@@ -275,7 +276,7 @@ export default function PaymentInvoice() {
       : `${selectedPlan.duration_days} hari`
 
     const message = [
-      'Halo Admin Zetass POS, saya ingin membeli / berlangganan lisensi:',
+      'Halo Admin WariPOS, saya ingin membeli / berlangganan lisensi:',
       '',
       `Paket: ${selectedPlan.name} (${selectedPlan.code})`,
       `Harga: ${formatPlanPrice(selectedPlan)} / ${getPlanDurationLabel(selectedPlan.duration_days)}`,
@@ -293,6 +294,8 @@ export default function PaymentInvoice() {
       const r = await api<Invoice>('license:createManualPaymentRequest', {
         email: buyerEmail,
         plan_code: selectedPlan.code,
+        amount: selectedPlan.price,
+        name: user?.nama_lengkap ?? user?.nama_pengguna ?? buyerEmail.split('@')[0],
       })
       if (r.success && r.data) {
         setInvoice(r.data)
@@ -312,9 +315,13 @@ export default function PaymentInvoice() {
   if (loading && plans.length === 0) return <SkeletonPage rows={6} />
 
   // Calculate current subscription status details
-  const isLifetime = user?.subscription_plan_code === 'LIFETIME'
-    || (user?.subscription_plan_name || '').toLowerCase().includes('seumur')
-    || (user?.subscription_plan_name || '').toLowerCase().includes('lifetime')
+  const planCodeStr = String(user?.subscription_plan_code ?? '').toUpperCase()
+  const planNameStr = String(user?.subscription_plan_name ?? '').toLowerCase()
+  const isLifetime = Boolean(user?.is_lifetime)
+    || planCodeStr === 'LIFETIME'
+    || planCodeStr.includes('LIFETIME')
+    || planNameStr.includes('seumur')
+    || planNameStr.includes('lifetime')
     || (user?.subscription_expires_at === null && !isDemo && Boolean(user?.subscription_plan_name))
 
   const isExpired = user?.access_days_remaining !== null && user?.access_days_remaining !== undefined && user.access_days_remaining <= 0 && !isLifetime && !isDemo
@@ -337,20 +344,20 @@ export default function PaymentInvoice() {
       {/* ─── Page Header ────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25 ring-4 ring-violet-500/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-600 text-white shadow-sm ring-4 ring-red-600/10">
             <Crown className="h-6 w-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+              <h1 className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl tracking-tight">
                 Status Langganan & Lisensi
               </h1>
-              <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 sm:inline-flex border border-emerald-500/20">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                 Realtime Sync
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+            <p className="text-xs text-slate-500 dark:text-slate-400 sm:text-sm font-medium">
               Pantau paket aktif, batas kapasitas toko, dan nikmati aktivasi realtime tanpa perlu relog.
             </p>
           </div>
@@ -360,55 +367,53 @@ export default function PaymentInvoice() {
           type="button"
           onClick={handleSyncNow}
           disabled={syncing}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? 'Menyinkronkan...' : 'Sinkronkan Lisensi'}
         </button>
       </div>
 
-      {/* ─── Current Active Subscription Card ───────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl border border-violet-500/20 bg-gradient-to-br from-[#0c1427] via-[#101b33] to-[#0f172a] p-6 text-white shadow-xl shadow-slate-950/20 sm:p-7">
-        <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
-
+      {/* ─── Current Active Subscription Card (Flat Solid Elegance) ─── */}
+      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-6 text-white shadow-md sm:p-7 dark:bg-slate-950 dark:border-slate-800">
         <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
           {/* Plan Info */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-violet-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Paket Aktif Saat Ini
               </span>
               {isLifetime ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-black text-amber-300 ring-1 ring-amber-500/40">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-black text-amber-300 border border-amber-500/40">
                   <Star className="h-3 w-3 fill-amber-300" /> SEUMUR HIDUP
                 </span>
               ) : isPaidActive ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-bold text-emerald-300 ring-1 ring-emerald-500/30">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-bold text-emerald-300 border border-emerald-500/30">
                   <Zap className="h-3 w-3 fill-emerald-300" /> AKTIF
                 </span>
               ) : isDemo ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-0.5 text-xs font-bold text-orange-300 ring-1 ring-orange-500/30">
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-0.5 text-xs font-bold text-orange-300 border border-orange-500/30">
                   <AlertTriangle className="h-3 w-3" /> DEMO
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-3 py-0.5 text-xs font-bold text-rose-300 ring-1 ring-rose-500/30">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-3 py-0.5 text-xs font-bold text-rose-300 border border-rose-500/30">
                   <XCircle className="h-3 w-3" /> EXPIRED
                 </span>
               )}
             </div>
 
-            <h2 className="text-2xl font-black text-white sm:text-3xl">
+            <h2 className="text-2xl font-black text-white sm:text-3xl tracking-tight">
               {userPlanName}
             </h2>
 
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
               <div className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-violet-400" />
+                <Clock className="h-4 w-4 text-red-400" />
                 <span>Masa Berlaku: <strong className="text-white">{expiryDisplay}</strong></span>
               </div>
               {user?.access_days_remaining !== null && user?.access_days_remaining !== undefined && !isLifetime && (
                 <div className="flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <Award className="h-4 w-4 text-amber-400" />
                   <span>Sisa: <strong className="text-amber-300">{Math.max(0, user.access_days_remaining)} Hari</strong></span>
                 </div>
               )}
@@ -423,14 +428,14 @@ export default function PaymentInvoice() {
           {/* Demo usage bar or quick upgrade button */}
           <div className="flex flex-col items-start gap-3 lg:items-end">
             {isDemo && (
-              <div className="w-full rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 sm:w-72">
+              <div className="w-full rounded-2xl bg-slate-800/80 p-4 border border-slate-700/60 sm:w-72">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-slate-300">Transaksi Demo</span>
-                  <span className="text-amber-400">{demoState.usage_count} / {demoState.usage_limit}</span>
+                  <span className="text-amber-400 font-bold">{demoState.usage_count} / {demoState.usage_limit}</span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-900">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                    className="h-full rounded-full bg-red-600"
                     style={{ width: `${Math.min(100, Math.round((demoState.usage_count / Math.max(1, demoState.usage_limit)) * 100))}%` }}
                   />
                 </div>
@@ -446,7 +451,7 @@ export default function PaymentInvoice() {
                 const el = document.getElementById('available-plans-section')
                 if (el) el.scrollIntoView({ behavior: 'smooth' })
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-500/25 transition hover:from-violet-600 hover:to-fuchsia-600"
+              className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-red-600/20 transition hover:bg-red-700"
             >
               <Rocket className="h-4 w-4" />
               {isPaidActive ? 'Perpanjang / Ganti Paket' : 'Beli & Upgrade Paket'}
@@ -455,10 +460,10 @@ export default function PaymentInvoice() {
         </div>
 
         {/* ─── Plan Limits & Quotas Grid ────────────────────────────── */}
-        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-4">
-          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-800 pt-5 sm:grid-cols-4">
+          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-              <Laptop className="h-4 w-4 text-violet-400" />
+              <Laptop className="h-4 w-4 text-slate-300" />
               Batas Perangkat
             </div>
             <p className="mt-1.5 text-base font-extrabold text-white">
@@ -466,7 +471,7 @@ export default function PaymentInvoice() {
             </p>
           </div>
 
-          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
               <CreditCard className="h-4 w-4 text-emerald-400" />
               Transaksi / Hari
@@ -480,7 +485,7 @@ export default function PaymentInvoice() {
             </p>
           </div>
 
-          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
               <Package className="h-4 w-4 text-blue-400" />
               Batas Produk
@@ -490,7 +495,7 @@ export default function PaymentInvoice() {
             </p>
           </div>
 
-          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
               <Users className="h-4 w-4 text-amber-400" />
               Multi-User
@@ -502,7 +507,7 @@ export default function PaymentInvoice() {
         </div>
 
         {/* ─── Unlocked Features Grid ───────────────────────────────── */}
-        <div className="mt-6 border-t border-white/10 pt-5">
+        <div className="mt-6 border-t border-slate-800 pt-5">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
             Daftar Fitur Operasional Paket Anda
           </p>
@@ -514,8 +519,8 @@ export default function PaymentInvoice() {
                   key={feat.key}
                   className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs transition ${
                     isUnlocked
-                      ? 'bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-500/20'
-                      : 'bg-white/5 text-slate-500 opacity-60'
+                      ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50'
+                      : 'bg-slate-800/30 text-slate-500 border border-slate-800/40 opacity-60'
                   }`}
                 >
                   {isUnlocked ? (
@@ -561,28 +566,33 @@ export default function PaymentInvoice() {
         </div>
 
         {plans.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900 shadow-sm">
             <p className="text-sm font-semibold text-slate-500">Belum ada paket yang aktif di Developer Panel.</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan) => {
-              const active = selectedCode === plan.code
-              const isRecommended = Boolean(plan.is_recommended)
-              const isPlanLifetime = plan.duration_days === 0 || plan.code.includes('LIFETIME')
+            {plans.map((plan, idx) => {
+              const code = String(plan?.code ?? `PLAN_${idx}`)
+              const name = String(plan?.name ?? 'Paket Lisensi')
+              const active = selectedCode === code
+              const isRecommended = Boolean(plan?.is_recommended)
+              const isPlanLifetime = Number(plan?.duration_days ?? 0) === 0
+                || code.toUpperCase().includes('LIFETIME')
+                || name.toLowerCase().includes('seumur')
+                || name.toLowerCase().includes('lifetime')
 
               return (
                 <div
-                  key={plan.code}
-                  onClick={() => setSelectedCode(plan.code)}
-                  className={`relative flex cursor-pointer flex-col justify-between rounded-3xl border p-5 transition hover:-translate-y-1 ${
+                  key={code}
+                  onClick={() => setSelectedCode(code)}
+                  className={`relative flex cursor-pointer flex-col justify-between rounded-3xl border p-5 transition hover:-translate-y-0.5 ${
                     active
-                      ? 'border-violet-500 bg-violet-50/50 shadow-xl shadow-violet-500/10 ring-2 ring-violet-500 dark:border-violet-400 dark:bg-violet-950/20'
+                      ? 'border-2 border-red-600 bg-red-50/30 shadow-md ring-1 ring-red-600/20 dark:border-red-600 dark:bg-red-950/20'
                       : 'border-slate-200 bg-white shadow-sm hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700'
                   }`}
                 >
                   {isRecommended && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-[10px] font-extrabold text-white shadow-md">
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-red-600 px-3 py-0.5 text-[10px] font-black uppercase text-white shadow-sm">
                       REKOMENDASI
                     </div>
                   )}
@@ -591,14 +601,14 @@ export default function PaymentInvoice() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          {plan.code}
+                          {code}
                         </span>
                         <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                          {plan.name}
+                          {name}
                         </h3>
                       </div>
                       {isPlanLifetime && (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                           Sekali Beli
                         </span>
                       )}
@@ -609,12 +619,12 @@ export default function PaymentInvoice() {
                         {formatPlanPrice(plan)}
                       </span>
                       <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">
-                        / {getPlanDurationLabel(plan.duration_days)}
+                        / {getPlanDurationLabel(plan?.duration_days)}
                       </span>
                     </div>
 
-                    {plan.description && (
-                      <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                    {plan?.description && (
+                      <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400 font-medium">
                         {plan.description}
                       </p>
                     )}
@@ -625,11 +635,11 @@ export default function PaymentInvoice() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setSelectedCode(plan.code)
+                        setSelectedCode(code)
                       }}
                       className={`w-full rounded-xl py-2.5 text-xs font-bold transition ${
                         active
-                           ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-700'
+                          ? 'bg-red-600 text-white shadow-sm shadow-red-600/20 hover:bg-red-700'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                       }`}
                     >
@@ -650,7 +660,7 @@ export default function PaymentInvoice() {
           <h3 className="text-sm font-bold text-slate-900 dark:text-white">
             Informasi Checkout & Aktivasi Lisensi
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
             Pilih metode pembayaran dan masukkan akun Anda untuk aktivasi lisensi otomatis.
           </p>
 
@@ -746,18 +756,18 @@ export default function PaymentInvoice() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="nama@toko.com"
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-red-600 focus:ring-2 focus:ring-red-600/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white font-medium"
               />
             </div>
 
             {selectedPlan && (
-              <div className="flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30">
+              <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
                 <div>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Paket Terpilih</p>
-                  <p className="text-sm font-bold text-violet-900 dark:text-violet-200">{selectedPlan.name}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedPlan.name}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-base font-extrabold text-violet-900 dark:text-violet-200">
+                  <p className="text-base font-extrabold text-red-600 dark:text-red-400">
                     {formatPlanPrice(selectedPlan)}
                   </p>
                   <p className="text-[11px] text-slate-500 font-medium">{getPlanDurationLabel(selectedPlan.duration_days)}</p>
@@ -782,7 +792,7 @@ export default function PaymentInvoice() {
                 type="button"
                 onClick={handleRequestPayment}
                 disabled={creating || !selectedPlan}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98]"
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98]"
               >
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                 Beli via WhatsApp Admin ({selectedPlan ? selectedPlan.name : 'Pilih Paket'})
@@ -797,7 +807,7 @@ export default function PaymentInvoice() {
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
               Status Permintaan Lisensi
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
               Pantau status transaksi invoice Anda.
             </p>
 
@@ -813,7 +823,7 @@ export default function PaymentInvoice() {
                       <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
                         {invoice.status}
                       </span>
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[11px] text-slate-500 font-bold">
                         Rp {Number(invoice.amount).toLocaleString('id-ID')}
                       </span>
                     </div>
@@ -824,7 +834,7 @@ export default function PaymentInvoice() {
                   <button
                     type="button"
                     onClick={() => void api('app:openExternal', invoice.payment_url!)}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     Buka WhatsApp Admin
@@ -841,22 +851,18 @@ export default function PaymentInvoice() {
 
           <div className="mt-6 rounded-2xl bg-slate-50 p-3.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-100 dark:border-slate-700/50">
             <p className="font-bold text-slate-700 dark:text-slate-200">Aktivasi Instan & Real-time</p>
-            <p className="mt-0.5">Pembayaran via Midtrans otomatis mengaktifkan lisensi toko dalam hitungan detik.</p>
+            <p className="mt-0.5">Setelah admin menyetujui, lisensi toko otomatis aktif seketika di semua perangkat.</p>
           </div>
         </div>
       </div>
 
       {/* ─── Midtrans Active Payment Modal ───────────────────────── */}
       {midtransModalOpen && midtransOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 overflow-hidden">
-            {/* Ambient Background Glow */}
-            <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-violet-600/15 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-indigo-600/15 blur-3xl" />
-
             <div className="relative flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-violet-600/30">
+                <div className="w-11 h-11 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-sm dark:bg-slate-800">
                   <CreditCard size={22} />
                 </div>
                 <div>
@@ -873,15 +879,15 @@ export default function PaymentInvoice() {
               </button>
             </div>
 
-            {/* Order Details Luxury Card */}
-            <div className="relative bg-slate-50 dark:bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-2.5 shadow-inner">
+            {/* Order Details Solid Card */}
+            <div className="relative bg-slate-50 dark:bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-2.5">
               <div className="flex justify-between text-xs text-slate-500 font-medium">
                 <span>Order ID</span>
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{midtransOrder.orderId}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-500 font-medium">
                 <span>Paket Langganan</span>
-                <span className="font-extrabold text-violet-600 dark:text-violet-400">{midtransOrder.plan.name}</span>
+                <span className="font-extrabold text-red-600 dark:text-red-400">{midtransOrder.plan.name}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-500 font-medium">
                 <span>Metode Tersedia</span>
@@ -899,7 +905,7 @@ export default function PaymentInvoice() {
             <div className={`p-4 rounded-2xl border text-xs font-extrabold flex items-center gap-3 shadow-sm ${
               midtransSuccess
                 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-800'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-800'
             }`}>
               {midtransSuccess ? (
                 <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow">
@@ -924,7 +930,7 @@ export default function PaymentInvoice() {
                 <button
                   type="button"
                   onClick={() => void api('app:openExternal', midtransOrder.redirectUrl)}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-black shadow-xl shadow-violet-600/30 transition transform active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-black shadow-sm transition transform active:scale-[0.98]"
                 >
                   <ExternalLink size={16} />
                   Buka Jendela Pembayaran Midtrans (Snap)

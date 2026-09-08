@@ -46,7 +46,7 @@ export default function TaxReport() {
     setExportLoading(true)
     const r = await api('export:taxReportExcel', data, dateRange.start, dateRange.end)
     setExportLoading(false)
-    if (r.success) toast('Laporan pajak berhasil di-export', 'success')
+    if (r.success) toast(r.message || 'Laporan pajak berhasil di-export', 'success')
     else toast(r.message as string ?? 'Export gagal', 'error')
   }
 

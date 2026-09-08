@@ -64,9 +64,9 @@ export default function StrukModal({
             </Button>
             <Button
               variant="secondary"
-              icon={<Printer size={16} />}
+              icon={<Printer size={16} className="text-primary-500" />}
               onClick={onHandlePrint}
-              className="flex-1 sm:flex-initial font-bold rounded-xl border border-slate-300 dark:border-slate-700"
+              className="flex-1 sm:flex-initial font-bold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               Cetak Struk
             </Button>

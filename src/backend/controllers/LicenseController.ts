@@ -5,7 +5,8 @@ import { MidtransService } from '../services/midtransService.js'
 import { PaymentMethodController } from './PaymentMethodController.js'
 import {
   syncBuyerLicense as fbSyncBuyerLicense,
-  heartbeat as fbHeartbeat
+  heartbeat as fbHeartbeat,
+  registerTrialCustomerInSupabase
 } from '../../shared/supabase/license.js'
 import { supabase, isSupabaseConfigured } from '../../shared/supabase/config.js'
 import { tryCloudSignIn } from '../../shared/supabase/auth.js'
@@ -65,19 +66,23 @@ function normalizeLicenseBaseUrl(rawUrl: string): string {
 }
 
 async function request<T = unknown>(method: string, path: string, token: string, baseUrl: string, body?: unknown): Promise<T> {
-  const fullUrl = `${baseUrl}${path}`
+  const normalizedBase = normalizeLicenseBaseUrl(baseUrl)
+  const fullUrl = `${normalizedBase}${path}`
   const payload = body ? JSON.stringify(body) : undefined
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10000)
+
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4'
+  const authHeader = (token && token.trim()) ? `Bearer ${token.trim()}` : `Bearer ${anonKey}`
 
   try {
     const res = await fetch(fullUrl, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'apikey': process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'apikey': anonKey,
+        'Authorization': authHeader,
       },
       body: payload,
       signal: controller.signal,
@@ -85,7 +90,23 @@ async function request<T = unknown>(method: string, path: string, token: string,
 
     const text = await res.text()
     try {
-      return JSON.parse(text) as T
+      const parsed = JSON.parse(text) as any
+      if (parsed && typeof parsed === 'object' && parsed.message && typeof parsed.message === 'string' && parsed.message.toLowerCase().includes('jwt')) {
+        const retryRes = await fetch(fullUrl, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': anonKey,
+            'Authorization': `Bearer ${anonKey}`,
+          },
+          body: payload,
+        })
+        const retryText = await retryRes.text()
+        try {
+          return JSON.parse(retryText) as T
+        } catch {}
+      }
+      return parsed as T
     } catch {
       const preview = text.slice(0, 150).replace(/\s+/g, ' ')
       throw new Error(`Server tidak merespons dengan JSON. Status: ${res.status}. Response: ${preview}`)
@@ -169,6 +190,14 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
     }
 
     if (path.startsWith('/admin/users')) {
+      // 1. Fetch from remote Edge Function /admin/users
+      try {
+        const remoteUsersRes = await request<ApiResult<any[]>>('GET', '/admin/users', cfg?.token || '', cfg?.url || getPublicLicenseUrl() || '')
+        if (remoteUsersRes?.success && Array.isArray(remoteUsersRes.data)) {
+          return remoteUsersRes as any
+        }
+      } catch {}
+
       if (isSupabase && isSupabaseConfigured()) {
         try {
           const { data: customers, error } = await (supabase
@@ -201,25 +230,7 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
           }
         } catch {}
       }
-      // Fallback from local mediasoft_pengguna
-      const localUsers = sqlite.prepare(`
-        SELECT p.nama_pengguna, p.nama_lengkap AS name, p.email, p.no_telp AS phone, p.status_user,
-               s.code AS plan_code, p.subscription_expires_at AS expired_at
-        FROM mediasoft_pengguna p
-        LEFT JOIN mediasoft_subscription_plans s ON s.id = p.subscription_plan_id
-      `).all() as any[]
-      const mapped = localUsers.map(u => ({
-        id: u.nama_pengguna,
-        name: u.name || u.nama_pengguna || 'Pengguna',
-        email: u.email || u.nama_pengguna || '-',
-        phone: u.phone || null,
-        status: u.status_user === 'Aktif' ? 'active' : 'inactive',
-        plan_code: u.plan_code || 'STANDARD',
-        sub_status: u.status_user === 'Aktif' ? 'active' : 'inactive',
-        expired_at: u.expired_at,
-        active_devices: 1,
-      }))
-      return { success: true, data: mapped as any }
+      return { success: true, data: [] as any }
     }
 
     if (path.startsWith('/admin/stats')) {
@@ -276,7 +287,18 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
     }
 
     if (path.startsWith('/admin/payments')) {
-      const rows = sqlite.prepare('SELECT * FROM mediasoft_customer_payments ORDER BY id DESC').all()
+      // 1. Fetch from remote Edge Function /admin/payments
+      try {
+        const remotePayRes = await request<ApiResult<any[]>>('GET', '/admin/payments', cfg?.token || '', cfg?.url || getPublicLicenseUrl() || '')
+        if (remotePayRes?.success && Array.isArray(remotePayRes.data)) {
+          return remotePayRes as any
+        }
+      } catch {}
+
+      let rows: any[] = []
+      try {
+        rows = sqlite.prepare('SELECT * FROM mediasoft_customer_payments ORDER BY id DESC').all()
+      } catch {}
       return { success: true, data: rows as any }
     }
 
@@ -292,8 +314,82 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
     }
 
     if (path.startsWith('/admin/app-update')) {
-      const row = sqlite.prepare('SELECT * FROM mediasoft_app_updates ORDER BY id DESC LIMIT 1').get()
-      return { success: true, data: row || { current_version: '2.0.1', is_mandatory: false } as any }
+      try {
+        sqlite.prepare(`
+          CREATE TABLE IF NOT EXISTS mediasoft_app_update_rules (
+            id TEXT PRIMARY KEY,
+            platform TEXT,
+            latest_version TEXT,
+            minimum_version TEXT,
+            release_notes TEXT,
+            download_url TEXT,
+            mode TEXT,
+            is_active INTEGER,
+            updated_at TEXT
+          )
+        `).run()
+
+        if (method === 'PATCH' || method === 'POST') {
+          const d = (body && typeof body === 'object' ? body : {}) as any
+          const ruleId = d.id || d.platform || 'all'
+          sqlite.prepare(`
+            INSERT INTO mediasoft_app_update_rules (id, platform, latest_version, minimum_version, release_notes, download_url, mode, is_active, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE SET
+              platform = excluded.platform,
+              latest_version = excluded.latest_version,
+              minimum_version = excluded.minimum_version,
+              release_notes = excluded.release_notes,
+              download_url = excluded.download_url,
+              mode = excluded.mode,
+              is_active = excluded.is_active,
+              updated_at = excluded.updated_at
+          `).run(
+            ruleId,
+            d.platform || 'all',
+            d.latest_version || '2.1.0',
+            d.minimum_version || '2.0.0',
+            d.release_notes || '',
+            d.download_url || '',
+            d.mode || 'optional',
+            d.is_active !== false && d.is_active !== 0 ? 1 : 0
+          )
+          return { success: true, message: 'Update rule berhasil disimpan' }
+        }
+
+        const rows = sqlite.prepare('SELECT * FROM mediasoft_app_update_rules ORDER BY id').all() as any[]
+        if (rows.length > 0) {
+          const mapped = rows.map(r => ({
+            id: r.id,
+            platform: r.platform || 'all',
+            latest_version: r.latest_version || '2.1.0',
+            minimum_version: r.minimum_version || '2.0.0',
+            release_notes: r.release_notes || '',
+            download_url: r.download_url || '',
+            mode: r.mode || 'optional',
+            is_active: r.is_active !== 0 && r.is_active !== false,
+          }))
+          return { success: true, data: mapped as any }
+        }
+      } catch (err) {
+        console.warn('[app-update rules error]', err)
+      }
+
+      return {
+        success: true,
+        data: [
+          {
+            id: 'all',
+            platform: 'all',
+            latest_version: '2.1.0',
+            minimum_version: '2.0.0',
+            release_notes: 'Peningkatan performa dan optimasi sistem WariPOS.',
+            download_url: '',
+            mode: 'optional',
+            is_active: true,
+          }
+        ] as any
+      }
     }
 
     if (path.startsWith('/admin/errors')) {
@@ -453,7 +549,20 @@ export class LicenseController {
   static async loginAdmin(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
   static async loginBuyer(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
   static saveAdminSessionFromRemote(...args: any[]) { return null }
-  static async registerTrialCustomer(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
+  static async registerTrialCustomer(data: {
+    email: string
+    password?: string
+    nama_lengkap: string
+    no_telp?: string | null
+  }, deviceInfo?: unknown) {
+    return registerTrialCustomerInSupabase({
+      email: data.email,
+      password: data.password,
+      nama_lengkap: data.nama_lengkap,
+      no_telp: data.no_telp,
+      deviceInfo,
+    })
+  }
   static async changePassword(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
 
   static async testConnection(url?: string) {
@@ -534,7 +643,7 @@ export class LicenseController {
     try {
       const loginRes = await request<ApiResult<{ access_token: string; refresh_token?: string; user: { role: string } }>>(
         'POST', '/auth/login', '', apiBase,
-        { email, password, device_id: 'pos-app-developer', device_name: 'Zetass Pos Developer', platform: 'electron' }
+        { email, password, device_id: 'pos-app-developer', device_name: 'WariPOS Developer', platform: 'electron' }
       )
       if (loginRes?.data?.access_token) {
         if (!['admin', 'super_admin', 'developer'].includes(loginRes.data.user?.role ?? '')) {
@@ -912,7 +1021,100 @@ export class LicenseController {
   }
 
   static async getUsers(search?: string) { return call('GET', `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
-  static async createUser(data: unknown) { return call('POST', '/admin/users', data) }
+  static async createUser(data: unknown) {
+    const payload = (data && typeof data === 'object' ? data : {}) as any
+    const rawEmail = String(payload.email || '').trim()
+    const username = String(payload.username || rawEmail.split('@')[0] || payload.name || '').trim()
+    const email = rawEmail.includes('@') ? rawEmail : ''
+    const password = String(payload.password || payload.kata_sandi || '12345678')
+    const role = String(payload.role || payload.hak_akses || 'developer').toLowerCase()
+    const fullName = String(payload.name || payload.nama_lengkap || username)
+
+    if (!username) {
+      return { success: false, message: 'Username atau email wajib diisi' }
+    }
+
+    // 1. Sync with Supabase Cloud if online
+    const cfg = getConfig()
+    let remoteCustomerId: string | null = null
+    if (cfg?.url) {
+      try {
+        const supEmail = email || `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@zetass.dev`
+        const finalName = role === 'developer' ? (fullName.includes('[Developer]') ? fullName : `${fullName} [Developer]`) : fullName
+        const regRes = await call<any>('POST', '/customer/register', {
+          email: supEmail,
+          name: finalName,
+          phone: payload.phone || null,
+        })
+        if (regRes?.success && regRes.data?.customer?.id) {
+          remoteCustomerId = regRes.data.customer.id
+          if (role === 'developer') {
+            await call('PATCH', `/admin/users/${remoteCustomerId}`, {
+              name: finalName,
+            })
+            await call('PUT', `/admin/users/${remoteCustomerId}/plan`, {
+              plan_code: 'LIFETIME',
+              duration_days: 0,
+            })
+          } else if (payload.plan_code) {
+            await call('PUT', `/admin/users/${remoteCustomerId}/plan`, {
+              plan_code: payload.plan_code,
+              duration_days: Number(payload.duration_days ?? 30),
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('[LicenseController.createUser] Supabase cloud sync warning:', err)
+      }
+    }
+
+    // 2. Persist to Local SQLite (mediasoft_pengguna)
+    try {
+      const existing = PenggunaModel.findByUsername(username) || (email ? sqlite.prepare('SELECT * FROM mediasoft_pengguna WHERE lower(email) = lower(?) LIMIT 1').get(email) : null) as any
+      if (existing) {
+        // If account already exists, update password and upgrade to developer role
+        await PenggunaModel.updatePassword(existing.nama_pengguna, password, false)
+        sqlite.prepare(`
+          UPDATE mediasoft_pengguna SET
+            nama_lengkap = ?,
+            email = COALESCE(?, email),
+            no_telp = COALESCE(?, no_telp),
+            hak_akses = ?,
+            is_buyer = ?,
+            status_user = 'Aktif',
+            subscription_plan_id = ?,
+            access_expires_at = null,
+            subscription_expires_at = null
+          WHERE nama_pengguna = ?
+        `).run(
+          fullName,
+          email || null,
+          payload.phone || null,
+          role === 'developer' ? 'developer' : (role === 'admin' ? 'admin' : 'kasir'),
+          role === 'developer' ? 0 : 1,
+          role === 'developer' ? null : 1,
+          existing.nama_pengguna
+        )
+      } else {
+        await PenggunaModel.create({
+          nama_pengguna: username,
+          kata_sandi: password,
+          nama_lengkap: fullName,
+          email: email || undefined,
+          no_telp: payload.phone || undefined,
+          hak_akses: role === 'developer' ? 'developer' : (role === 'admin' ? 'admin' : 'kasir'),
+          is_buyer: role === 'developer' ? 0 : 1,
+          subscription_plan_id: role === 'developer' ? null : 1,
+          access_expires_at: null,
+          must_change_password: 0,
+        })
+      }
+      return { success: true, message: `Akun ${role} "${username}" berhasil dibuat!` }
+    } catch (localErr: any) {
+      console.warn('[LicenseController.createUser] Local create warning:', localErr)
+      return { success: false, message: 'Gagal membuat akun: ' + (localErr?.message || String(localErr)) }
+    }
+  }
   static async updateUser(id: string | number, data: unknown) { return call('PATCH', `/admin/users/${id}`, data) }
   static async deleteUser(id: string | number) { return call('DELETE', `/admin/users/${id}`) }
   static async changeUserPlan(id: string | number, data: unknown) {

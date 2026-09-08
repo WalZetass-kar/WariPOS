@@ -1,5 +1,5 @@
 /**
- * Bluetooth ESC/POS Thermal Printer Driver for Zetass POS (Mobile & Desktop Web)
+ * Bluetooth ESC/POS Thermal Printer Driver for WariPOS (Mobile & Desktop Web)
  * Supports 58mm (32 chars) and 80mm (48 chars) paper sizes.
  */
 
@@ -353,7 +353,7 @@ class BluetoothPrinterService {
       const encoder = new TextEncoder()
       let testData = ESC_COMMANDS.INIT
       testData += ESC_COMMANDS.ALIGN_CENTER
-      testData += `${ESC_COMMANDS.BOLD_ON}=== TEST PRINT ZETASS POS ===${ESC_COMMANDS.BOLD_OFF}\n`
+      testData += `${ESC_COMMANDS.BOLD_ON}=== TEST PRINT WARIPOS ===${ESC_COMMANDS.BOLD_OFF}\n`
       testData += `Printer: ${this.getConnectedPrinterName()}\n`
       testData += `Waktu: ${new Date().toLocaleString('id-ID')}\n`
       testData += `Status: OK - Siap Digunakan\n`

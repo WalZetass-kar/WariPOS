@@ -292,6 +292,7 @@ export interface UserSession {
   subscription_plan_name?: string | null
   subscription_plan_code?: string | null
   subscription_expires_at?: string | null
+  is_lifetime?: boolean | null
   max_devices?: number | null
   max_transactions_per_day?: number | null
   max_products?: number | null

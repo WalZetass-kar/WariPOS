@@ -217,6 +217,7 @@ const ALLOWED_CHANNELS = new Set([
   // Tax
   'tax:getActive',
   'tax:getActiveRate',
+  'tax:setActiveRate',
   'tax:getAll',
   'tax:setActive',
   'tax:create',
@@ -346,6 +347,7 @@ const ALLOWED_CHANNELS = new Set([
   'cashFlow:getAll',
   'taxReport:getSummary',
   'salesCommission:getAll',
+  'salesCommission:getStaffDetail',
   'supplierRating:getAll',
   'membership:getAll',
   'stockHistory:getAll',
@@ -500,6 +502,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Window / Display
   'window:openCustomerDisplay',
+  'window:openQueueDisplay',
 
   // Employee / HR
   'employee:getAll',
@@ -547,6 +550,8 @@ const ALLOWED_CHANNELS = new Set([
   'kds:getOrderById',
   'kds:createOrder',
   'kds:updateOrderStatus',
+  'kds:deleteOrder',
+  'kds:clearOrders',
   'kds:getOrderItems',
   'kds:addOrderItem',
   'kds:updateOrderItemStatus',
@@ -572,7 +577,9 @@ const ALLOWED_CHANNELS = new Set([
   'reservation:getAll',
   'reservation:getById',
   'reservation:create',
+  'reservation:update',
   'reservation:updateStatus',
+  'reservation:delete',
   'reservation:cancel',
   'reservation:getActive',
   'reservation:getUpcoming',

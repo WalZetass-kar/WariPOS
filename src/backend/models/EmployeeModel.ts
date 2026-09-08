@@ -250,6 +250,7 @@ export class EmployeeModel {
     employee_id: number
     tgl: string
     jam_masuk: string
+    status?: string | null
     lokasi_masuk?: string | null
     foto_masuk?: string | null
     catatan?: string | null
@@ -262,7 +263,7 @@ export class EmployeeModel {
       lokasi_masuk: data.lokasi_masuk ?? null,
       foto_masuk: data.foto_masuk ?? null,
       catatan: data.catatan ?? null,
-      status: 'HADIR',
+      status: data.status || 'HADIR',
       keterlambatan_menit: 0,
       created_at: now,
     }).run()

@@ -74,7 +74,7 @@ export default function LicensePaymentsPage() {
           <Plus className="w-4 h-4" />Catat Persetujuan Manual
         </button>
       </div>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-thin">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 text-left">
             <tr><th className="px-4 py-3">Pembeli</th><th>Paket</th><th>Jumlah</th><th>Request</th><th>Status</th><th>Tanggal</th><th></th></tr>

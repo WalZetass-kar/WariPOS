@@ -320,7 +320,7 @@ class SyncServer {
       sendJson(res, 200, {
         success: true,
         data: {
-          app: 'Zetass Pos',
+          app: 'WariPOS',
           serverTime: new Date().toISOString(),
           tokenRequired: true,
         },

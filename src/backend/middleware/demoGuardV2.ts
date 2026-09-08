@@ -55,6 +55,7 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'whatsapp:saveBroadcastHistory',
 
   // Security
+  'security:get',
   'security:save',
 
   // Ecommerce API
@@ -550,41 +551,10 @@ const OPERATIONAL_ADMIN_CHANNELS: Set<string> = new Set([
 ])
 
 const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
-  // User administration
-  'user:getAll',
-  'user:create',
-  'user:update',
-  'user:changePassword',
-  'user:resetPassword',
-  'user:delete',
-  'user:toggleStatus',
-  'user:block',
-  'user:extendAccess',
-  'user:savePermissions',
-  'user:getPermissions',
-
-  // App administration
-  'backup:getAll',
-  'backup:create',
   'backup:restore',
-  'backup:delete',
-  'backup:download',
-  'backup:import',
-  'activityLog:getAll',
-  'activityLog:getByUsername',
-  'activityLog:getByModul',
-  'activityLog:search',
-  'activityLog:delete',
-  'activityLog:deleteOldLogs',
+  'system:resetData',
   'security:get',
   'security:save',
-  'ecommerce:get',
-  'ecommerce:save',
-  'ecommerce:getIntegration',
-  'ecommerce:saveIntegration',
-  'ecommerce:syncNow',
-  'ecommerce:enqueueStockUpdate',
-  'system:resetData',
 
   // Commercial/admin setup
   'plan:getAll',
@@ -797,6 +767,12 @@ export function shouldBlockChannel(channel: string): boolean {
   if (isPreAuthChannel(channel)) return false
 
   if (!role) return true
+
+  // Profile update and password change allowed for any authenticated user (unless demo mode)
+  if (channel === 'user:changePassword' || channel === 'user:update') {
+    if (demoSession.isDemoMode()) return true
+    return false
+  }
 
   // Operational admin channels can be used by store admins and developer roles.
   if (OPERATIONAL_ADMIN_CHANNELS.has(channel)) {
