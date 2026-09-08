@@ -1,4 +1,4 @@
-# Zetass POS
+# Wari POS
 
 > **Aplikasi Point of Sale Multi-Platform (Desktop, Mobile Android, & Web Online)** yang dibangun dengan Electron, React, Capacitor, dan Supabase Cloud.
 
