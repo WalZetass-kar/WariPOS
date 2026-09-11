@@ -121,10 +121,18 @@ Penting: Gunakan versi LTS (Node.js v20 atau v22). Jangan gunakan Node.js v24 at
 
 #### 3. pnpm (Package Manager Cepat)
 Pasang pnpm secara global melalui npm:
-```bash
-npm install -g pnpm
-pnpm -v
-```
+- Jika menggunakan **Node.js v20**: gunakan pnpm versi 9
+  ```bash
+  npm install -g pnpm@9
+  ```
+- Jika menggunakan **Node.js v22 LTS**: gunakan pnpm versi terbaru
+  ```bash
+  npm install -g pnpm
+  ```
+- Verifikasi instalasi:
+  ```bash
+  pnpm -v
+  ```
 
 #### 4. Java Development Kit (JDK 17)
 Diperlukan untuk kompilasi modul Android dan menjalankan Gradle:
