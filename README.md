@@ -105,8 +105,9 @@ Sebelum mengunduh kode proyek, pastikan perangkat lunak berikut telah terpasang 
   xcode-select --install
   ```
 
-#### 2. Node.js & npm (Versi LTS v20 Direkomendasikan)
-- **Windows**: Unduh Node.js versi LTS v20.x dari https://nodejs.org. Saat proses instalasi, centang kotak pilihan *Tools for Native Modules* agar Visual Studio C++ build tools dan Python otomatis terpasang.
+#### 2. Node.js & npm (Wajib Menggunakan Versi LTS: v20.x atau v22.x)
+Penting: Gunakan versi LTS (Node.js v20 atau v22). Jangan gunakan Node.js v24 atau versi development non-LTS karena modul native SQLite (`better-sqlite3`) belum menyediakan binary siap pakai (prebuilt binary) untuk Node 24, yang akan menyebabkan error `gyp ERR! find VS` saat instalasi.
+- **Windows**: Unduh installer Node.js bertanda **LTS** dari https://nodejs.org.
 - **Linux (Debian/Ubuntu)**:
   ```bash
   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -375,7 +376,20 @@ Berikut adalah daftar lengkap perintah otomatis yang tersedia pada berkas `packa
 
 ## 6. Panduan Troubleshooting Masalah Umum
 
-### 1. Pesan Galat: `The module 'better-sqlite3.node' was compiled against a different Node.js version`
+### 1. Pesan Galat: `gyp ERR! find VS You need to install the latest version of Visual Studio` / `No prebuilt binaries found (target=24.x)` saat `pnpm install`
+Penyebab: Anda menggunakan Node.js versi non-LTS (misalnya Node.js v24). Library SQLite native (`better-sqlite3`) belum menyediakan prebuilt binary untuk versi Node tersebut, sehingga sistem mencoba mengompilasinya dari kode sumber C++ dan menuntut Visual Studio C++ Build Tools.  
+Solusi:
+- **Solusi Utama (Sangat Disarankan)**: Pasang Node.js versi **LTS (v20.x atau v22.x)** dari https://nodejs.org. Pada versi LTS, binary prebuilt `better-sqlite3` akan langsung terunduh secara otomatis dalam hitungan detik tanpa perlu menginstal Visual Studio C++ sama sekali. Setelah mengganti versi Node.js, hapus folder `node_modules` lalu jalankan kembali `pnpm install`.
+- **Solusi Alternatif**: Jika tetap harus di Node.js saat ini, jalankan instalasi tanpa mengeksekusi skrip kompilasi:
+  ```bash
+  pnpm install --ignore-scripts
+  ```
+  Kemudian lakukan rebuild khusus binary Electron:
+  ```bash
+  pnpm run rebuild:electron
+  ```
+
+### 2. Pesan Galat: `The module 'better-sqlite3.node' was compiled against a different Node.js version`
 Penyebab: Versi binary Node.js sistem berbeda dengan internal runtime Electron.  
 Solusi: Jalankan perintah kompilasi ulang modul:
 ```bash

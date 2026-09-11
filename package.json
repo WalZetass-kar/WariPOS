@@ -57,7 +57,7 @@
     "check": "npm run typecheck && npm run test",
     "lint": "eslint src/**/*.ts src/**/*.tsx",
     "qa:stress": "ELECTRON_RUN_AS_NODE=1 electron scripts/qa-stress.mjs",
-    "rebuild:electron": "./node_modules/.bin/electron-rebuild -f -w better-sqlite3",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3",
     "desktop:linux": "npm run build:desktop && electron-builder --linux --publish never",
     "desktop:mac": "npm run build:desktop && electron-builder --mac --publish never",
