@@ -17,6 +17,7 @@ const ALLOWED_CHANNELS = new Set([
   'auth:registerTrial',
   'auth:login',
   'auth:loginPin',
+  'auth:verifyPinKasir',
   'auth:changePassword',
   'auth:checkIdentitas',
   'auth:restoreSession',
@@ -178,6 +179,7 @@ const ALLOWED_CHANNELS = new Set([
   'integrations:listAiModels',
   'integrations:testGoogleSheets',
   'integrations:exportDashboardToSheets',
+  'integrations:exportReportToSheets',
 
   // Scheduler
   'scheduler:runStokCheck',
@@ -702,12 +704,12 @@ contextBridge.exposeInMainWorld('api', {
   invoke: (channel, ...args) => {
     // SECURITY: Validate channel is in whitelist
     if (!ALLOWED_CHANNELS.has(channel)) {
-      console.error(`🚫 PRELOAD BLOCKED: Channel "${channel}" is not whitelisted!`)
+      console.error(`[PRELOAD BLOCKED] Channel "${channel}" is not whitelisted!`)
       return Promise.reject(new Error(`Channel "${channel}" is not allowed`))
     }
 
     // Only log IPC calls in development — prevents channel name leak in production
-    if (isDev) console.log('📡 IPC invoke:', channel)
+    if (isDev) console.log('[IPC invoke]', channel)
     return ipcRenderer.invoke(channel, ...args)
   },
   onDeepLink: (callback) => {
@@ -734,4 +736,4 @@ contextBridge.exposeInMainWorld('secureStorage', {
   },
 })
 
-if (isDev) console.log('✅ window.api exposed successfully (with channel whitelist)')
+if (isDev) console.log('[preload] window.api exposed successfully (with channel whitelist)')

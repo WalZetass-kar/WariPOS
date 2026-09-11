@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power, CalendarPlus, Monitor, Smartphone, RefreshCw, Users as UsersIcon } from 'lucide-react'
+import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power, CalendarPlus, Monitor, Smartphone, RefreshCw, Users as UsersIcon, Zap } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -118,6 +119,7 @@ function getDaysRemaining(value: string | null | undefined) {
 
 export default function Users() {
   const toast = useToast()
+  const navigate = useNavigate()
   const { user: currentUser } = useAuth()
   const { guardPremiumFeature } = useDemoGuard()
   const [activeTab, setActiveTab] = useState<'users' | 'devices'>('users')
@@ -138,7 +140,14 @@ export default function Users() {
       const r = await api<Pengguna[]>('user:getAll')
       if (r.success) {
         // Exclude system developer accounts from store staff list
-        const storeStaff = (r.data ?? []).filter(u => u.hak_akses !== 'developer')
+        const storeStaff = (r.data ?? []).filter(u => {
+          if (u.hak_akses === 'developer') return false
+          // Non-developer should only see active store staff and their own account
+          if (currentUser?.hak_akses !== 'developer') {
+            if (u.is_buyer && u.nama_pengguna !== currentUser?.nama_pengguna) return false
+          }
+          return true
+        })
         setData(storeStaff)
       }
     } finally {
@@ -163,10 +172,10 @@ export default function Users() {
   const openAdd = () => {
     if (guardPremiumFeature('multi_user', 'Tambah User')) return
     if (multiUserLocked) {
-      return toast('Paket saat ini belum mengaktifkan multi-user. Aktifkan fitur multi_user di Developer Panel -> Paket.', 'error')
+      return toast('Paket langganan saat ini belum mendukung multi-user. Silakan upgrade paket langganan Anda.', 'error')
     }
     if (userLimitReached) {
-      return toast(`Limit pengguna lokal paket sudah penuh (${localManagedCount}/${limitText}). Ubah Max User di Developer Panel -> Paket untuk menambah kasir lagi.`, 'error')
+      return toast(`Kuota pengguna lokal paket sudah penuh (${localManagedCount}/${limitText} akun termasuk owner). Silakan upgrade paket untuk menambah kasir lagi.`, 'error')
     }
     setPermissions(getDefaultPermissions())
     setForm({ ...EMPTY }); setModal('add')
@@ -231,6 +240,7 @@ export default function Users() {
     setLoading(true)
     const payload = {
       ...form,
+      nama_pengguna: form.nama_pengguna.trim(),
       kata_sandi: form.password,
       password: form.password,
       access_expires_at: form.access_expires_at || null,
@@ -436,17 +446,25 @@ export default function Users() {
   const formHasUnlimitedAccess = isPrivilegedRole(form.hak_akses)
   const currentUserBypassesPlan = currentUser?.hak_akses === 'developer' || currentUser?.hak_akses === 'super_admin'
   const isCurrentPlanManaged = !currentUserBypassesPlan && Boolean(currentUser?.subscription_plan_id || subscriptionStatus?.plan_name)
-  const localManagedCount = data.filter(row => row.hak_akses !== 'developer').length
+  const activeStaffCount = data.filter(row => row.hak_akses !== 'developer' && !row.is_buyer && row.nama_pengguna !== currentUser?.nama_pengguna && row.status_user === 'Aktif').length
+  const localManagedCount = activeStaffCount + 1
   const maxLocalUsers = subscriptionStatus?.max_users ?? null
   const limitText = maxLocalUsers === -1 ? 'Unlimited' : maxLocalUsers === null || maxLocalUsers === undefined ? '-' : String(maxLocalUsers)
   const userLimitReached = isCurrentPlanManaged && maxLocalUsers !== null && maxLocalUsers !== -1 && localManagedCount >= maxLocalUsers
   const multiUserLocked = isCurrentPlanManaged && subscriptionStatus?.feature_flags?.multi_user === false
 
-  // Group permission menus by group label
-  const permGroups = MENU_GROUPS.map(g => ({
-    label: g.label,
-    items: g.items.filter((item, idx, arr) => arr.findIndex(x => x.code === item.code) === idx),
-  }))
+  const EXCLUDED_PERMISSION_CODES = new Set(['nav_license_admin'])
+
+  // Group permission menus by group label, excluding developer-only and sensitive items
+  const permGroups = MENU_GROUPS
+    .map(g => ({
+      label: g.label,
+      items: g.items
+        .filter(item => !EXCLUDED_PERMISSION_CODES.has(item.code))
+        .filter(item => !item.roles || !item.roles.every(r => r === 'developer' || r === 'super_admin'))
+        .filter((item, idx, arr) => arr.findIndex(x => x.code === item.code) === idx),
+    }))
+    .filter(g => g.items.length > 0)
 
   const permissionGroupsView = (
     <div className="space-y-3">
@@ -509,21 +527,43 @@ export default function Users() {
         <>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} user terdaftar</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{data.filter(u => !u.is_buyer).length} kasir & staf terdaftar</p>
+                {isCurrentPlanManaged && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    userLimitReached
+                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                      : 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300 border border-primary-200/60 dark:border-primary-800/40'
+                  }`}>
+                    Kuota: {localManagedCount} / {limitText} Akun
+                  </span>
+                )}
+              </div>
               {isCurrentPlanManaged && (
-                <p className={`text-xs mt-0.5 ${userLimitReached || multiUserLocked ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  Pengguna lokal perangkat ini: {localManagedCount}/{limitText} termasuk owner
-                  {subscriptionStatus?.plan_name ? ` - Paket ${subscriptionStatus.plan_name}` : ''}
-                  {multiUserLocked ? ' - multi-user terkunci' : ''}
+                <p className={`text-xs mt-0.5 ${userLimitReached || multiUserLocked ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {subscriptionStatus?.plan_name ? `Paket ${subscriptionStatus.plan_name}` : 'Paket Langganan'}
+                  {multiUserLocked ? ' - multi-user belum aktif' : userLimitReached ? ' - kuota penuh' : ` - sisa ${maxLocalUsers === -1 ? 'tak terbatas' : Math.max(0, (maxLocalUsers ?? 1) - localManagedCount)} kasir lagi`}
                 </p>
               )}
               {currentUser?.hak_akses === 'admin' && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
-                  <Lock size={12} /> Pengguna bersifat lokal — hanya berlaku di perangkat ini
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
+                  <Lock size={12} /> Pengguna kasir bersifat lokal untuk toko ini
                 </p>
               )}
             </div>
-            <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Pengguna</Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {(userLimitReached || multiUserLocked) && (
+                <Button
+                  variant="secondary"
+                  icon={<Zap size={15} />}
+                  onClick={() => navigate('/subscription')}
+                  className="w-full sm:w-auto text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-bold"
+                >
+                  Upgrade Kuota
+                </Button>
+              )}
+              <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Pengguna</Button>
+            </div>
           </div>
           <Card>
             <DataTable data={data.filter(u => !u.is_buyer)} columns={columns} searchPlaceholder="Cari user..." />

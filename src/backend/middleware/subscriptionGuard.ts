@@ -36,10 +36,31 @@ export function getSubscriptionStatus(username: string): SubscriptionStatus {
   ).get(username) as any
 
   const isDemo = user?.hak_akses === 'demo'
-  const expiresAt = user?.subscription_expires_at || user?.access_expires_at || null
+  let expiresAt = user?.subscription_expires_at || user?.access_expires_at || null
+  let planId = user?.subscription_plan_id
+
+  // If this user has no explicit subscription, but is a store staff account,
+  // inherit the active store buyer's subscription
+  if (!planId && !isDemo && user?.hak_akses !== 'developer') {
+    const buyer = sqlite.prepare(
+      `SELECT subscription_plan_id, subscription_expires_at, access_expires_at
+       FROM mediasoft_pengguna
+       WHERE (is_buyer = 1 OR subscription_plan_id IS NOT NULL)
+         AND subscription_plan_id IS NOT NULL
+         AND COALESCE(status_user, 'Aktif') = 'Aktif'
+       ORDER BY CASE WHEN is_buyer = 1 THEN 1 ELSE 2 END, rowid DESC
+       LIMIT 1`
+    ).get() as any
+
+    if (buyer?.subscription_plan_id) {
+      planId = buyer.subscription_plan_id
+      expiresAt = buyer.subscription_expires_at || buyer.access_expires_at || expiresAt
+    }
+  }
+
   const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false
 
-  if (!user?.subscription_plan_id) {
+  if (!planId) {
     return {
       plan_id: null, plan_name: null, expires_at: expiresAt,
       is_expired: isExpired, is_demo: isDemo,
@@ -52,7 +73,7 @@ export function getSubscriptionStatus(username: string): SubscriptionStatus {
   const plan = sqlite.prepare(
     `SELECT id, name, max_devices, max_transactions_per_day, max_products, max_users, feature_flags
      FROM mediasoft_subscription_plans WHERE id = ?`
-  ).get(user.subscription_plan_id) as any
+  ).get(planId) as any
 
   const flags = parseFlags(plan?.feature_flags)
 

@@ -6,6 +6,29 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' ws://localhost:* http://localhost:* https://*.supabase.co wss://*.supabase.co https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://openrouter.ai https://bluesminds.com; font-src 'self' data:; frame-src 'none';" />
     <link rel="icon" type="image/png" href="./icon.png" />
     <title>WariPOS</title>
+    <script>
+      (function() {
+        try {
+          var mode = localStorage.getItem('waripos_theme_mode') || localStorage.getItem('theme-mode') || 'system';
+          var isDark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          var color = localStorage.getItem('waripos_theme_color') || localStorage.getItem('theme-color') || 'crimson';
+          if (color.indexOf('#') === 0) {
+            document.documentElement.setAttribute('data-theme', 'custom');
+          } else {
+            document.documentElement.setAttribute('data-theme', color);
+          }
+          var font = localStorage.getItem('waripos_font_size') || 'normal';
+          document.documentElement.setAttribute('data-font-size', font);
+          var radius = localStorage.getItem('waripos_border_radius') || 'rounded';
+          document.documentElement.setAttribute('data-radius', radius);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

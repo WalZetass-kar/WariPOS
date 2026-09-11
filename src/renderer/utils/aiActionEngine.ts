@@ -3,7 +3,7 @@ import type { Barang } from '../../shared/types'
 
 export interface AiActionResult {
   executed: boolean
-  actionType: 'RESTOCK' | 'RESTOCK_ALL' | 'CREATE_PRODUCT' | 'UPDATE_PRICE' | 'CREATE_PROMO' | 'BACKUP' | 'NAVIGATE' | 'NAVIGATE_LIST' | 'NONE'
+  actionType: 'RESTOCK' | 'RESTOCK_ALL' | 'CREATE_PRODUCT' | 'UPDATE_PRICE' | 'CREATE_PROMO' | 'BACKUP' | 'NAVIGATE' | 'NAVIGATE_LIST' | 'CHANGE_THEME' | 'NONE'
   title: string
   message: string
   details?: Array<{ label: string; value: string }>
@@ -758,6 +758,71 @@ export class AiActionEngine {
   }
 
   /**
+   * 6. Ubah Tema, Mode Tampilan, atau Ukuran Font
+   */
+  static executeChangeTheme({
+    color,
+    mode,
+    fontSize,
+    borderRadius,
+  }: {
+    color?: string
+    mode?: 'light' | 'dark' | 'system'
+    fontSize?: 'compact' | 'normal' | 'large'
+    borderRadius?: 'sharp' | 'medium' | 'rounded'
+  }): AiActionResult {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('waripos:change-theme', {
+          detail: { color, mode, fontSize, borderRadius },
+        })
+      )
+      if (color) {
+        try {
+          localStorage.setItem('waripos_theme_color', color)
+          localStorage.setItem('theme-color', color)
+        } catch {}
+      }
+      if (mode) {
+        try {
+          localStorage.setItem('waripos_theme_mode', mode)
+          localStorage.setItem('theme-mode', mode)
+        } catch {}
+      }
+      if (fontSize) {
+        try {
+          localStorage.setItem('waripos_font_size', fontSize)
+        } catch {}
+      }
+      if (borderRadius) {
+        try {
+          localStorage.setItem('waripos_border_radius', borderRadius)
+        } catch {}
+      }
+    }
+
+    const details: Array<{ label: string; value: string }> = []
+    if (color) details.push({ label: 'Warna Tema', value: color })
+    if (mode) {
+      const modeLabel = mode === 'dark' ? 'Mode Gelap' : mode === 'light' ? 'Mode Terang' : 'Sistem Otomatis'
+      details.push({ label: 'Mode Pencahayaan', value: modeLabel })
+    }
+    if (fontSize) details.push({ label: 'Ukuran Teks', value: fontSize })
+    if (borderRadius) details.push({ label: 'Bentuk Sudut', value: borderRadius })
+
+    return {
+      executed: true,
+      success: true,
+      actionType: 'CHANGE_THEME',
+      title: 'Tema Tampilan Diperbarui',
+      message: 'Preferensi tema dan tampilan antarmuka WariPOS berhasil diterapkan dan tersimpan secara permanen.',
+      details,
+      navigateRoute: '/settings?category=tampilan',
+      navigateLabel: 'Lihat Pengaturan Tampilan',
+    }
+  }
+
+  /**
    * Parser bahasa alami (Natural Language Intent Parser) untuk mendeteksi perintah aksi.
    */
   static async parseAndExecute(promptText: string): Promise<AiActionResult> {
@@ -825,6 +890,59 @@ export class AiActionEngine {
     // 5. Backup Database
     if (text.includes('backup') && (text.includes('database') || text.includes('sekarang') || text.includes('data') || text.includes('sistem'))) {
       return this.executeBackup()
+    }
+
+    // 5.5 Ganti Tema / Mode Tampilan / Ukuran Font
+    if (
+      text.includes('tema') ||
+      text.includes('mode gelap') ||
+      text.includes('dark mode') ||
+      text.includes('mode terang') ||
+      text.includes('light mode') ||
+      text.includes('mode sistem') ||
+      text.includes('mode auto') ||
+      text.includes('ubah warna') ||
+      text.includes('ganti warna') ||
+      text.includes('ukuran font') ||
+      text.includes('ganti font')
+    ) {
+      let targetColor: string | undefined
+      let targetMode: 'light' | 'dark' | 'system' | undefined
+      let targetFontSize: 'compact' | 'normal' | 'large' | undefined
+
+      if (text.includes('gelap') || text.includes('dark')) targetMode = 'dark'
+      else if (text.includes('terang') || text.includes('light')) targetMode = 'light'
+      else if (text.includes('sistem') || text.includes('otomatis') || text.includes('system') || text.includes('auto')) targetMode = 'system'
+
+      if (text.includes('merah') || text.includes('crimson') || text.includes('wari red')) targetColor = 'crimson'
+      else if (text.includes('indigo')) targetColor = 'indigo'
+      else if (text.includes('emerald') || text.includes('hijau tosca')) targetColor = 'emerald'
+      else if (text.includes('biru') || text.includes('blue')) targetColor = 'blue'
+      else if (text.includes('rose') || text.includes('mawar')) targetColor = 'rose'
+      else if (text.includes('amber') || text.includes('kuning')) targetColor = 'amber'
+      else if (text.includes('sky') || text.includes('biru muda') || text.includes('langit')) targetColor = 'sky'
+      else if (text.includes('pink') || text.includes('merah muda')) targetColor = 'pink'
+      else if (text.includes('violet')) targetColor = 'violet'
+      else if (text.includes('purple') || text.includes('ungu')) targetColor = 'purple'
+      else if (text.includes('teal') || text.includes('toska')) targetColor = 'teal'
+      else if (text.includes('cyan')) targetColor = 'cyan'
+      else if (text.includes('orange') || text.includes('oranye') || text.includes('jingga')) targetColor = 'orange'
+      else if (text.includes('green') || text.includes('hijau')) targetColor = 'green'
+      else if (text.includes('slate') || text.includes('abu')) targetColor = 'slate'
+      else if (text.includes('coffee') || text.includes('kopi') || text.includes('cokelat')) targetColor = 'coffee'
+      else if (text.includes('gold') || text.includes('emas')) targetColor = 'gold'
+
+      if (text.includes('font besar') || text.includes('teks besar') || text.includes('tulisan besar')) targetFontSize = 'large'
+      else if (text.includes('font kecil') || text.includes('font kompak') || text.includes('teks kompak') || text.includes('tulisan kompak')) targetFontSize = 'compact'
+      else if (text.includes('font normal') || text.includes('font standar') || text.includes('teks normal')) targetFontSize = 'normal'
+
+      if (targetColor || targetMode || targetFontSize) {
+        return this.executeChangeTheme({
+          color: targetColor,
+          mode: targetMode,
+          fontSize: targetFontSize,
+        })
+      }
     }
 
     // 6. Tampilkan Daftar Seluruh Tab (Katalog Navigasi)

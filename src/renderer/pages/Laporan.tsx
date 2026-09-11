@@ -29,6 +29,7 @@ import {
   Clock,
   User,
   ShoppingBag,
+  Table2,
 } from 'lucide-react'
 import {
   Area,
@@ -55,6 +56,7 @@ import { useToast } from '../contexts/ToastContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import type { Penjualan } from '../../shared/types'
 import { ensureStoragePermission } from '../utils/nativePermissions'
+import { reportToSheetsPayload, reportToTsv } from '../../shared/googleSheetsExport'
 
 interface LabaRugi {
   total_transaksi: number
@@ -300,6 +302,175 @@ export default function Laporan() {
     }
   }
 
+  const copyTextWithTextarea = (text: string) => {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const copied = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return copied
+  }
+
+  const copyTextToClipboard = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(text); return } catch { /**/ }
+    }
+    if (copyTextWithTextarea(text)) return
+    throw new Error('Clipboard tidak tersedia')
+  }
+
+  const handleExportGoogleSheets = async () => {
+    if (guardPremiumFeature('export_excel', 'Export Laporan Google Sheets')) return
+
+    let title = 'Laporan'
+    let headers: string[] = []
+    let rows: Array<Array<string | number>> = []
+    let summaryCards: Array<{ label: string; value: string | number }> = []
+
+    if (tab === 'penjualan') {
+      if (!penjualanData || (penjualanData.transaksi ?? []).length === 0) {
+        toast('Tidak ada data penjualan untuk diexport', 'error')
+        return
+      }
+      title = 'Penjualan'
+      headers = ['No. Transaksi', 'Tanggal', 'Kasir', 'Pelanggan', 'Qty', 'Subtotal', 'Diskon', 'Pajak', 'Total Bayar', 'Metode Pembayaran']
+      rows = (penjualanData.transaksi ?? []).map(t => [
+        t.kd_tansaksi_jual || '-',
+        t.tgl_wkt_transaksi ? t.tgl_wkt_transaksi.replace('T', ' ').slice(0, 19) : '-',
+        t.username_transaksi || '-',
+        (t as any).nama_customer || 'Pelanggan Umum',
+        t.total_qty ?? 0,
+        t.sub_total ?? 0,
+        (t as any).discount_amount ?? 0,
+        (t as any).pajak ?? 0,
+        t.yang_dibayar ?? 0,
+        t.jenis_pembayaran || 'TUNAI',
+      ])
+      if (penjualanData.summary) {
+        summaryCards = [
+          { label: 'Total Transaksi', value: penjualanData.summary.total_transaksi ?? rows.length },
+          { label: 'Total Item Terjual', value: penjualanData.summary.total_qty ?? 0 },
+          { label: 'Total Omzet Penjualan (Rp)', value: penjualanData.summary.total_penjualan ?? 0 },
+          { label: 'Total Pajak (Rp)', value: penjualanData.summary.total_pajak ?? 0 },
+          { label: 'Total Return (Rp)', value: penjualanData.summary.total_return ?? 0 },
+          { label: 'Total Penjualan Bersih (Rp)', value: penjualanData.summary.total_bersih ?? 0 },
+        ]
+      }
+    } else if (tab === 'laba-rugi') {
+      if (!labaRugiData) {
+        toast('Tidak ada data laba rugi untuk diexport', 'error')
+        return
+      }
+      title = 'Laba Rugi'
+      headers = ['Keterangan', 'Nilai (Rp)']
+      rows = [
+        ['Total Transaksi', labaRugiData.total_transaksi],
+        ['Total Penjualan', labaRugiData.total_penjualan],
+        ['Total Modal HPP', labaRugiData.total_modal],
+        ['Laba Kotor', labaRugiData.laba_kotor],
+        ['Margin Penjualan (%)', `${labaRugiData.margin_persen}%`],
+      ]
+      summaryCards = [
+        { label: 'Total Penjualan (Rp)', value: labaRugiData.total_penjualan },
+        { label: 'Total Modal HPP (Rp)', value: labaRugiData.total_modal },
+        { label: 'Laba Kotor (Rp)', value: labaRugiData.laba_kotor },
+        { label: 'Margin (%)', value: `${labaRugiData.margin_persen}%` },
+      ]
+    } else if (tab === 'produk') {
+      if (produkData.length === 0) {
+        toast('Tidak ada data produk terlaris untuk diexport', 'error')
+        return
+      }
+      title = 'Produk Terlaris'
+      headers = ['Kode Barang', 'Nama Produk', 'Total Qty Terjual', 'Total Omzet Penjualan (Rp)']
+      rows = produkData.map(p => [
+        p.kd_barang,
+        p.nama_barang || '-',
+        p.total_qty ?? 0,
+        p.total_penjualan ?? 0,
+      ])
+    } else if (tab === 'stok') {
+      const items = stokData?.all ?? []
+      if (items.length === 0) {
+        toast('Tidak ada data stok barang untuk diexport', 'error')
+        return
+      }
+      title = 'Stok Barang'
+      headers = ['Kode Barang', 'Nama Barang', 'Stok Saat Ini', 'Stok Minimum', 'Status Stok']
+      rows = items.map(s => {
+        const isLow = (s.stok ?? 0) <= (s.stok_minimum ?? 0)
+        return [
+          s.kd_barang,
+          s.nama_barang || '-',
+          s.stok ?? 0,
+          s.stok_minimum ?? 0,
+          isLow ? 'Stok Menipis' : 'Stok Aman',
+        ]
+      })
+      summaryCards = [
+        { label: 'Total Jenis Barang', value: items.length },
+        { label: 'Barang Stok Menipis', value: (stokData?.stok_menipis ?? []).length },
+      ]
+    } else if (tab === 'customer') {
+      const customers = customerData?.customers ?? []
+      if (customers.length === 0) {
+        toast('Tidak ada data pelanggan untuk diexport', 'error')
+        return
+      }
+      title = 'Pelanggan'
+      headers = ['Kode Customer', 'Nama Pelanggan', 'Poin', 'Total Belanja (Rp)', 'Status']
+      rows = customers.map(c => [
+        c.kd_customer || '-',
+        c.nama_customer || '-',
+        c.poin ?? 0,
+        c.total_belanja ?? 0,
+        c.status ?? 'Aktif',
+      ])
+    }
+
+    const payloadInput = {
+      title,
+      tab,
+      dateRange: (tab !== 'stok' && tab !== 'customer') ? dateRange : undefined,
+      headers,
+      rows,
+      summaryCards,
+    }
+
+    const payload = reportToSheetsPayload(payloadInput)
+    const key = `${tab}-sheets`
+    setExportLoading(key)
+
+    try {
+      const res = await api<{ mode?: 'apps-script' | 'clipboard' }>('integrations:exportReportToSheets', payload)
+      if (res.success && res.data?.mode === 'apps-script') {
+        toast('Laporan berhasil dikirim ke Google Sheets', 'success')
+        return
+      }
+
+      // Fallback: Copy TSV and open Google Sheets
+      const tsv = reportToTsv(payloadInput)
+      const copiedBeforeOpen = copyTextWithTextarea(tsv)
+      const sheetsUrl = 'https://docs.google.com/spreadsheets/u/0/create'
+      const sheetsWindow = window.api?.invoke ? null : window.open(sheetsUrl, '_blank', 'noopener,noreferrer')
+      if (!copiedBeforeOpen) await copyTextToClipboard(tsv)
+      if (window.api?.invoke) {
+        await window.api.invoke('app:openExternal', sheetsUrl)
+      } else if (!sheetsWindow) {
+        window.location.href = sheetsUrl
+      }
+      toast('Data laporan disalin. Google Sheets dibuka — tempel (Ctrl+V) di sel A1.', 'success')
+    } catch (err) {
+      toast(`Export Google Sheets gagal: ${err instanceof Error ? err.message : 'Error'}`, 'error')
+    } finally {
+      setExportLoading(null)
+    }
+  }
+
   const TABS: { key: TabType; label: string; icon: React.ReactNode }[] = [
     { key: 'penjualan', label: 'Penjualan', icon: <TrendingUp size={15} /> },
     { key: 'laba-rugi', label: 'Laba Rugi', icon: <DollarSign size={15} /> },
@@ -419,6 +590,15 @@ export default function Laporan() {
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
+            onClick={handleExportGoogleSheets}
+            disabled={!!exportLoading}
+            className="p-2 rounded-xl border border-teal-200 dark:border-teal-900/50 bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 transition-colors shadow-sm active:scale-95"
+            title="Google Sheets"
+          >
+            <Table2 size={17} />
+          </button>
+          <button
+            type="button"
             onClick={() => handleExport('excel')}
             disabled={!!exportLoading}
             className="p-2 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition-colors shadow-sm active:scale-95"
@@ -448,8 +628,37 @@ export default function Laporan() {
             <span>Laporan & Analitik Keuangan</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Pantau arus pendapatan, rincian laba kotor, produk terlaris, ketersediaan stok, dan ekspor data ke Excel / PDF.
+            Pantau arus pendapatan, rincian laba kotor, produk terlaris, ketersediaan stok, dan ekspor data ke Google Sheets, Excel, atau PDF.
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            icon={<Table2 size={16} />}
+            onClick={handleExportGoogleSheets}
+            loading={exportLoading === `${tab}-sheets`}
+            className="h-10 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-900/60 hover:bg-teal-50 dark:hover:bg-teal-950/30 font-bold text-xs"
+          >
+            Google Sheets
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<FileSpreadsheet size={16} />}
+            onClick={() => handleExport('excel')}
+            loading={exportLoading === `${tab}-excel`}
+            className="h-10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-bold text-xs"
+          >
+            Export Excel
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<FileText size={16} />}
+            onClick={() => handleExport('pdf')}
+            loading={exportLoading === `${tab}-pdf`}
+            className="h-10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-bold text-xs"
+          >
+            Export PDF
+          </Button>
         </div>
       </div>
 
@@ -569,6 +778,15 @@ export default function Laporan() {
               </button>
 
               <div className="hidden sm:flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  icon={<Table2 size={16} />}
+                  onClick={handleExportGoogleSheets}
+                  loading={exportLoading === `${tab}-sheets`}
+                  className="h-10 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-900/60 font-bold text-xs"
+                >
+                  Google Sheets
+                </Button>
                 <Button
                   variant="secondary"
                   icon={<FileSpreadsheet size={16} />}

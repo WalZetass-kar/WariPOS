@@ -18,6 +18,20 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase credentials missing! Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY')
 }
 
+class NoopWebSocket {
+  static OPEN = 1
+  static CLOSED = 3
+  readyState = 3
+  send() {}
+  close() {}
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+const realtimeTransport = typeof WebSocket !== 'undefined'
+  ? undefined
+  : ((globalThis as any).WebSocket || NoopWebSocket)
+
 // Create a single supabase client for interacting with your database
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -25,6 +39,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  ...(realtimeTransport ? { realtime: { transport: realtimeTransport } } : {}),
 })
 
 supabase.auth.onAuthStateChange((event) => {

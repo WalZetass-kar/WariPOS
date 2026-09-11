@@ -17,12 +17,12 @@ export const GOOGLE_SHEETS_APPS_SCRIPT = `function doPost(e) {
       });
     }
 
-    if (payload.action !== 'append_dashboard') {
+    if (payload.action !== 'append_dashboard' && payload.action !== 'append_report' && payload.action !== 'export_data') {
       throw new Error('Action tidak dikenal: ' + payload.action);
     }
 
     sheets.forEach(function (entry) {
-      const name = String(entry.name || 'Dashboard').slice(0, 99);
+      const name = String(entry.name || 'Sheet1').slice(0, 99);
       const rows = Array.isArray(entry.rows) ? entry.rows : [];
       let sheet = spreadsheet.getSheetByName(name);
       if (!sheet) sheet = spreadsheet.insertSheet(name);
@@ -43,9 +43,10 @@ export const GOOGLE_SHEETS_APPS_SCRIPT = `function doPost(e) {
       }
     });
 
+    const isReport = payload.action === 'append_report';
     return jsonResponse({
       success: true,
-      message: 'Dashboard berhasil ditulis ke Google Sheets',
+      message: isReport ? 'Laporan berhasil ditulis ke Google Sheets' : 'Dashboard berhasil ditulis ke Google Sheets',
       writtenRows: writtenRows,
       sheets: sheets.map(function (entry) { return entry.name; }),
       generatedAt: payload.generatedAt || new Date().toISOString(),

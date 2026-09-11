@@ -7,8 +7,7 @@ const NATIVE_PREFIX = 'zetass.secure.'
 
 function storageSecret() {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'node'
-  const agent = typeof navigator !== 'undefined' ? navigator.userAgent : 'server'
-  return CryptoJS.SHA256(`zetass-pos:${origin}:${agent}`)
+  return CryptoJS.SHA256(`zetass-pos-v1:${origin}`)
 }
 
 function encodePayload(value: string) {
@@ -25,26 +24,33 @@ function encodePayload(value: string) {
   return PREFIX + btoa(JSON.stringify({ iv: ivText, ct: cipherText, mac }))
 }
 
-function decodePayload(value: string) {
+function decodePayload(value: string): string | null {
   if (!value.startsWith(PREFIX)) return value
 
-  const key = storageSecret()
-  const payload = JSON.parse(atob(value.slice(PREFIX.length))) as { iv: string; ct: string; mac: string }
-  const expectedMac = CryptoJS.HmacSHA256(`${payload.iv}.${payload.ct}`, key).toString(CryptoJS.enc.Hex)
-  if (payload.mac !== expectedMac) {
-    throw new Error('Encrypted local storage integrity check failed')
-  }
-
-  const decrypted = CryptoJS.AES.decrypt(
-    { ciphertext: CryptoJS.enc.Base64.parse(payload.ct) } as CryptoJS.lib.CipherParams,
-    key,
-    {
-      iv: CryptoJS.enc.Base64.parse(payload.iv),
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7,
+  try {
+    const key = storageSecret()
+    const payload = JSON.parse(atob(value.slice(PREFIX.length))) as { iv: string; ct: string; mac: string }
+    const expectedMac = CryptoJS.HmacSHA256(`${payload.iv}.${payload.ct}`, key).toString(CryptoJS.enc.Hex)
+    if (payload.mac !== expectedMac) {
+      console.warn('[secureStorage] Storage integrity verification mismatch or secret changed, resetting entry.')
+      return null
     }
-  )
-  return decrypted.toString(CryptoJS.enc.Utf8)
+
+    const decrypted = CryptoJS.AES.decrypt(
+      { ciphertext: CryptoJS.enc.Base64.parse(payload.ct) } as CryptoJS.lib.CipherParams,
+      key,
+      {
+        iv: CryptoJS.enc.Base64.parse(payload.iv),
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7,
+      }
+    )
+    const result = decrypted.toString(CryptoJS.enc.Utf8)
+    return result || null
+  } catch (err) {
+    console.warn('[secureStorage] Exception while decoding payload:', err)
+    return null
+  }
 }
 
 function getStorage() {
@@ -96,23 +102,42 @@ export const secureStorage = {
   getItem(key: string): string | null {
     const electronStorage = getElectronStorage()
     if (electronStorage) {
-      const stored = electronStorage.getItem(key)
-      if (stored) return stored
+      try {
+        const stored = electronStorage.getItem(key)
+        if (stored) return stored
+      } catch {}
 
       const legacyStorage = getStorage()
       const legacyRaw = legacyStorage?.getItem(key)
       if (!legacyRaw) return null
       const legacyValue = decodePayload(legacyRaw)
-      electronStorage.setItem(key, legacyValue)
-      legacyStorage?.removeItem(key)
-      return legacyValue
+      if (legacyValue) {
+        try { electronStorage.setItem(key, legacyValue) } catch {}
+        try { legacyStorage?.removeItem(key) } catch {}
+        return legacyValue
+      }
+      try { legacyStorage?.removeItem(key) } catch {}
+      return null
     }
 
     const storage = getStorage()
     if (!storage) return null
-    const raw = storage.getItem(key)
-    if (!raw) return null
-    return decodePayload(raw)
+    try {
+      const raw = storage.getItem(key)
+      if (!raw) return null
+      const decoded = decodePayload(raw)
+      if (decoded === null && raw.startsWith(PREFIX)) {
+        storage.removeItem(key)
+        removeFromNativePreferences(key)
+      }
+      return decoded
+    } catch {
+      try {
+        storage.removeItem(key)
+        removeFromNativePreferences(key)
+      } catch {}
+      return null
+    }
   },
 
   setItem(key: string, value: string) {

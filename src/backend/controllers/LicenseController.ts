@@ -12,6 +12,7 @@ import { supabase, isSupabaseConfigured } from '../../shared/supabase/config.js'
 import { tryCloudSignIn } from '../../shared/supabase/auth.js'
 import { isLicenseSessionExpiredResult } from '../../shared/licenseSession.js'
 import { verifyPassword, encryptPassword } from '../services/crypto.js'
+import { getKnownPlanDefaults } from '../../shared/planDefaults.js'
 
 type ApiResult<T = unknown> = { success: boolean; data?: T; message?: string }
 
@@ -424,9 +425,10 @@ export class LicenseController {
   }
 
   static async syncBuyerLicense(username: string, deviceInfo?: unknown): Promise<ApiResult<any>> {
+    const cleanIdentifier = (username || '').trim()
     const user = sqlite
-      .prepare(`SELECT nama_pengguna, email, is_buyer, hak_akses, subscription_plan_id, subscription_expires_at FROM mediasoft_pengguna WHERE nama_pengguna = ? LIMIT 1`)
-      .get(username) as { nama_pengguna?: string; email?: string | null; is_buyer?: number | null; hak_akses?: string; subscription_plan_id?: number | null; subscription_expires_at?: string | null } | undefined
+      .prepare(`SELECT nama_pengguna, email, is_buyer, hak_akses, subscription_plan_id, subscription_expires_at FROM mediasoft_pengguna WHERE nama_pengguna = ? OR lower(email) = lower(?) LIMIT 1`)
+      .get(cleanIdentifier, cleanIdentifier) as { nama_pengguna?: string; email?: string | null; is_buyer?: number | null; hak_akses?: string; subscription_plan_id?: number | null; subscription_expires_at?: string | null } | undefined
 
     if (!user?.nama_pengguna) {
       return { success: false, message: 'User tidak ditemukan' }
@@ -443,9 +445,27 @@ export class LicenseController {
 
           if (plan) {
             let localPlanId: number | null = null
+            const defaults = getKnownPlanDefaults(plan.code || plan.name)
+            const resolvedMaxUsers = Number.isFinite(Number(plan.max_users))
+              ? Math.trunc(Number(plan.max_users))
+              : (defaults.max_users ?? 15)
+            const resolvedMaxDevices = Number.isFinite(Number(plan.max_devices))
+              ? Math.trunc(Number(plan.max_devices))
+              : (defaults.max_devices ?? 10)
+            const resolvedFlags = (plan.feature_flags && typeof plan.feature_flags === 'object' && Object.keys(plan.feature_flags).length > 0)
+              ? plan.feature_flags
+              : (defaults.feature_flags ?? {})
+
             const foundPlan = sqlite.prepare('SELECT id FROM mediasoft_subscription_plans WHERE code = ? OR name = ? LIMIT 1').get(plan.code, plan.name) as { id?: number } | undefined
             if (foundPlan?.id) {
               localPlanId = foundPlan.id
+              sqlite.prepare(`
+                UPDATE mediasoft_subscription_plans SET
+                  max_users = ?,
+                  max_devices = ?,
+                  feature_flags = ?
+                WHERE id = ?
+              `).run(resolvedMaxUsers, resolvedMaxDevices, JSON.stringify(resolvedFlags), foundPlan.id)
             } else {
               PlanModel.create({
                 code: plan.code,
@@ -454,11 +474,11 @@ export class LicenseController {
                 duration_days: plan.duration_days ?? 30,
                 description: plan.description,
                 features: Array.isArray(plan.features) ? plan.features : [],
-                max_devices: plan.max_devices ?? 1,
+                max_devices: resolvedMaxDevices,
                 max_transactions_per_day: plan.max_transactions_per_day ?? -1,
                 max_products: plan.max_products ?? -1,
-                max_users: plan.max_users ?? 1,
-                feature_flags: plan.feature_flags ?? {},
+                max_users: resolvedMaxUsers,
+                feature_flags: resolvedFlags,
               })
               const inserted = sqlite.prepare('SELECT id FROM mediasoft_subscription_plans WHERE code = ? OR name = ? ORDER BY id DESC LIMIT 1').get(plan.code, plan.name) as { id?: number } | undefined
               localPlanId = inserted?.id ?? null
@@ -471,7 +491,7 @@ export class LicenseController {
                 status_user = 'Aktif',
                 hak_akses = CASE WHEN hak_akses = 'demo' THEN 'admin' ELSE hak_akses END
               WHERE nama_pengguna = ?
-            `).run(localPlanId, expiresAt, username)
+            `).run(localPlanId, expiresAt, user.nama_pengguna)
           }
 
           return {
@@ -485,7 +505,7 @@ export class LicenseController {
         } else if (!r.success) {
           const code = String((r as any).error_code ?? '').toUpperCase()
           if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code)) {
-            sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(username)
+            sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(user.nama_pengguna)
           }
         }
       } catch (err) {
@@ -501,7 +521,7 @@ export class LicenseController {
         FROM mediasoft_pengguna p
         LEFT JOIN mediasoft_subscription_plans s ON s.id = p.subscription_plan_id
         WHERE p.nama_pengguna = ? LIMIT 1
-      `).get(username) as any
+      `).get(user.nama_pengguna) as any
 
       if (localUser) {
         let parsedFeatures: string[] = []
@@ -546,9 +566,65 @@ export class LicenseController {
     return { success: true, data: { skipped: true, synced_at: new Date().toISOString() } }
   }
 
-  static async loginAdmin(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
-  static async loginBuyer(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
-  static saveAdminSessionFromRemote(...args: any[]) { return null }
+  static async loginAdmin(data: { email: string; password?: string }, deviceInfo?: any) {
+    const cfg = getConfig()
+    const cleanEmail = (data?.email || '').trim().toLowerCase()
+    if (!cleanEmail) return { success: false, message: 'Email wajib diisi', data: {} as any }
+
+    try {
+      const url = cfg?.url || getPublicLicenseUrl() || ''
+      const result = await request<ApiResult<any>>(
+        'POST',
+        '/auth/login',
+        '',
+        url,
+        {
+          email: cleanEmail,
+          password: data.password,
+          device_id: deviceInfo?.deviceId ?? 'desktop-admin',
+          device_name: deviceInfo?.deviceName ?? 'Desktop Admin',
+          platform: deviceInfo?.platform ?? 'Desktop',
+          app_version: deviceInfo?.appVersion,
+        }
+      )
+      return result
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Gagal login admin ke license server', data: {} as any }
+    }
+  }
+
+  static async loginBuyer(data: { email: string; password?: string }, deviceInfo?: any) {
+    const cfg = getConfig()
+    const cleanEmail = (data?.email || '').trim().toLowerCase()
+    if (!cleanEmail) return { success: false, message: 'Email wajib diisi', data: {} as any }
+
+    try {
+      const url = cfg?.url || getPublicLicenseUrl() || ''
+      const result = await request<ApiResult<any>>(
+        'POST',
+        '/customer/login',
+        '',
+        url,
+        {
+          email: cleanEmail,
+          password: data.password,
+          device: deviceInfo,
+        }
+      )
+      return result
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Gagal login pembeli ke license server', data: {} as any }
+    }
+  }
+
+  static saveAdminSessionFromRemote(remote?: any) {
+    if (!remote?.access_token) return null
+    const cfg = getConfig()
+    if (cfg?.url) {
+      saveConfig(cfg.url, String(remote.access_token), remote.refresh_token ? String(remote.refresh_token) : null)
+    }
+    return true
+  }
   static async registerTrialCustomer(data: {
     email: string
     password?: string
@@ -1137,9 +1213,10 @@ export class LicenseController {
           subscription_plan_id = COALESCE(?, subscription_plan_id),
           subscription_expires_at = ?,
           status_user = 'Aktif',
+          is_buyer = 1,
           hak_akses = CASE WHEN hak_akses = 'demo' THEN 'admin' ELSE hak_akses END
-        WHERE nama_pengguna = ? OR email = ?
-      `).run(targetPlan?.id ?? null, expiresAt, String(id), String(id))
+        WHERE nama_pengguna = ? OR email = ? OR lower(nama_pengguna) = lower(?) OR lower(email) = lower(?)
+      `).run(targetPlan?.id ?? null, expiresAt, String(id), String(id), String(id), String(id))
     } catch (err) {
       console.warn('[changeUserPlan] Local SQLite update warning:', err)
     }

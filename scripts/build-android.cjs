@@ -114,20 +114,29 @@ if (status === 0 && (task === 'assembleDebug' || task === 'assembleRelease' || t
   const isBundle = task === 'bundleRelease'
   const sourceArtifact = task === 'assembleDebug'
     ? (function() {
-        const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'ZetassPOS.apk')
+        const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'WariPOS.apk')
+        const legacy = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'ZetassPOS.apk')
         const fallback = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
-        return fs.existsSync(preferred) ? preferred : fallback
+        if (fs.existsSync(preferred)) return preferred
+        if (fs.existsSync(legacy)) return legacy
+        return fallback
       })()
     : task === 'assembleRelease'
       ? (function() {
-          const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'ZetassPOS.apk')
+          const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'WariPOS.apk')
+          const legacy = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'ZetassPOS.apk')
           const fallback = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
-          return fs.existsSync(preferred) ? preferred : fallback
+          if (fs.existsSync(preferred)) return preferred
+          if (fs.existsSync(legacy)) return legacy
+          return fallback
         })()
       : (function() {
-          const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'ZetassPOS.aab')
+          const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'WariPOS.aab')
+          const legacy = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'ZetassPOS.aab')
           const fallback = path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab')
-          return fs.existsSync(preferred) ? preferred : fallback
+          if (fs.existsSync(preferred)) return preferred
+          if (fs.existsSync(legacy)) return legacy
+          return fallback
         })()
   if (fs.existsSync(sourceArtifact)) {
     fs.mkdirSync(releaseDir, { recursive: true })

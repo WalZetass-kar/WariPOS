@@ -26,6 +26,7 @@ export interface MenuItem {
   adminOnly?: boolean
   feature?: string
   roles?: AppRole[]
+  isRestaurantOnly?: boolean
 }
 
 interface MenuGroup {
@@ -85,7 +86,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/employee', icon: UserPlus, label: 'Data Karyawan', code: 'nav_pengguna' },
       { to: '/attendance', icon: Clock, label: 'Absensi & Jadwal', code: 'nav_pengguna' },
       { to: '/payroll', icon: Briefcase, label: 'Penggajian / Payroll', code: 'nav_pengguna', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/tip-pooling', icon: HandCoins, label: 'Tip Pooling', code: 'nav_pengguna' },
+      { to: '/tip-pooling', icon: HandCoins, label: 'Tip Pooling', code: 'nav_pengguna', isRestaurantOnly: true },
     ],
   },
   {
@@ -165,6 +166,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   })()
   const canShowItem = (item: MenuItem) => {
     if (item.adminOnly && !isDeveloper) return false
+    if (item.isRestaurantOnly && posMode !== 'restaurant') return false
     if (item.to === '/tutorials' && typeof window !== 'undefined' && window.innerWidth < 1024) return false
     if (item.roles && !hasRole(user?.hak_akses, item.roles)) return false
     if (isSimpleMode && !SIMPLE_MENU_PATHS.has(item.to)) return false
@@ -219,53 +221,58 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
       {/* Mode Bisnis Switcher (Toko Retail ⇄ Restoran F&B) */}
       <div className={`border-b border-slate-200/60 dark:border-slate-800/80 transition-colors ${
         posMode === 'restaurant'
-          ? 'bg-amber-500/5 dark:bg-amber-500/10'
-          : 'bg-slate-50/50 dark:bg-slate-900/40'
+          ? 'bg-amber-500/10 dark:bg-amber-500/15'
+          : 'bg-slate-50/70 dark:bg-slate-900/50'
       } ${isCollapsed ? 'p-2 flex justify-center' : 'px-3 py-2.5'}`}>
         {isCollapsed ? (
           <button
             type="button"
             onClick={() => setPosMode(posMode === 'retail' ? 'restaurant' : 'retail')}
-            className={`p-2 rounded-xl border transition-all ${
+            className={`p-2.5 rounded-xl border transition-all ${
               posMode === 'restaurant'
-                ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'bg-primary-50 dark:bg-primary-950/40 border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-400 shadow-sm'
             }`}
-            title={posMode === 'retail' ? 'Mode Toko Retail (Klik ganti ke Restoran F&B)' : 'Mode Restoran F&B (Klik ganti ke Toko Retail)'}
+            title={posMode === 'retail' ? 'Mode Toko (Klik ganti ke Restoran F&B)' : 'Mode Restoran F&B (Klik ganti ke Toko Retail)'}
           >
-            {posMode === 'retail' ? <Store size={16} /> : <UtensilsCrossed size={16} />}
+            {posMode === 'retail' ? <Store size={18} /> : <UtensilsCrossed size={18} />}
           </button>
         ) : (
           <div className="space-y-1.5">
-            <div className="flex items-center p-1 bg-slate-200/60 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/60 shadow-inner">
+            <div className="flex items-center p-1 bg-slate-200/70 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
               <button
                 type="button"
                 onClick={() => setPosMode('retail')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   posMode === 'retail'
-                    ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200/60 dark:border-slate-600 scale-[1.01]'
+                    ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200/80 dark:border-slate-600 scale-[1.01]'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <Store size={13} />
+                <Store size={14} />
                 <span>Mode Toko</span>
               </button>
               <button
                 type="button"
                 onClick={() => setPosMode('restaurant')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   posMode === 'restaurant'
-                    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30 scale-[1.01]'
+                    ? 'bg-amber-600 text-white shadow-sm shadow-amber-600/30 scale-[1.01]'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <UtensilsCrossed size={13} />
+                <UtensilsCrossed size={14} />
                 <span>Restoran</span>
               </button>
             </div>
-            <div className="px-1 text-[10px] font-semibold">
+            <div className="px-1 text-[10px] font-semibold flex items-center justify-between">
               <span className={posMode === 'restaurant' ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-slate-400'}>
-                {posMode === 'restaurant' ? 'Operasional F&B Resto Aktif' : 'Operasional Toko Retail'}
+                {posMode === 'restaurant' ? 'Operasional Restoran & F&B' : 'Operasional Toko Retail'}
+              </span>
+              <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                posMode === 'restaurant' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-primary-500/15 text-primary-700 dark:text-primary-300'
+              }`}>
+                Aktif
               </span>
             </div>
           </div>

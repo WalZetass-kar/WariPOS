@@ -263,12 +263,11 @@ export default function Login() {
       setLoading(true)
       try {
         const deviceInfo = collectAuthDeviceInfo()
-        const r = await api<UserSession>('auth:verifyPinKasir', username.trim(), pin, deviceInfo)
+        let r = await api<UserSession>('auth:loginPin', username.trim(), pin, deviceInfo)
+        if (!r.success && r.message?.toLowerCase().includes('belum tersedia')) {
+          r = await api<UserSession>('auth:verifyPinKasir', username.trim(), pin, deviceInfo)
+        }
         if (r.success && r.data) {
-          if (r.data.must_change_password) {
-            setForcePasswordUser(r.data)
-            return
-          }
           await completeLogin(r.data)
         } else {
           setError(r.message || 'PIN kasir salah')
@@ -327,7 +326,10 @@ export default function Login() {
       if (authRes.username && authRes.password) {
         let r = await api<UserSession>('auth:login', authRes.username, authRes.password, collectAuthDeviceInfo())
         if (!r.success) {
-          r = await api<UserSession>('auth:verifyPinKasir', authRes.username, authRes.password, collectAuthDeviceInfo())
+          r = await api<UserSession>('auth:loginPin', authRes.username, authRes.password, collectAuthDeviceInfo())
+          if (!r.success && r.message?.toLowerCase().includes('belum tersedia')) {
+            r = await api<UserSession>('auth:verifyPinKasir', authRes.username, authRes.password, collectAuthDeviceInfo())
+          }
         }
         if (r.success && r.data) {
           await completeLogin(r.data)
@@ -371,11 +373,14 @@ export default function Login() {
 
     setChangingPassword(true)
     try {
-      const res = await api('auth:changePassword', {
-        username: forcePasswordUser.nama_pengguna,
+      const deviceInfo = collectAuthDeviceInfo()
+      const res = await api(
+        'auth:changePassword',
+        forcePasswordUser.nama_pengguna,
         oldPassword,
         newPassword,
-      })
+        deviceInfo
+      )
       if (res.success) {
         toast('Password berhasil diganti! Silakan login kembali.', 'success')
         setForcePasswordUser(null)

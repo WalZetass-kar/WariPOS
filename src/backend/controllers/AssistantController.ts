@@ -30,7 +30,7 @@ interface ModelsResponse {
 }
 
 const AI_TIMEOUT_MS = 60000
-const DEFAULT_AI_REFERER = process.env.VITE_AI_REFERER_URL || ''
+const DEFAULT_AI_REFERER = process.env.VITE_AI_REFERER_URL || 'https://waripos.com'
 
 interface JsonHttpResponse<T> {
   ok: boolean
@@ -48,12 +48,11 @@ function defaultBaseUrl(settings: IndustrySettings) {
 
 function aiRefererUrl() {
   const raw = process.env.VITE_AI_REFERER_URL || process.env.VITE_API_BASE_URL || DEFAULT_AI_REFERER
-  if (!raw) return undefined
   try {
     const parsed = new URL(raw)
-    return parsed.protocol === 'https:' ? parsed.toString().replace(/\/+$/, '') : undefined
+    return parsed.protocol === 'https:' ? parsed.toString().replace(/\/+$/, '') : 'https://waripos.com'
   } catch {
-    return undefined
+    return 'https://waripos.com'
   }
 }
 
@@ -129,17 +128,43 @@ function requestJson<T>(
   })
 }
 
+function extractAiErrorMessage(data: any, status: number): string {
+  if (!data?.error) return `HTTP ${status}`
+  const errObj = data.error
+  if (typeof errObj === 'string') return errObj
+
+  const rawMeta = errObj?.metadata?.raw
+  const remedyHint = errObj?.metadata?.remedy_hint
+  const baseMsg = errObj?.message || `HTTP ${status}`
+  const code = errObj?.code || status
+
+  if (rawMeta && typeof rawMeta === 'string') {
+    return `${baseMsg}: ${rawMeta}`
+  }
+  if (remedyHint && typeof remedyHint === 'string') {
+    return `${baseMsg} (${remedyHint})`
+  }
+  return code ? `${baseMsg} (kode: ${code})` : baseMsg
+}
+
 function formatAiError(error: unknown, settings?: IndustrySettings) {
   const message = error instanceof Error ? error.message : String(error || '')
   const cause = error && typeof error === 'object' ? (error as any).cause : undefined
   const details = [message, cause?.message, cause?.code].filter(Boolean).join(' ')
 
-  if (/resourceexhausted|request limit reached|rate limit|quota|429/i.test(details)) {
+  if (/provider returned error|rate-limit|upstream_provider_shared_pool|temporarily rate-limited|429/i.test(details)) {
+    if (settings?.aiProvider === 'openrouter') {
+      return `Model "${settings.aiModel || 'ini'}" sedang terkena antrean atau kuota sementara dari provider upstream OpenRouter. Solusi: Gunakan model "openrouter/free" (otomatis merutekan ke model gratis yang sedang aktif tanpa antrean) atau pilih model gratis lainnya seperti "nvidia/nemotron-3.5-lightning:free", atau coba beberapa saat lagi.`
+    }
+    return 'Kuota server AI online sedang mencapai batas pemanggilan sementara (Rate Limit / 429). Asisten AI otomatis beralih ke Mode Cerdas Lokal.'
+  }
+
+  if (/resourceexhausted|request limit reached|quota/i.test(details)) {
     return 'Kuota server AI online sedang mencapai batas sementara (Resource Exhausted). Asisten AI otomatis beralih ke Mode Cerdas Lokal agar perintah operasional Anda tetap dapat dijalankan secara langsung.'
   }
 
   if (/abort|timeout/i.test(details)) {
-    return 'Koneksi AI timeout (60 detik). Server AI lambat merespons. Coba model yang lebih cepat (contoh: blackbox, google/gemma-3n-e4b-it) atau periksa koneksi internet.'
+    return 'Koneksi AI timeout (60 detik). Server AI lambat merespons. Coba model yang lebih cepat (contoh: openrouter/free, nvidia/nemotron-3.5-lightning:free) atau periksa koneksi internet.'
   }
 
   if (/fetch failed|failed to fetch|networkerror|enotfound|eai_again|econnrefused|econnreset|etimedout|cert|certificate/i.test(details)) {
@@ -186,8 +211,8 @@ async function askOpenAiCompatible(settings: IndustrySettings, prompt: string) {
     'Authorization': `Bearer ${settings.aiApiKey}`,
     'Content-Type': 'application/json',
   }
-  if (isOpenRouter && referer) {
-    headers['HTTP-Referer'] = referer
+  if (isOpenRouter) {
+    headers['HTTP-Referer'] = referer || 'https://waripos.com'
     headers['X-Title'] = 'WariPOS'
   }
 
@@ -218,11 +243,9 @@ async function askOpenAiCompatible(settings: IndustrySettings, prompt: string) {
       : nonJsonAiResponseMessage(settings))
   }
   if (!response.ok || data?.error) {
+    const errorMsg = extractAiErrorMessage(data, response.status)
     const errObj = data?.error
-    const errorMsg = typeof errObj === 'string'
-      ? errObj
-      : (errObj?.message || errObj?.toString() || `HTTP ${response.status}`)
-    const errType = typeof errObj === 'object' && errObj?.type ? ` (${errObj.type})` : ''
+    const errType = typeof errObj === 'object' && (errObj as any)?.type ? ` (${(errObj as any).type})` : ''
     throw new Error(isBluesminds
       ? `BluesMinds: ${errorMsg}${errType}. Model: ${model}`
       : errorMsg)
@@ -248,8 +271,8 @@ async function listOpenAiCompatibleModels(settings: IndustrySettings) {
     'Authorization': `Bearer ${settings.aiApiKey}`,
     'Content-Type': 'application/json',
   }
-  if (isOpenRouter && referer) {
-    headers['HTTP-Referer'] = referer
+  if (isOpenRouter) {
+    headers['HTTP-Referer'] = referer || 'https://waripos.com'
     headers['X-Title'] = 'WariPOS'
   }
 
@@ -258,16 +281,37 @@ async function listOpenAiCompatibleModels(settings: IndustrySettings) {
   const data = response.data
   if (!data) throw new Error(nonJsonAiResponseMessage(settings))
   if (!response.ok || data?.error) {
-    const err = data?.error
-    const errMsg = typeof err === 'string' ? err : (err?.message || `AI models HTTP ${response.status}`)
+    const errMsg = extractAiErrorMessage(data, response.status)
     throw new Error(errMsg)
   }
 
   const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : []
-  const models = rows
+  const rawModels = rows
     .map(row => String(row.id || row.name || '').trim())
     .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b))
+
+  let models: string[]
+  if (isOpenRouter) {
+    const freeModels: string[] = []
+    const otherModels: string[] = []
+
+    for (const m of rawModels) {
+      if (m === 'openrouter/free' || m.endsWith(':free')) {
+        freeModels.push(m)
+      } else {
+        otherModels.push(m)
+      }
+    }
+    freeModels.sort((a, b) => {
+      if (a === 'openrouter/free') return -1
+      if (b === 'openrouter/free') return 1
+      return a.localeCompare(b)
+    })
+    otherModels.sort((a, b) => a.localeCompare(b))
+    models = [...freeModels, ...otherModels]
+  } else {
+    models = rawModels.sort((a, b) => a.localeCompare(b))
+  }
   if (!models.length) throw new Error('Provider tidak mengembalikan daftar model')
   return models
 }

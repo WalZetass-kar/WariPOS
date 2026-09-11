@@ -32,7 +32,7 @@ export class DebtController {
   }
 
   static getPayments(debtId: number) {
-    return sqlite.prepare('SELECT dp.*, u.nama_lengkap FROM mediasoft_debt_payments dp LEFT JOIN mediasoft_pengguna u ON dp.created_by = u.id WHERE dp.debt_id = ? ORDER BY dp.created_at DESC').all(debtId)
+    return sqlite.prepare('SELECT dp.*, u.nama_lengkap FROM mediasoft_debt_payments dp LEFT JOIN mediasoft_pengguna u ON dp.created_by = u.nama_pengguna WHERE dp.debt_id = ? ORDER BY dp.created_at DESC').all(debtId)
   }
   
   static delete(id: number) {

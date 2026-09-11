@@ -6,13 +6,14 @@ import {
   Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2,
   Code2, ExternalLink, MessageCircle, ChevronLeft, Search, Monitor, Shield, HardDrive,
   Info, User, Fingerprint, PackagePlus, Trash2, UtensilsCrossed, LogOut,
+  Type, Sliders, ArrowUpRight,
 } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import appLogo from '../assets/app-logo.png'
-import { useTheme, type ThemeColor } from '../contexts/ThemeContext'
+import { useTheme, type ThemeColor, type ThemeMode, type FontSize, type BorderRadius } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useAppStore } from '../stores'
 import { api } from '../utils/api'
@@ -30,16 +31,23 @@ import { appConfig } from '../utils/productionConfig'
 import { validatePasswordStrength } from '../../shared/passwordPolicy'
 
 const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
-  { key: 'indigo', label: 'Indigo', hex: '#6366f1' },
-  { key: 'emerald', label: 'Emerald', hex: '#10b981' },
-  { key: 'rose', label: 'Rose', hex: '#f43f5e' },
-  { key: 'amber', label: 'Amber', hex: '#f59e0b' },
-  { key: 'sky', label: 'Sky', hex: '#0ea5e9' },
+  { key: 'crimson', label: 'Crimson (Wari Red)', hex: '#ef4444' },
+  { key: 'indigo', label: 'Indigo Classic', hex: '#6366f1' },
+  { key: 'emerald', label: 'Emerald Mint', hex: '#10b981' },
+  { key: 'blue', label: 'Royal Blue', hex: '#2563eb' },
+  { key: 'rose', label: 'Rose Berry', hex: '#f43f5e' },
+  { key: 'amber', label: 'Warm Amber', hex: '#f59e0b' },
+  { key: 'sky', label: 'Sky Blue', hex: '#0ea5e9' },
   { key: 'pink', label: 'Pink Soft', hex: '#ec4899' },
-  { key: 'violet', label: 'Violet', hex: '#8b5cf6' },
-  { key: 'teal', label: 'Teal', hex: '#14b8a6' },
-  { key: 'cyan', label: 'Cyan', hex: '#06b6d4' },
-  { key: 'orange', label: 'Orange', hex: '#f97316' },
+  { key: 'violet', label: 'Electric Violet', hex: '#8b5cf6' },
+  { key: 'purple', label: 'Royal Purple', hex: '#9333ea' },
+  { key: 'teal', label: 'Teal Ocean', hex: '#14b8a6' },
+  { key: 'cyan', label: 'Cyan Bright', hex: '#06b6d4' },
+  { key: 'orange', label: 'Sunset Orange', hex: '#f97316' },
+  { key: 'green', label: 'Forest Green', hex: '#16a34a' },
+  { key: 'slate', label: 'Modern Slate', hex: '#475569' },
+  { key: 'coffee', label: 'Warm Coffee', hex: '#934624' },
+  { key: 'gold', label: 'Luxury Gold', hex: '#d97706' },
 ]
 
 type SyncMode = 'server' | 'client'
@@ -71,12 +79,12 @@ const CATEGORIES: CategoryDef[] = [
   { id: 'perangkat', label: 'Perangkat', description: 'Pengaturan perangkat lokal', icon: <Monitor size={20} />, color: 'bg-cyan-500' },
   { id: 'notifikasi', label: 'Notifikasi', description: 'Batas stok dan pengingat', icon: <Bell size={20} />, color: 'bg-rose-500' },
   { id: 'backup', label: 'Backup', description: 'Cadangan database otomatis', icon: <HardDrive size={20} />, color: 'bg-teal-500' },
-  { id: 'jaringan', label: 'Jaringan', description: 'AI, Google Sheets, dan integrasi', icon: <Bot size={20} />, color: 'bg-pink-500' },
+  { id: 'jaringan', label: 'Integrasi & AI', description: 'Google Sheets, AI, dan Cloud API', icon: <Bot size={20} />, color: 'bg-pink-500' },
   { id: 'tentang', label: 'Tentang', description: 'Info aplikasi dan pengembang', icon: <Info size={20} />, color: 'bg-slate-500' },
 ]
 
 export default function Settings() {
-  const { color, mode, setColor, setMode } = useTheme()
+  const { color, mode, setColor, setMode, fontSize, setFontSize, borderRadius, setBorderRadius, isDark } = useTheme()
   const [customColor, setCustomColor] = useState(color.startsWith('#') ? color : '#ec4899')
   const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
@@ -101,6 +109,7 @@ export default function Settings() {
   const [loadingAiModels, setLoadingAiModels] = useState(false)
   const [testingAi, setTestingAi] = useState(false)
   const [testingSheets, setTestingSheets] = useState(false)
+  const [testingExport, setTestingExport] = useState(false)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -309,19 +318,51 @@ export default function Settings() {
   }
 
   const testGoogleSheets = async () => {
+    const url = industrySettings.googleSheetsWebAppUrl?.trim()
+    if (!url) {
+      toast('Masukkan URL Apps Script Web App terlebih dahulu', 'error')
+      return
+    }
     setTestingSheets(true)
     try {
-      const r = await api('integrations:testGoogleSheets')
-      toast(r.message as string || (r.success ? 'Google Sheets tersambung' : 'Google Sheets gagal'), r.success ? 'success' : 'error')
+      await api('integrations:save', industrySettings)
+      const r = await api('integrations:testGoogleSheets', industrySettings)
+      toast(r.message as string || (r.success ? 'Google Sheets berhasil tersambung' : 'Koneksi Google Sheets gagal'), r.success ? 'success' : 'error')
+    } catch {
+      toast('Gagal menguji koneksi Google Sheets', 'error')
     } finally {
       setTestingSheets(false)
+    }
+  }
+
+  const testExportSheets = async () => {
+    const url = industrySettings.googleSheetsWebAppUrl?.trim()
+    if (!url) {
+      toast('Masukkan URL Apps Script Web App terlebih dahulu', 'error')
+      return
+    }
+    setTestingExport(true)
+    try {
+      await api('integrations:save', industrySettings)
+      const r = await api('integrations:exportReportToSheets', {
+        type: 'test-sync',
+        title: 'Tes Integrasi Google Sheets WariPOS',
+        generatedAt: new Date().toISOString(),
+        headers: ['Waktu', 'Keterangan', 'Status'],
+        rows: [[new Date().toLocaleTimeString('id-ID'), 'Uji Coba Integrasi WariPOS Google Sheets', 'BERHASIL']],
+      })
+      toast(r.message as string || (r.success ? 'Sampel data berhasil dikirim ke spreadsheet' : 'Pengiriman sampel gagal'), r.success ? 'success' : 'error')
+    } catch {
+      toast('Gagal melakukan ekspor sampel ke Google Sheets', 'error')
+    } finally {
+      setTestingExport(false)
     }
   }
 
   const copyGoogleSheetsScript = async () => {
     try {
       await navigator.clipboard.writeText(GOOGLE_SHEETS_APPS_SCRIPT)
-      toast('Template Apps Script disalin', 'success')
+      toast('Template Apps Script berhasil disalin', 'success')
     } catch {
       toast('Clipboard tidak tersedia', 'error')
     }
@@ -330,6 +371,12 @@ export default function Settings() {
   const openAppsScript = () => {
     api('app:openExternal', 'https://script.google.com/home').catch(() => {
       window.open('https://script.google.com/home', '_blank', 'noopener,noreferrer')
+    })
+  }
+
+  const openNewSpreadsheet = () => {
+    api('app:openExternal', 'https://sheets.new').catch(() => {
+      window.open('https://sheets.new', '_blank', 'noopener,noreferrer')
     })
   }
 
@@ -702,6 +749,10 @@ export default function Settings() {
               setCustomColor={setCustomColor}
               setColor={setColor}
               setMode={setMode}
+              fontSize={fontSize}
+              setFontSize={setFontSize}
+              borderRadius={borderRadius}
+              setBorderRadius={setBorderRadius}
             />
           )}
           {activeCategory === 'akun' && (
@@ -782,9 +833,12 @@ export default function Settings() {
               loadAiModels={loadAiModels}
               testAiConnection={testAiConnection}
               testGoogleSheets={testGoogleSheets}
+              testingExport={testingExport}
+              testExportSheets={testExportSheets}
               saveIndustrySettings={saveIndustrySettings}
               copyGoogleSheetsScript={copyGoogleSheetsScript}
               openAppsScript={openAppsScript}
+              openNewSpreadsheet={openNewSpreadsheet}
             />
           )}
           {activeCategory === 'tentang' && <TentangSettings openResetDialog={openResetDialog} />}
@@ -881,74 +935,202 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pt-2 pb-1 px-1">{children}</p>
 }
 
-function TampilanSettings({ color, mode, customColor, setCustomColor, setColor, setMode }: {
-  color: string; mode: string; customColor: string; setCustomColor: (v: string) => void
-  setColor: (v: ThemeColor) => void; setMode: (v: 'light' | 'dark') => void
+function TampilanSettings({
+  color,
+  mode,
+  customColor,
+  setCustomColor,
+  setColor,
+  setMode,
+  fontSize,
+  setFontSize,
+  borderRadius,
+  setBorderRadius,
+}: {
+  color: string
+  mode: ThemeMode
+  customColor: string
+  setCustomColor: (v: string) => void
+  setColor: (v: ThemeColor) => void
+  setMode: (v: ThemeMode) => void
+  fontSize: FontSize
+  setFontSize: (v: FontSize) => void
+  borderRadius: BorderRadius
+  setBorderRadius: (v: BorderRadius) => void
 }) {
-  return (
-    <div className="space-y-3">
-      <SectionTitle>Mode Tampilan</SectionTitle>
-      <div className="grid grid-cols-2 gap-2">
-        {(['light', 'dark'] as const).map(m => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
-              mode === m
-                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary-300'
-            }`}
-          >
-            {m === 'light' ? <Sun size={16} /> : <Moon size={16} />}
-            {m === 'light' ? 'Light Mode' : 'Dark Mode'}
-          </button>
-        ))}
-      </div>
+  const activeColorObj = COLORS.find(c => c.key === color)
+  const activeColorLabel = activeColorObj?.label || (color.startsWith('#') ? `Custom (${color.toUpperCase()})` : color)
 
-      <SectionTitle>Tema Warna</SectionTitle>
-      <div className="grid grid-cols-2 gap-2">
-        {COLORS.map(c => (
-          <button
-            key={c.key}
-            onClick={() => setColor(c.key)}
-            className={`relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
-              color === c.key
-                ? 'shadow-md scale-[1.02]'
-                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-            }`}
-            style={{
-              color: c.hex,
-              borderColor: color === c.key ? c.hex : undefined,
-              backgroundColor: color === c.key ? `${c.hex}15` : undefined,
-            }}
-          >
-            <span className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: c.hex }} />
-            {c.label}
-            {color === c.key && <CheckCircle2 size={14} className="shrink-0" style={{ color: c.hex }} />}
-          </button>
-        ))}
-        <div
-          className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border-2 transition-all relative overflow-hidden ${
-            color.startsWith('#')
-              ? 'border-dashed shadow-md scale-[1.02]'
-              : 'border-dashed border-slate-300 dark:border-slate-600 hover:border-primary-400'
-          }`}
-          style={{ borderColor: color.startsWith('#') ? customColor : undefined }}
-        >
-          <input
-            type="color"
-            value={customColor}
-            onChange={(e) => { setCustomColor(e.target.value); setColor(e.target.value) }}
-            className="absolute inset-0 opacity-0 cursor-pointer"
-          />
-          <span className="w-4 h-4 rounded-full shadow-sm border border-white" style={{ backgroundColor: customColor }} />
-          <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Custom</span>
-          {color.startsWith('#') && <CheckCircle2 size={14} className="shrink-0 text-slate-500" />}
+  return (
+    <div className="space-y-6">
+      {/* 1. Mode Tampilan */}
+      <div>
+        <SectionTitle>Mode Tampilan</SectionTitle>
+        <p className="text-xs text-slate-500 dark:text-slate-400 px-1 mb-2.5">
+          Pilih tema pencahayaan antarmuka atau biarkan otomatis menyesuaikan preferensi sistem operasi perangkat Anda.
+        </p>
+        <div className="grid grid-cols-3 gap-2.5">
+          {([
+            { id: 'light' as const, label: 'Mode Terang', icon: <Sun size={18} /> },
+            { id: 'dark' as const, label: 'Mode Gelap', icon: <Moon size={18} /> },
+            { id: 'system' as const, label: 'Sistem Otomatis', icon: <Monitor size={18} /> },
+          ]).map(m => (
+            <button
+              key={m.id}
+              onClick={() => setMode(m.id)}
+              className={`flex flex-col sm:flex-row items-center justify-center gap-2 px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                mode === m.id
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              {m.icon}
+              <span>{m.label}</span>
+            </button>
+          ))}
         </div>
       </div>
-      {color.startsWith('#') && (
-        <p className="text-[10px] text-slate-400 font-mono px-1">Custom Color: {color.toUpperCase()}</p>
-      )}
+
+      {/* 2. Tema Warna */}
+      <div>
+        <div className="flex items-center justify-between px-1 mb-1">
+          <SectionTitle>Tema Warna POS ({COLORS.length} Pilihan)</SectionTitle>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+            Aktif: {activeColorLabel}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 px-1 mb-2.5">
+          Warna utama diaplikasikan pada tombol aksi kasir, header laporan, sorotan status, dan grafik performa.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          {COLORS.map(c => {
+            const isSelected = color === c.key
+            return (
+              <button
+                key={c.key}
+                onClick={() => setColor(c.key)}
+                className={`relative flex items-center justify-between px-3.5 py-2.5 rounded-xl border-2 transition-all text-xs font-semibold ${
+                  isSelected
+                    ? 'shadow-sm ring-1 ring-offset-1 dark:ring-offset-slate-900 scale-[1.01]'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+                style={{
+                  borderColor: isSelected ? c.hex : undefined,
+                  backgroundColor: isSelected ? `${c.hex}18` : undefined,
+                  color: isSelected ? c.hex : undefined,
+                }}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className="w-4 h-4 rounded-full shrink-0 shadow-sm ring-1 ring-black/10"
+                    style={{ backgroundColor: c.hex }}
+                  />
+                  <span className="truncate">{c.label}</span>
+                </div>
+                {isSelected && <CheckCircle2 size={15} className="shrink-0 ml-1.5" style={{ color: c.hex }} />}
+              </button>
+            )
+          })}
+
+          {/* Custom Color Picker */}
+          <div
+            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border-2 transition-all relative overflow-hidden bg-white dark:bg-slate-900 ${
+              color.startsWith('#')
+                ? 'shadow-sm ring-1 ring-offset-1 dark:ring-offset-slate-900 scale-[1.01]'
+                : 'border-dashed border-slate-300 dark:border-slate-700 hover:border-slate-400'
+            }`}
+            style={{
+              borderColor: color.startsWith('#') ? customColor : undefined,
+              backgroundColor: color.startsWith('#') ? `${customColor}18` : undefined,
+            }}
+          >
+            <input
+              type="color"
+              value={customColor}
+              onChange={(e) => {
+                setCustomColor(e.target.value)
+                setColor(e.target.value)
+              }}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+              title="Pilih Warna Custom"
+            />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span
+                className="w-4 h-4 rounded-full shadow-sm ring-1 ring-black/10 shrink-0"
+                style={{ backgroundColor: customColor }}
+              />
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Warna Custom (HEX)</span>
+            </div>
+            {color.startsWith('#') && (
+              <span className="text-[10px] font-mono font-bold uppercase shrink-0" style={{ color: customColor }}>
+                {color}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Ukuran Font Antarmuka */}
+      <div>
+        <SectionTitle>Ukuran Teks Antarmuka</SectionTitle>
+        <p className="text-xs text-slate-500 dark:text-slate-400 px-1 mb-2.5">
+          Sesuaikan kerapatan teks pada layar kasir dan tabel transaksi.
+        </p>
+        <div className="grid grid-cols-3 gap-2.5">
+          {([
+            { id: 'compact' as const, label: 'Kompak (13px)', desc: 'Padat untuk layar kecil' },
+            { id: 'normal' as const, label: 'Normal (14px)', desc: 'Standar WariPOS' },
+            { id: 'large' as const, label: 'Besar (15.5px)', desc: 'Lebih lega & jelas' },
+          ]).map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFontSize(f.id)}
+              className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all ${
+                fontSize === f.id
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-xs mb-0.5">
+                <Type size={14} />
+                <span>{f.label}</span>
+              </div>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">{f.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Bentuk Sudut Sudut Kotak / Elemen */}
+      <div>
+        <SectionTitle>Kelengkungan Sudut (Radius)</SectionTitle>
+        <p className="text-xs text-slate-500 dark:text-slate-400 px-1 mb-2.5">
+          Gaya estetika tombol, kartu produk, dan jendela modal di seluruh sistem.
+        </p>
+        <div className="grid grid-cols-3 gap-2.5">
+          {([
+            { id: 'sharp' as const, label: 'Tegas / Kotak', desc: 'Sudut minimal 2-4px' },
+            { id: 'medium' as const, label: 'Sedang', desc: 'Sudut modern 8-12px' },
+            { id: 'rounded' as const, label: 'Melengkung', desc: 'Sudut halus 16-24px' },
+          ]).map(r => (
+            <button
+              key={r.id}
+              onClick={() => setBorderRadius(r.id)}
+              className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all ${
+                borderRadius === r.id
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-xs mb-0.5">
+                <Sliders size={14} />
+                <span>{r.label}</span>
+              </div>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">{r.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -1249,28 +1431,28 @@ function TokoSettings({ identitas, f, loading, saveIdentitas }: any) {
           onClick={() => setPosMode('retail')}
           className={`cursor-pointer rounded-2xl p-4 border transition-all ${
             posMode === 'retail'
-              ? 'border-2 border-red-600 bg-red-50/40 dark:bg-red-950/20 ring-1 ring-red-600/30 shadow-sm'
+              ? 'border-2 border-primary-500 bg-primary-50/60 dark:bg-primary-950/30 ring-2 ring-primary-500/20 shadow-sm'
               : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
           }`}
         >
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-xl ${posMode === 'retail' ? 'bg-red-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+              <div className={`p-2.5 rounded-xl ${posMode === 'retail' ? 'bg-primary-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
                 <Store size={20} />
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">Mode Toko / Retail</h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">Minimarket, Fashion, Retail</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Minimarket, Toko Kelontong, Fashion, Grosir</p>
               </div>
             </div>
             {posMode === 'retail' && (
-              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">
+              <span className="px-2 py-0.5 rounded-full bg-primary-600 text-white text-[10px] font-black tracking-wider">
                 AKTIF
               </span>
             )}
           </div>
           <p className="mt-3 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-            Layout kasir cepat, scan barcode langsung, tanpa opsi nomor meja & menyembunyikan menu dapur F&B.
+            Layout kasir cepat langsung ke barcode & item, tanpa nomor meja/dine-in, dan menyembunyikan operasional dapur F&B.
           </p>
         </div>
 
@@ -1279,28 +1461,28 @@ function TokoSettings({ identitas, f, loading, saveIdentitas }: any) {
           onClick={() => setPosMode('restaurant')}
           className={`cursor-pointer rounded-2xl p-4 border transition-all ${
             posMode === 'restaurant'
-              ? 'border-2 border-red-600 bg-red-50/40 dark:bg-red-950/20 ring-1 ring-red-600/30 shadow-sm'
+              ? 'border-2 border-amber-500 bg-amber-50/60 dark:bg-amber-950/30 ring-2 ring-amber-500/20 shadow-sm'
               : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
           }`}
         >
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-xl ${posMode === 'restaurant' ? 'bg-red-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+              <div className={`p-2.5 rounded-xl ${posMode === 'restaurant' ? 'bg-amber-600 text-white shadow-sm shadow-amber-600/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
                 <UtensilsCrossed size={20} />
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">Mode Restoran & F&B</h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">Resto, Cafe, Rumah Makan</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Restoran, Cafe, Rumah Makan, Kedai Kopi</p>
               </div>
             </div>
             {posMode === 'restaurant' && (
-              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">
+              <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-black tracking-wider">
                 AKTIF
               </span>
             )}
           </div>
           <p className="mt-3 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-            Mengaktifkan tata letak denah meja, reservasi meja, resep makanan & pesanan Dine-in.
+            Mengaktifkan denah meja interaktif, pesanan Dine-In, kitchen display (KDS), resep & BOM, serta reservasi meja.
           </p>
         </div>
       </div>
@@ -1415,98 +1597,210 @@ function BackupSettings({ industrySettings, changeIndustrySetting, industryLoadi
       </SettingRow>
       <Input label="Retensi Backup (hari)" type="number" min={1} max={365} value={industrySettings.backupRetentionDays} onChange={e => changeIndustrySetting('backupRetentionDays', Number(e.target.value))} />
 
-      <SectionTitle>Google Sheets</SectionTitle>
-      <SettingRow>
-        <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">Export Google Sheets Otomatis</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Gunakan URL Web App Apps Script</p>
-        </div>
-        <Toggle checked={industrySettings.googleSheetsEnabled} onChange={v => changeIndustrySetting('googleSheetsEnabled', v)} />
-      </SettingRow>
-      <Input label="Apps Script Web App URL" value={industrySettings.googleSheetsWebAppUrl} onChange={e => changeIndustrySetting('googleSheetsWebAppUrl', e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" icon={<FileSpreadsheet size={16} />} helperText="Buat script dari file Google Sheets target, deploy sebagai Web App, lalu tempel URL /exec di sini." />
-      <div className="flex flex-col gap-2">
-        <Button variant="secondary" onClick={() => navigator.clipboard.writeText(GOOGLE_SHEETS_APPS_SCRIPT).then(() => {}) } icon={<Code2 size={14} />} className="w-full">Salin Template Script</Button>
-      </div>
-
       <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full">Simpan Pengaturan Backup</Button>
     </div>
   )
 }
 
-function JaringanSettings({ industrySettings, changeIndustrySetting, changeAiProvider, aiModels, loadingAiModels, testingAi, testingSheets, industryLoading, loadAiModels, testAiConnection, testGoogleSheets, saveIndustrySettings, copyGoogleSheetsScript, openAppsScript }: any) {
+function JaringanSettings({
+  industrySettings,
+  changeIndustrySetting,
+  changeAiProvider,
+  aiModels,
+  loadingAiModels,
+  testingAi,
+  testingSheets,
+  testingExport,
+  industryLoading,
+  loadAiModels,
+  testAiConnection,
+  testGoogleSheets,
+  testExportSheets,
+  saveIndustrySettings,
+  copyGoogleSheetsScript,
+  openAppsScript,
+  openNewSpreadsheet,
+}: any) {
   return (
-    <div className="space-y-3">
-      <SectionTitle>Asisten AI</SectionTitle>
-      <SettingRow>
-        <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">AI Online Opsional</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Fallback lokal tetap aktif saat API tidak tersedia</p>
-        </div>
-        <Toggle checked={industrySettings.aiEnabled} onChange={v => changeIndustrySetting('aiEnabled', v)} />
-      </SettingRow>
-
+    <div className="space-y-5">
+      {/* ─── GOOGLE SHEETS INTEGRATION ───────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Provider AI</label>
-          <select
-            value={industrySettings.aiProvider}
-            onChange={e => changeAiProvider(e.target.value as AiProvider)}
-            className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+        <SectionTitle>Integrasi Google Sheets</SectionTitle>
+        <SettingRow>
+          <div>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Sinkronisasi Google Sheets Otomatis</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Kirim data transaksi dan laporan otomatis ke Google Spreadsheet secara online</p>
+          </div>
+          <Toggle checked={industrySettings.googleSheetsEnabled} onChange={v => changeIndustrySetting('googleSheetsEnabled', v)} />
+        </SettingRow>
+
+        <Input
+          label="Apps Script Web App URL"
+          value={industrySettings.googleSheetsWebAppUrl}
+          onChange={e => changeIndustrySetting('googleSheetsWebAppUrl', e.target.value)}
+          placeholder="https://script.google.com/macros/s/.../exec"
+          icon={<FileSpreadsheet size={16} />}
+          helperText="Tempel URL Web App dari deployment Apps Script Google Sheets Anda (harus berakhiran /exec)."
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+          <Button
+            type="button"
+            variant="secondary"
+            loading={testingSheets}
+            onClick={testGoogleSheets}
+            icon={<CheckCircle2 size={14} className="text-emerald-500" />}
+            className="w-full justify-center text-xs font-bold"
           >
-            <option value="local">Lokal gratis</option>
-            <option value="openai">OpenAI</option>
-            <option value="gemini">Gemini</option>
-            <option value="custom">Custom OpenAI-Compatible</option>
-            <option value="deepseek">DeepSeek</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="bluesminds">BluesMinds</option>
-          </select>
+            Tes Koneksi Sheets
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={testingExport}
+            onClick={testExportSheets}
+            icon={<ArrowUpRight size={14} className="text-primary-500" />}
+            className="w-full justify-center text-xs font-bold"
+          >
+            Uji Ekspor Data
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={copyGoogleSheetsScript}
+            icon={<Copy size={14} />}
+            className="w-full justify-center text-xs font-bold"
+          >
+            Salin Template Apps Script
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={openNewSpreadsheet}
+            icon={<ExternalLink size={14} />}
+            className="w-full justify-center text-xs font-bold"
+          >
+            Buka sheets.new
+          </Button>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Model</label>
-          <div className="flex gap-2">
-            {aiModels.length > 0 ? (
-              <select
-                value={industrySettings.aiModel}
-                onChange={e => changeIndustrySetting('aiModel', e.target.value)}
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              >
-                {aiModels.map((model: string) => <option key={model} value={model}>{model}</option>)}
-              </select>
-            ) : (
-              <input
-                value={industrySettings.aiModel}
-                onChange={e => changeIndustrySetting('aiModel', e.target.value)}
-                placeholder={defaultModelForProvider(industrySettings.aiProvider) || 'nama-model'}
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              />
-            )}
-            {industrySettings.aiProvider !== 'local' && (
-              <Button type="button" variant="secondary" loading={loadingAiModels} onClick={loadAiModels} icon={<RefreshCw size={14} />} className="shrink-0">Model</Button>
+
+        {/* Setup guide */}
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3.5 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+          <p className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+            <FileSpreadsheet size={15} className="text-emerald-500" />
+            Panduan 3 Langkah Setup Google Sheets:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 pl-1 leading-relaxed text-[11px]">
+            <li>Buka Google Spreadsheet baru dengan tombol <strong>Buka sheets.new</strong> di atas.</li>
+            <li>Di Google Sheets, klik menu <strong>Ekstensi &rarr; Apps Script</strong>, hapus kode lama, lalu klik tombol <strong>Salin Template Apps Script</strong> dan tempel ke editor.</li>
+            <li>Klik <strong>Deploy &rarr; New deployment &rarr; Web app</strong>, set <em>Who has access</em> ke <strong>Anyone</strong>, klik Deploy, lalu salin URL Web App (/exec) ke kolom di atas.</li>
+          </ol>
+        </div>
+
+        <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full">
+          Simpan Pengaturan Google Sheets
+        </Button>
+      </div>
+
+      <div className="border-t border-slate-200 dark:border-slate-800 pt-2" />
+
+      {/* ─── AI ASSISTANT CONFIG ──────────────────────────────────── */}
+      <div className="space-y-3">
+        <SectionTitle>Asisten AI</SectionTitle>
+        <SettingRow>
+          <div>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">AI Online Opsional</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Fallback lokal tetap aktif saat API tidak tersedia</p>
+          </div>
+          <Toggle checked={industrySettings.aiEnabled} onChange={v => changeIndustrySetting('aiEnabled', v)} />
+        </SettingRow>
+
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Provider AI</label>
+            <select
+              value={industrySettings.aiProvider}
+              onChange={e => changeAiProvider(e.target.value as AiProvider)}
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+            >
+              <option value="local">Lokal gratis</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Gemini</option>
+              <option value="custom">Custom OpenAI-Compatible</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="bluesminds">BluesMinds</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Model</label>
+            <div className="flex gap-2">
+              {aiModels.length > 0 ? (
+                <select
+                  value={industrySettings.aiModel}
+                  onChange={e => changeIndustrySetting('aiModel', e.target.value)}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                >
+                  {aiModels.map((model: string) => (
+                    <option key={model} value={model}>
+                      {model === 'openrouter/free' || model.endsWith(':free') ? `[GRATIS] ${model}` : model}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={industrySettings.aiModel}
+                  onChange={e => changeIndustrySetting('aiModel', e.target.value)}
+                  placeholder={defaultModelForProvider(industrySettings.aiProvider) || 'nama-model'}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                />
+              )}
+              {industrySettings.aiProvider !== 'local' && (
+                <Button type="button" variant="secondary" loading={loadingAiModels} onClick={loadAiModels} icon={<RefreshCw size={14} />} className="shrink-0">Model</Button>
+              )}
+            </div>
+
+            {industrySettings.aiProvider === 'openrouter' && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Model Gratis Rekomendasi:</span>
+                {[
+                  { id: 'openrouter/free', label: 'openrouter/free (Anti-Antrean)' },
+                  { id: 'nvidia/nemotron-3.5-lightning:free', label: 'nemotron-3.5:free' },
+                  { id: 'nex-agi/nex-n2.5-pro:free', label: 'nex-n2.5-pro:free' },
+                ].map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => changeIndustrySetting('aiModel', m.id)}
+                    className={`rounded-md px-2 py-0.5 text-xs transition ${
+                      industrySettings.aiModel === m.id
+                        ? 'bg-primary-600 text-white font-semibold shadow-sm'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </div>
-      </div>
 
-      {industrySettings.aiProvider !== 'local' && (
-        <div className="space-y-3">
-          <Input label="API Key AI" type="password" value={industrySettings.aiApiKey} onChange={e => changeIndustrySetting('aiApiKey', e.target.value)} placeholder="Masukkan API key provider" icon={<KeyRound size={16} />} />
-          <Input label="Base URL" value={industrySettings.aiBaseUrl} onChange={e => changeIndustrySetting('aiBaseUrl', e.target.value)} placeholder={industrySettings.aiProvider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : appConfig.aiProviderUrl || defaultBaseUrlForProvider(industrySettings.aiProvider)} />
+        {industrySettings.aiProvider !== 'local' && (
+          <div className="space-y-3">
+            <Input label="API Key AI" type="password" value={industrySettings.aiApiKey} onChange={e => changeIndustrySetting('aiApiKey', e.target.value)} placeholder="Masukkan API key provider" icon={<KeyRound size={16} />} />
+            <Input label="Base URL" value={industrySettings.aiBaseUrl} onChange={e => changeIndustrySetting('aiBaseUrl', e.target.value)} placeholder={industrySettings.aiProvider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : appConfig.aiProviderUrl || defaultBaseUrlForProvider(industrySettings.aiProvider)} />
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <Button variant="secondary" loading={testingAi} onClick={testAiConnection} icon={<Bot size={14} />} className="w-full">Tes Koneksi AI</Button>
         </div>
-      )}
 
-      <div className="flex flex-col gap-2">
-        <Button variant="secondary" loading={testingAi} onClick={testAiConnection} icon={<Bot size={14} />} className="w-full">Tes Koneksi AI</Button>
+        <div className="pt-2">
+          <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full">Simpan Pengaturan AI</Button>
+        </div>
       </div>
-
-      <SectionTitle>Integrasi</SectionTitle>
-      <div className="flex flex-col gap-2">
-        <Button variant="secondary" loading={testingSheets} onClick={testGoogleSheets} icon={<CheckCircle2 size={14} />} className="w-full">Tes Google Sheets</Button>
-        <Button variant="secondary" onClick={copyGoogleSheetsScript} icon={<Code2 size={14} />} className="w-full">Salin Template Script</Button>
-        <Button variant="ghost" onClick={openAppsScript} icon={<ExternalLink size={14} />} className="w-full">Buka Apps Script</Button>
-      </div>
-
-      <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full">Simpan Pengaturan Jaringan</Button>
     </div>
   )
 }

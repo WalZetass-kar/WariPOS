@@ -1,6 +1,9 @@
 import React, { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { UtensilsCrossed, ArrowLeft } from 'lucide-react'
 import AppLayout from './layouts/AppLayout'
+import Button from './components/Button'
+import { useAppStore } from './stores'
 import { RequireAuth, RequireDeveloperPanel, RequireMinRole, RequireOperationalAdmin, RequireRoles } from '../apps/routing/RouteGuards'
 
 // ─── Lazy Imports ──────────────────────────────────────────────────────────────
@@ -109,6 +112,51 @@ function LegacyAppRedirect() {
   return <Navigate to={`${targetPath}${search}${hash}`} replace />
 }
 
+// ─── Mode Restoran Guard ───────────────────────────────────────────────────────
+function RequireRestaurantMode({ children }: { children: React.ReactNode }) {
+  const { posMode, setPosMode } = useAppStore()
+  const navigate = useNavigate()
+
+  if (posMode !== 'restaurant') {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="max-w-md w-full p-8 rounded-3xl border border-amber-200 dark:border-amber-800/60 bg-white/90 dark:bg-slate-900/90 shadow-xl space-y-4 backdrop-blur-md">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+            <UtensilsCrossed size={32} />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">
+              Fitur Khusus Mode Restoran (F&B)
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Halaman ini dirancang khusus untuk operasional Restoran, Meja, dan Dapur F&B. Saat ini sistem sedang aktif dalam <strong>Mode Toko (Retail)</strong>.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+            <Button
+              variant="secondary"
+              icon={<ArrowLeft size={14} />}
+              onClick={() => navigate('/')}
+              className="flex-1 justify-center text-xs font-bold"
+            >
+              Kembali ke Beranda
+            </Button>
+            <Button
+              onClick={() => setPosMode('restaurant')}
+              icon={<UtensilsCrossed size={14} />}
+              className="flex-1 justify-center text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white border-0"
+            >
+              Beralih ke Resto
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
+}
+
 // ─── App Routes ────────────────────────────────────────────────────────────────
 export default function AppRoutes() {
   return (
@@ -186,15 +234,15 @@ export default function AppRoutes() {
           <Route path="/employee-contract" element={<EmployeeContract />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/payroll" element={<Payroll />} />
-          <Route path="/tip-pooling" element={<TipPooling />} />
+          <Route path="/tip-pooling" element={<RequireRestaurantMode><TipPooling /></RequireRestaurantMode>} />
           <Route path="/shift-schedule" element={<ShiftSchedule />} />
           {/* KDS & F&B */}
-          <Route path="/kitchen-display" element={<KitchenDisplay />} />
-          <Route path="/table-management" element={<TableManagement />} />
-          <Route path="/reservation" element={<Reservation />} />
-          <Route path="/recipe" element={<Recipe />} />
+          <Route path="/kitchen-display" element={<RequireRestaurantMode><KitchenDisplay /></RequireRestaurantMode>} />
+          <Route path="/table-management" element={<RequireRestaurantMode><TableManagement /></RequireRestaurantMode>} />
+          <Route path="/reservation" element={<RequireRestaurantMode><Reservation /></RequireRestaurantMode>} />
+          <Route path="/recipe" element={<RequireRestaurantMode><Recipe /></RequireRestaurantMode>} />
           {/* Delivery */}
-          <Route path="/delivery" element={<Delivery />} />
+          <Route path="/delivery" element={<RequireRestaurantMode><Delivery /></RequireRestaurantMode>} />
           {/* Finance */}
           <Route path="/bank-account" element={<RequireMinRole minRole="admin"><BankAccount /></RequireMinRole>} />
           <Route path="/fixed-asset" element={<RequireMinRole minRole="admin"><FixedAsset /></RequireMinRole>} />

@@ -1,8 +1,10 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Barang, CartItem, Customer, Kategori } from '../../../shared/types'
 import type { SalePayload, QrisPayment } from './types'
+import { useAppStore } from '../../stores'
 
 export function useTransaksiState() {
+  const { posMode } = useAppStore()
   const [products, setProducts] = useState<Barang[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -34,10 +36,19 @@ export function useTransaksiState() {
   const [categories, setCategories] = useState<Kategori[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL')
 
-  const [tipePesanan, setTipePesanan] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN')
+  const [tipePesanan, setTipePesanan] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>(() => {
+    return posMode === 'restaurant' ? 'DINE_IN' : 'TAKEAWAY'
+  })
   const [nomorMeja, setNomorMeja] = useState('')
   const [availableTables, setAvailableTables] = useState<Array<{ id: number; nomor_meja: string; label?: string; status: string }>>([])
   const [manualWaPhone, setManualWaPhone] = useState('')
+
+  useEffect(() => {
+    if (posMode === 'retail') {
+      setTipePesanan('TAKEAWAY')
+      setNomorMeja('')
+    }
+  }, [posMode])
 
   const [pajakPersen, setPajakPersen] = useState(0)
   const [activeShiftId, setActiveShiftId] = useState<number | null>(null)

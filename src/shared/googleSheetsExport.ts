@@ -2,7 +2,7 @@ import type { DashboardSummary } from './types'
 
 export interface GoogleSheetsPayload {
   app: string
-  action: 'append_dashboard' | 'test'
+  action: 'append_dashboard' | 'append_report' | 'test'
   generatedAt: string
   sheets: Array<{
     name: string
@@ -142,4 +142,63 @@ export function testGoogleSheetsPayload(): GoogleSheetsPayload {
       },
     ],
   }
+}
+
+export interface ReportExportInput {
+  title: string
+  tab: string
+  dateRange?: { start?: string; end?: string }
+  headers: string[]
+  rows: Array<Array<string | number>>
+  summaryCards?: Array<{ label: string; value: string | number }>
+}
+
+export function reportToSheetsPayload(input: ReportExportInput): GoogleSheetsPayload {
+  const generatedAt = new Date().toLocaleString('id-ID')
+  const dateInfo = input.dateRange?.start && input.dateRange?.end
+    ? `${input.dateRange.start} s/d ${input.dateRange.end}`
+    : 'Semua Periode'
+
+  const sheetRows: Array<Array<string | number>> = [
+    ['WariPOS - ' + input.title],
+    ['Periode', dateInfo],
+    ['Waktu Export', generatedAt],
+    [],
+  ]
+
+  if (input.summaryCards && input.summaryCards.length > 0) {
+    sheetRows.push(['RINGKASAN'])
+    for (const card of input.summaryCards) {
+      sheetRows.push([card.label, card.value])
+    }
+    sheetRows.push([])
+  }
+
+  sheetRows.push(input.headers)
+  for (const row of input.rows) {
+    sheetRows.push(row)
+  }
+
+  return {
+    app: 'WariPOS',
+    action: 'append_report',
+    generatedAt,
+    sheets: [
+      {
+        name: (input.tab || 'Laporan').slice(0, 50),
+        rows: sheetRows,
+      },
+    ],
+  }
+}
+
+export function reportToTsv(input: ReportExportInput): string {
+  const payload = reportToSheetsPayload(input)
+  const rows = payload.sheets.flatMap((sheet, index) => [
+    ...(index === 0 ? [] : [[]]),
+    [sheet.name],
+    ...sheet.rows,
+  ])
+
+  return rows.map(row => row.map(sanitizeSheetCell).join('\t')).join('\n')
 }

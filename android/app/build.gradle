@@ -62,10 +62,10 @@ android {
     }
 }
 
-// Rename APK/AAB output to ZetassPOS
+// Rename APK output to WariPOS.apk
 android.applicationVariants.configureEach { variant ->
     variant.outputs.all { output ->
-        outputFileName = "ZetassPOS.apk"
+        outputFileName = "WariPOS.apk"
     }
 }
 

@@ -1,26 +1,70 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { secureStorage } from '../utils/secureStorage'
 
-export type ThemeColor = 'indigo' | 'emerald' | 'rose' | 'amber' | 'sky' | 'pink' | 'violet' | 'teal' | 'cyan' | 'orange' | string
-export type ThemeMode = 'light' | 'dark'
+export type ThemeColor =
+  | 'crimson'
+  | 'indigo'
+  | 'emerald'
+  | 'blue'
+  | 'rose'
+  | 'amber'
+  | 'sky'
+  | 'pink'
+  | 'violet'
+  | 'purple'
+  | 'teal'
+  | 'cyan'
+  | 'orange'
+  | 'green'
+  | 'slate'
+  | 'coffee'
+  | 'gold'
+  | string
 
-interface ThemeContextValue {
+export type ThemeMode = 'light' | 'dark' | 'system'
+export type FontSize = 'compact' | 'normal' | 'large'
+export type BorderRadius = 'sharp' | 'medium' | 'rounded'
+
+export interface ThemeContextValue {
   color: ThemeColor
   mode: ThemeMode
+  resolvedMode: 'light' | 'dark'
+  isDark: boolean
+  fontSize: FontSize
+  borderRadius: BorderRadius
   setColor: (c: ThemeColor) => void
   setMode: (m: ThemeMode) => void
   toggleMode: () => void
+  setFontSize: (f: FontSize) => void
+  setBorderRadius: (r: BorderRadius) => void
 }
 
-const PRESETS = ['indigo', 'emerald', 'rose', 'amber', 'sky', 'pink', 'violet', 'teal', 'cyan', 'orange']
+export const PRESETS: ThemeColor[] = [
+  'crimson',
+  'indigo',
+  'emerald',
+  'blue',
+  'rose',
+  'amber',
+  'sky',
+  'pink',
+  'violet',
+  'purple',
+  'teal',
+  'cyan',
+  'orange',
+  'green',
+  'slate',
+  'coffee',
+  'gold',
+]
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 function hexToRgb(hex: string): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  return result 
+  return result
     ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
-    : '236, 72, 153'
+    : '220, 38, 38'
 }
 
 function mixHex(hex: string, target: string, amount: number): string {
@@ -54,24 +98,78 @@ function generateCustomShades(hex: string) {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [color, setColorState] = useState<ThemeColor>(() => {
     try {
-      return (localStorage.getItem('theme-color') || secureStorage.getItem('theme-color') as ThemeColor) || 'pink'
+      return (
+        localStorage.getItem('waripos_theme_color') ||
+        localStorage.getItem('theme-color') ||
+        'crimson'
+      )
     } catch {
-      return 'pink'
+      return 'crimson'
     }
   })
 
   const [mode, setModeState] = useState<ThemeMode>(() => {
     try {
-      const stored = localStorage.getItem('theme-mode') || secureStorage.getItem('theme-mode') as ThemeMode | null
-      if (stored === 'light' || stored === 'dark') return stored
+      const stored = (
+        localStorage.getItem('waripos_theme_mode') ||
+        localStorage.getItem('theme-mode')
+      ) as ThemeMode | null
+      if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
     } catch {}
-    return 'light'
+    return 'system'
   })
 
+  const [fontSize, setFontSizeState] = useState<FontSize>(() => {
+    try {
+      const stored = localStorage.getItem('waripos_font_size') as FontSize | null
+      if (stored === 'compact' || stored === 'normal' || stored === 'large') return stored
+    } catch {}
+    return 'normal'
+  })
+
+  const [borderRadius, setBorderRadiusState] = useState<BorderRadius>(() => {
+    try {
+      const stored = localStorage.getItem('waripos_border_radius') as BorderRadius | null
+      if (stored === 'sharp' || stored === 'medium' || stored === 'rounded') return stored
+    } catch {}
+    return 'rounded'
+  })
+
+  const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches
+    }
+    return false
+  })
+
+  // Watch system color scheme changes
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  // Listen to external theme events (from AI Assistant or other components)
+  useEffect(() => {
+    const handleCustomThemeChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (!detail) return
+      if (detail.color) setColorState(detail.color)
+      if (detail.mode) setModeState(detail.mode)
+      if (detail.fontSize) setFontSizeState(detail.fontSize)
+      if (detail.borderRadius) setBorderRadiusState(detail.borderRadius)
+    }
+    window.addEventListener('waripos:change-theme', handleCustomThemeChange)
+    return () => window.removeEventListener('waripos:change-theme', handleCustomThemeChange)
+  }, [])
+
+  // Color application & persistence
   useEffect(() => {
     if (PRESETS.includes(color)) {
       document.documentElement.setAttribute('data-theme', color)
-      // Reset inline styles if moving back to preset
+      // Reset inline styles
       document.documentElement.style.removeProperty('--color-primary-50')
       document.documentElement.style.removeProperty('--color-primary-100')
       document.documentElement.style.removeProperty('--color-primary-200')
@@ -101,35 +199,73 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       document.documentElement.style.setProperty('--glass-shadow-rgb', rgb)
       document.documentElement.style.setProperty('--chart-bar-color', color)
     }
+
     try {
+      localStorage.setItem('waripos_theme_color', color)
       localStorage.setItem('theme-color', color)
-    } catch {}
-    try {
-      secureStorage.setItem('theme-color', color)
     } catch {}
   }, [color])
 
+  // Resolved mode calculation
+  const resolvedMode: 'light' | 'dark' = mode === 'system' ? (systemIsDark ? 'dark' : 'light') : mode
+  const isDark = resolvedMode === 'dark'
+
+  // Mode application & persistence
   useEffect(() => {
-    const isDark = mode === 'dark'
     if (isDark) {
       document.documentElement.classList.add('dark')
     } else {
       document.documentElement.classList.remove('dark')
     }
+
     try {
+      localStorage.setItem('waripos_theme_mode', mode)
       localStorage.setItem('theme-mode', mode)
     } catch {}
+  }, [mode, isDark])
+
+  // Font size application & persistence
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-size', fontSize)
     try {
-      secureStorage.setItem('theme-mode', mode)
+      localStorage.setItem('waripos_font_size', fontSize)
     } catch {}
-  }, [mode])
+  }, [fontSize])
+
+  // Border radius application & persistence
+  useEffect(() => {
+    document.documentElement.setAttribute('data-radius', borderRadius)
+    try {
+      localStorage.setItem('waripos_border_radius', borderRadius)
+    } catch {}
+  }, [borderRadius])
 
   const setColor = (c: ThemeColor) => setColorState(c)
   const setMode = (m: ThemeMode) => setModeState(m)
-  const toggleMode = () => setModeState(m => (m === 'light' ? 'dark' : 'light'))
+  const toggleMode = () => {
+    setModeState(() => {
+      return isDark ? 'light' : 'dark'
+    })
+  }
+  const setFontSize = (f: FontSize) => setFontSizeState(f)
+  const setBorderRadius = (r: BorderRadius) => setBorderRadiusState(r)
 
   return (
-    <ThemeContext.Provider value={{ color, mode, setColor, setMode, toggleMode }}>
+    <ThemeContext.Provider
+      value={{
+        color,
+        mode,
+        resolvedMode,
+        isDark,
+        fontSize,
+        borderRadius,
+        setColor,
+        setMode,
+        toggleMode,
+        setFontSize,
+        setBorderRadius,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   )

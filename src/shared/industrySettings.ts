@@ -59,10 +59,21 @@ export function normalizeIndustrySettings(input: Partial<IndustrySettings> | Rec
   }
 }
 
+export const OPENROUTER_VERIFIED_FREE_MODELS = [
+  'openrouter/free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'nex-agi/nex-n2.5-pro:free',
+  'nex-agi/nex-n2.5-mini:free',
+  'liquid/lfm-2.5-2.6b:free',
+  'inclusionai/ling-3.0-flash-sante:free',
+  'inclusionai/ling-3.0-flash-fin:free',
+  'dots-studio/dots-3-note-preview:free',
+]
+
 export function defaultModelForProvider(provider: AiProvider) {
   if (provider === 'openai') return 'gpt-4o-mini'
   if (provider === 'deepseek') return 'deepseek-chat'
-  if (provider === 'openrouter') return 'deepseek/deepseek-r1:free'
+  if (provider === 'openrouter') return 'openrouter/free'
   if (provider === 'bluesminds') return 'DeepSeek-V4-Flash'
   if (provider === 'gemini') return 'gemini-2.0-flash'
   return ''

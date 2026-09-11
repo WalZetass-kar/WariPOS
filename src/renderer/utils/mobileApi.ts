@@ -17,7 +17,7 @@ import type {
 } from '../../shared/types'
 import bcrypt from 'bcryptjs'
 import { buildAssistantPrompt, buildAssistantSystemPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
-import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport'
+import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload, type GoogleSheetsPayload } from '../../shared/googleSheetsExport'
 import {
   DEFAULT_INDUSTRY_SETTINGS,
   defaultBaseUrlForProvider,
@@ -31,6 +31,7 @@ import { isLicenseSessionExpiredResult } from '../../shared/licenseSession'
 import { validatePasswordStrength } from '../../shared/passwordPolicy'
 import { assertHttpsEndpoint, normalizeSyncServerUrl } from '../../shared/endpointSecurity'
 import { registerTrialCustomerInSupabase, syncBuyerLicense } from '../../shared/supabase/license'
+import { getKnownPlanDefaults } from '../../shared/planDefaults'
 import {
   mobileExportToExcel,
   mobileExportToPDF,
@@ -1497,6 +1498,7 @@ function planIdFromMobileRemote(store: MobileStore, plan: AnyRecord | null | und
   const code = String(plan.code ?? '').trim()
   const name = String(plan.name ?? (code || 'Paket')).trim()
   if (!name) return null
+  const defaults = getKnownPlanDefaults(code || name)
 
   const existing = store.plans.find(item => (
     (code && String(item.code ?? '') === code) ||
@@ -1507,22 +1509,47 @@ function planIdFromMobileRemote(store: MobileStore, plan: AnyRecord | null | und
     created_at: now(),
   }
 
+  const resolvedMaxDevices = Number.isFinite(Number(plan.max_devices))
+    ? Math.trunc(Number(plan.max_devices))
+    : (defaults.max_devices ?? (Number.isFinite(Number(existing?.max_devices)) ? Math.trunc(Number(existing?.max_devices)) : 1))
+
+  const resolvedMaxTransactions = Number.isFinite(Number(plan.max_transactions_per_day))
+    ? Math.trunc(Number(plan.max_transactions_per_day))
+    : (defaults.max_transactions_per_day ?? (Number.isFinite(Number(existing?.max_transactions_per_day)) ? Math.trunc(Number(existing?.max_transactions_per_day)) : -1))
+
+  const resolvedMaxProducts = Number.isFinite(Number(plan.max_products))
+    ? Math.trunc(Number(plan.max_products))
+    : (defaults.max_products ?? (Number.isFinite(Number(existing?.max_products)) ? Math.trunc(Number(existing?.max_products)) : -1))
+
+  const resolvedMaxUsers = Number.isFinite(Number(plan.max_users))
+    ? Math.trunc(Number(plan.max_users))
+    : (defaults.max_users ?? (Number.isFinite(Number(existing?.max_users)) ? Math.trunc(Number(existing?.max_users)) : 1))
+
+  let resolvedFlags: Record<string, boolean> = {}
+  if (plan.feature_flags && typeof plan.feature_flags === 'object' && Object.keys(plan.feature_flags).length > 0) {
+    resolvedFlags = plan.feature_flags
+  } else if (defaults.feature_flags && Object.keys(defaults.feature_flags).length > 0) {
+    resolvedFlags = defaults.feature_flags
+  } else if (existing?.feature_flags && typeof existing.feature_flags === 'object') {
+    resolvedFlags = existing.feature_flags
+  }
+
   Object.assign(row, {
     name,
-    code: code || row.code,
-    price: Math.round(toNumber(plan.price)),
-    duration_days: Math.max(0, Math.trunc(toNumber(plan.duration_days, 30))),
-    features: Array.isArray(plan.features)
+    code: code || defaults.code || row.code,
+    price: Math.round(toNumber(plan.price, existing?.price ?? 0)),
+    duration_days: Math.max(0, Math.trunc(toNumber(plan.duration_days, defaults.duration_days ?? existing?.duration_days ?? 30))),
+    features: Array.isArray(plan.features) && plan.features.length > 0
       ? plan.features
-      : (plan.description ? [String(plan.description)] : []),
+      : (plan.description ? [String(plan.description)] : (existing?.features || [])),
     is_active: plan.is_active === false || plan.is_active === 0 ? false : true,
     is_recommended: plan.is_recommended === true || plan.is_recommended === 1,
     updated_at: now(),
-    max_devices: Number.isFinite(Number(plan.max_devices)) ? Math.trunc(Number(plan.max_devices)) : 1,
-    max_transactions_per_day: Number.isFinite(Number(plan.max_transactions_per_day)) ? Math.trunc(Number(plan.max_transactions_per_day)) : -1,
-    max_products: Number.isFinite(Number(plan.max_products)) ? Math.trunc(Number(plan.max_products)) : -1,
-    max_users: Number.isFinite(Number(plan.max_users)) ? Math.trunc(Number(plan.max_users)) : 1,
-    feature_flags: typeof plan.feature_flags === 'object' && plan.feature_flags ? plan.feature_flags : {},
+    max_devices: resolvedMaxDevices,
+    max_transactions_per_day: resolvedMaxTransactions,
+    max_products: resolvedMaxProducts,
+    max_users: resolvedMaxUsers,
+    feature_flags: resolvedFlags,
   })
 
   if (!existing) store.plans.push(row)
@@ -1533,7 +1560,8 @@ function syncMobileBuyerFromLicensePayload(store: MobileStore, username: string,
   const user = store.users.find(item => item.nama_pengguna === username)
   if (!user || !payload) return
 
-  const planId = planIdFromMobileRemote(store, payload.plan)
+  const planPayload = payload.subscription?.plan ?? payload.plan
+  const planId = planIdFromMobileRemote(store, planPayload)
   const hasSubscriptionPayload = payload.subscription && typeof payload.subscription === 'object'
   const expiresAt = typeof payload.subscription?.expires_at === 'string'
     ? payload.subscription.expires_at
@@ -1572,6 +1600,7 @@ async function upsertMobileRemoteBuyer(store: MobileStore, input: {
   const rawName = String(customer.name ?? customer.email ?? username)
   const existing = store.users.find(item => item.nama_pengguna.toLowerCase() === username.toLowerCase() || (item.email && item.email.toLowerCase() === email))
 
+  const rawPlan = input.remote?.subscription?.plan ?? input.remote?.plan
   const isDeveloper =
     customer.metadata?.role === 'developer' ||
     customer.metadata?.is_developer === true ||
@@ -1586,9 +1615,9 @@ async function upsertMobileRemoteBuyer(store: MobileStore, input: {
     input.remote?.role === 'developer' ||
     input.remote?.user?.role === 'developer' ||
     existing?.hak_akses === 'developer' ||
-    String(input.remote?.plan?.code || '').toUpperCase().includes('LIFETIME')
+    String(rawPlan?.code || '').toUpperCase().includes('LIFETIME')
 
-  const planId = isDeveloper ? null : planIdFromMobileRemote(store, input.remote?.plan)
+  const planId = isDeveloper ? null : planIdFromMobileRemote(store, rawPlan)
   const expiresAt = isDeveloper ? null : (typeof input.remote?.subscription?.expires_at === 'string'
     ? input.remote.subscription.expires_at
     : null)
@@ -2011,12 +2040,33 @@ async function listMobileAiModels(store: MobileStore, input?: Partial<IndustrySe
     }).finally(() => window.clearTimeout(timeout))
 
     const data = await response.json().catch(() => null) as any
-    if (!response.ok || data?.error) return fail(data?.error?.message || `AI models HTTP ${response.status}`)
+    if (!response.ok || data?.error) return fail(extractMobileAiErrorMessage(data, response.status))
     const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : []
-    const models = rows
+    const rawModels = rows
       .map((row: any) => String(row?.id || row?.name || '').trim())
       .filter(Boolean)
-      .sort((a: string, b: string) => a.localeCompare(b))
+
+    let models: string[]
+    if (settings.aiProvider === 'openrouter') {
+      const freeModels: string[] = []
+      const otherModels: string[] = []
+      for (const m of rawModels) {
+        if (m === 'openrouter/free' || m.endsWith(':free')) {
+          freeModels.push(m)
+        } else {
+          otherModels.push(m)
+        }
+      }
+      freeModels.sort((a, b) => {
+        if (a === 'openrouter/free') return -1
+        if (b === 'openrouter/free') return 1
+        return a.localeCompare(b)
+      })
+      otherModels.sort((a, b) => a.localeCompare(b))
+      models = [...freeModels, ...otherModels]
+    } else {
+      models = rawModels.sort((a: string, b: string) => a.localeCompare(b))
+    }
     if (!models.length) return fail('Provider tidak mengembalikan daftar model')
     return ok(models, `${models.length} model tersedia`)
   } catch (error) {
@@ -2026,8 +2076,36 @@ async function listMobileAiModels(store: MobileStore, input?: Partial<IndustrySe
   }
 }
 
+function extractMobileAiErrorMessage(data: any, status: number): string {
+  if (!data?.error) return `HTTP ${status}`
+  const errObj = data.error
+  if (typeof errObj === 'string') return errObj
+
+  const rawMeta = errObj?.metadata?.raw
+  const remedyHint = errObj?.metadata?.remedy_hint
+  const baseMsg = errObj?.message || `HTTP ${status}`
+  const code = errObj?.code || status
+
+  if (rawMeta && typeof rawMeta === 'string') {
+    return `${baseMsg}: ${rawMeta}`
+  }
+  if (remedyHint && typeof remedyHint === 'string') {
+    return `${baseMsg} (${remedyHint})`
+  }
+  return code ? `${baseMsg} (kode: ${code})` : baseMsg
+}
+
 function formatMobileAiError(error: unknown, settings: IndustrySettings) {
   const message = error instanceof Error ? error.message : String(error || '')
+  if (/provider returned error|rate-limit|upstream_provider_shared_pool|temporarily rate-limited|429/i.test(message)) {
+    if (settings.aiProvider === 'openrouter') {
+      return `Model "${settings.aiModel || 'ini'}" sedang terkena antrean/kuota sementara dari provider upstream OpenRouter. Solusi: Gunakan model "openrouter/free" (otomatis merutekan ke model gratis yang sedang aktif) atau model gratis seperti "nvidia/nemotron-3.5-lightning:free", atau coba beberapa saat lagi.`
+    }
+    return 'Kuota server AI online sedang mencapai batas pemanggilan sementara (Rate Limit / 429).'
+  }
+  if (/resourceexhausted|request limit reached|quota/i.test(message)) {
+    return 'Kuota server AI online sedang mencapai batas sementara (Resource Exhausted).'
+  }
   if (/abort|timeout/i.test(message)) return 'Koneksi AI timeout. Periksa koneksi internet atau coba lagi beberapa saat.'
   if (/fetch failed|failed to fetch|networkerror|enotfound|eai_again|econnrefused|econnreset|etimedout|cert|certificate/i.test(message)) {
     const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
@@ -2105,7 +2183,7 @@ async function requestMobileAiOnline(store: MobileStore, input: { question: stri
       }),
     })
     const data = await response.json().catch(() => null) as any
-    if (!response.ok || data?.error) throw new Error(data?.error?.message || `AI HTTP ${response.status}`)
+    if (!response.ok || data?.error) throw new Error(extractMobileAiErrorMessage(data, response.status))
     const answer = data?.choices?.[0]?.message?.content?.trim()
     if (!answer) throw new Error('AI tidak mengembalikan jawaban')
     return { answer, provider: settings.aiProvider, online: true }
@@ -2518,18 +2596,28 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'license:changeUserPlan': {
       const res = await mobileAdminLicenseRequest<T>('PUT', `/admin/users/${encodeURIComponent(String(args[0] ?? ''))}/plan`, args[1])
-      if (!res.success) {
-        const userId = String(args[0] ?? '')
-        const planData = (args[1] ?? {}) as AnyRecord
-        const targetUser = store.users.find(u => u.nama_pengguna === userId || u.email === userId || String((u as any).id) === userId)
-        if (targetUser) {
-          const duration = Number(planData.duration_days ?? 30)
-          const expiresAt = duration === 0 ? null : new Date(Date.now() + duration * 86400000).toISOString()
-          targetUser.access_expires_at = expiresAt
-          targetUser.subscription_expires_at = expiresAt
-          targetUser.status_user = 'Aktif'
-          if (planData.plan_code) (targetUser as any).plan_code = String(planData.plan_code)
-          saveStore(store)
+      const userId = String(args[0] ?? '')
+      const planData = (args[1] ?? {}) as AnyRecord
+      const targetUser = store.users.find(u => u.nama_pengguna === userId || u.email === userId || String((u as any).id) === userId)
+      if (targetUser) {
+        const duration = Number(planData.duration_days ?? 30)
+        const expiresAt = duration === 0 ? null : new Date(Date.now() + duration * 86400000).toISOString()
+        targetUser.access_expires_at = expiresAt
+        targetUser.subscription_expires_at = expiresAt
+        targetUser.status_user = 'Aktif'
+        targetUser.is_buyer = 1
+        if (planData.plan_code) (targetUser as any).plan_code = String(planData.plan_code)
+        const foundPlan = store.plans.find(p => (
+          (planData.plan_code && (p.code === planData.plan_code || p.name === planData.plan_code)) ||
+          (planData.plan_name && p.name === planData.plan_name) ||
+          (planData.name && p.name === planData.name) ||
+          (planData.id && Number(p.id) === Number(planData.id))
+        ))
+        if (foundPlan) {
+          targetUser.subscription_plan_id = Number(foundPlan.id)
+        }
+        saveStore(store)
+        if (!res.success) {
           return ok(targetUser as T, 'Paket langganan user berhasil diperbarui')
         }
       }
@@ -3199,8 +3287,10 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'subscription:getStatus': {
       const username = String(args[0] ?? '')
       const current = store.users.find(item => item.nama_pengguna === username)
-      const plan = store.plans.find(item => Number(item.id) === Number(current?.subscription_plan_id))
-      const expiresAt = current?.subscription_expires_at ?? current?.access_expires_at ?? null
+      const buyer = store.users.find(item => Boolean(item.is_buyer || item.subscription_plan_id))
+      const planId = current?.subscription_plan_id ?? (current?.hak_akses !== 'developer' && current?.hak_akses !== 'demo' ? buyer?.subscription_plan_id : null)
+      const plan = store.plans.find(item => Number(item.id) === Number(planId))
+      const expiresAt = current?.subscription_expires_at ?? current?.access_expires_at ?? (planId ? buyer?.subscription_expires_at ?? buyer?.access_expires_at : null) ?? null
       const expiresTime = expiresAt ? new Date(expiresAt).getTime() : Number.NaN
       return ok({
         plan,
@@ -3348,11 +3438,14 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return await listMobileAiModels(store, args[0] as Partial<IndustrySettings> | undefined) as IpcResponse<T>
 
     case 'integrations:testGoogleSheets': {
-      const settings = normalizeIndustrySettings(store.industrySettings)
-      if (!settings.googleSheetsEnabled || !settings.googleSheetsWebAppUrl) {
-        return fail('Google Sheets belum diaktifkan atau URL Apps Script belum diisi')
+      const saved = normalizeIndustrySettings(store.industrySettings)
+      const override = (args[0] ?? {}) as Partial<IndustrySettings>
+      const settings = { ...saved, ...override }
+      const url = String(settings.googleSheetsWebAppUrl || '').trim()
+      if (!url) {
+        return fail('URL Web App Apps Script belum diisi')
       }
-      return postJsonText(settings.googleSheetsWebAppUrl, testGoogleSheetsPayload()) as Promise<IpcResponse<T>>
+      return postJsonText(url, testGoogleSheetsPayload()) as Promise<IpcResponse<T>>
     }
 
     case 'integrations:exportDashboardToSheets': {
@@ -3363,6 +3456,17 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const result = await postJsonText(settings.googleSheetsWebAppUrl, dashboardSummaryToSheetsPayload(args[0] as DashboardSummary))
       return result.success
         ? ok({ mode: 'apps-script', result: result.data } as T, 'Dashboard berhasil dikirim ke Google Sheets')
+        : ({ ...result, data: { mode: 'clipboard' } } as IpcResponse<T>)
+    }
+
+    case 'integrations:exportReportToSheets': {
+      const settings = normalizeIndustrySettings(store.industrySettings)
+      if (!settings.googleSheetsEnabled || !settings.googleSheetsWebAppUrl) {
+        return fail('Google Sheets otomatis belum dikonfigurasi')
+      }
+      const result = await postJsonText(settings.googleSheetsWebAppUrl, args[0] as GoogleSheetsPayload)
+      return result.success
+        ? ok({ mode: 'apps-script', result: result.data } as T, 'Laporan berhasil dikirim ke Google Sheets')
         : ({ ...result, data: { mode: 'clipboard' } } as IpcResponse<T>)
     }
 
@@ -3594,9 +3698,30 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
       // If user is not yet in local store, try remote login
       const cleanUser = username.trim()
-      const targetEmail = EMAIL_PATTERN.test(cleanUser)
+      let targetEmail = EMAIL_PATTERN.test(cleanUser)
         ? cleanUser.toLowerCase()
-        : `${cleanUser.toLowerCase().replace(/[^a-z0-9]/g, '')}@zetass.dev`
+        : ''
+
+      if (!targetEmail) {
+        try {
+          const remoteUsersRes = await mobileAdminLicenseRequest<AnyRecord[]>('GET', '/admin/users')
+          if (remoteUsersRes.success && Array.isArray(remoteUsersRes.data)) {
+            const cleanLower = cleanUser.toLowerCase()
+            const match = remoteUsersRes.data.find((u: any) =>
+              (u.name && String(u.name).trim().toLowerCase() === cleanLower) ||
+              (u.email && String(u.email).trim().toLowerCase() === cleanLower) ||
+              (u.email && String(u.email).trim().toLowerCase().split('@')[0] === cleanLower)
+            )
+            if (match?.email) {
+              targetEmail = String(match.email).trim().toLowerCase()
+            }
+          }
+        } catch {}
+      }
+
+      if (!targetEmail) {
+        targetEmail = `${cleanUser.toLowerCase().replace(/[^a-z0-9]/g, '')}@zetass.dev`
+      }
 
       if (EMAIL_PATTERN.test(cleanUser)) {
         try {
@@ -3631,13 +3756,15 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.' : `Akun belum terdaftar di perangkat ini. Silakan Daftar Akun Baru atau periksa kembali username/password.`)
     }
 
+    case 'auth:verifyPinKasir':
     case 'auth:loginPin': {
       const username = String(args[0] ?? '').trim()
       const pin = String(args[1] ?? '')
       const device = authDevice(args[2])
       if (!/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
 
-      const limiterKey = `pin:${username}`
+      const cleanUsername = username.toLowerCase()
+      const limiterKey = `pin:${cleanUsername}`
       const lock = loginLockStatus(limiterKey)
       if (lock.locked) {
         const minutes = Math.ceil((lock.remainingSeconds ?? 0) / 60)
@@ -3646,7 +3773,10 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         return fail(`Login PIN diblokir karena terlalu banyak percobaan gagal. Coba lagi dalam ${minutes} menit.`)
       }
 
-      const user = store.users.find(item => item.nama_pengguna === username)
+      const user = store.users.find(item =>
+        item.nama_pengguna.trim().toLowerCase() === cleanUsername ||
+        (item.email && item.email.trim().toLowerCase() === cleanUsername)
+      )
       if (!user || user.status_user !== 'Aktif' || user.hak_akses !== 'kasir' || !user.pin_enabled || !user.pin_hash) {
         const attempt = recordFailedLoginAttempt(limiterKey)
         auditAuth(store, username, 'PIN_LOGIN_FAILED', `PIN tidak aktif untuk user atau user bukan kasir. Sisa percobaan: ${attempt.remainingAttempts}`, device)
@@ -3670,10 +3800,29 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     }
 
     case 'auth:changePassword': {
-      const username = String(args[0] ?? '').trim()
-      const oldPassword = String(args[1] ?? '')
-      const newPassword = String(args[2] ?? '')
-      const user = store.users.find(item => item.nama_pengguna === username)
+      let username = ''
+      let oldPassword = ''
+      let newPassword = ''
+      let device: MobileAuthDeviceInfo | null = null
+
+      if (args[0] && typeof args[0] === 'object') {
+        const payload = args[0] as AnyRecord
+        username = String(payload.username ?? '').trim()
+        oldPassword = String(payload.oldPassword ?? payload.oldPass ?? '')
+        newPassword = String(payload.newPassword ?? payload.newPass ?? '')
+        device = authDevice(payload.deviceInfo ?? args[1])
+      } else {
+        username = String(args[0] ?? '').trim()
+        oldPassword = String(args[1] ?? '')
+        newPassword = String(args[2] ?? '')
+        device = authDevice(args[3])
+      }
+
+      const cleanUsername = username.toLowerCase()
+      const user = store.users.find(item =>
+        item.nama_pengguna.trim().toLowerCase() === cleanUsername ||
+        (item.email && item.email.trim().toLowerCase() === cleanUsername)
+      )
       if (!user) return fail('User tidak ditemukan')
       if (!(await verifyMobilePassword(oldPassword, user))) return fail('Password lama salah')
 
@@ -3698,7 +3847,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
           throw new Error(remote.message ?? 'Gagal sinkronisasi password ke license server')
         }
 
-        auditAuth(store, username, 'CHANGE_PASSWORD', 'Password berhasil diubah', authDevice(args[3]))
+        auditAuth(store, username, 'CHANGE_PASSWORD', 'Password berhasil diubah', device)
         saveStore(store)
         return ok({ strength: validation.strength } as T, 'Password berhasil diubah')
       } catch (error) {
@@ -3715,7 +3864,11 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const input = args[0] as string | AnyRecord
       const username = String(typeof input === 'string' ? input : input?.username ?? '').trim()
       const sessionToken = typeof input === 'string' ? '' : String(input?.sessionToken ?? '')
-      const user = store.users.find(item => item.nama_pengguna === username)
+      const cleanUsername = username.toLowerCase()
+      const user = store.users.find(item =>
+        item.nama_pengguna.trim().toLowerCase() === cleanUsername ||
+        (item.email && item.email.trim().toLowerCase() === cleanUsername)
+      )
       if (!sessionToken) return fail('Session tidak valid atau sudah kedaluwarsa')
       if (!user) return fail('Session tidak ditemukan')
       if (user.must_change_password) return fail('Password wajib diganti sebelum session dipulihkan')
@@ -4208,7 +4361,11 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'user:create': {
       const data = args[0] as AnyRecord
-      if (store.users.some(item => item.nama_pengguna === data.nama_pengguna)) return fail('Username sudah digunakan')
+      const cleanNamaPengguna = String(data.nama_pengguna ?? '').trim()
+      if (!cleanNamaPengguna) return fail('Username wajib diisi')
+      if (store.users.some(item => item.nama_pengguna.trim().toLowerCase() === cleanNamaPengguna.toLowerCase())) {
+        return fail('Username sudah digunakan')
+      }
       const password = String(data.password ?? data.kata_sandi ?? '')
       const validation = validatePasswordStrength(password)
       if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
@@ -4217,28 +4374,43 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const role = normalizeMobileLocalRole(data.hak_akses ?? 'kasir')
       if (pinEnabled && role !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
       if ((pin || pinEnabled) && !/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
-      const caller = store.users.find(item => item.nama_pengguna === String(data._caller ?? ''))
-      const callerPlan = store.plans.find(item => Number(item.id) === Number(caller?.subscription_plan_id))
-      const callerPlanManaged = caller && caller.hak_akses !== 'developer' && (Number(caller.is_buyer ?? 0) === 1 || !!caller.subscription_plan_id)
-      if (callerPlanManaged) {
-        const expiresAt = caller.subscription_expires_at ?? caller.access_expires_at ?? null
+      const callerUsername = String(data._caller ?? '').trim().toLowerCase()
+      const caller = store.users.find(item => item.nama_pengguna.trim().toLowerCase() === callerUsername)
+      const buyer = store.users.find(item => Number(item.is_buyer ?? 0) === 1 && item.status_user !== 'Nonaktif')
+      const targetAccount = (caller && (Number(caller.is_buyer ?? 0) === 1 || caller.subscription_plan_id)) ? caller : (buyer || caller)
+      const targetPlanId = targetAccount?.subscription_plan_id
+      const effectivePlan = store.plans.find(item => Number(item.id) === Number(targetPlanId))
+      const isDeveloper = caller?.hak_akses === 'developer' || (!caller && targetAccount?.hak_akses === 'developer')
+
+      if (!isDeveloper && (targetAccount && (Number(targetAccount.is_buyer ?? 0) === 1 || !!targetPlanId))) {
+        const expiresAt = targetAccount.subscription_expires_at ?? targetAccount.access_expires_at ?? null
         const expiresTime = expiresAt ? new Date(expiresAt).getTime() : Number.NaN
         if (Number.isFinite(expiresTime) && expiresTime < Date.now()) {
           return fail('Paket pembeli sudah berakhir. Upgrade atau perpanjang paket sebelum menambah pengguna lokal.')
         }
-        if (callerPlan?.feature_flags?.multi_user === false) {
-          return fail('Paket pembeli belum mengaktifkan multi-user. Aktifkan fitur multi_user di Developer Panel -> Paket.')
+        if (effectivePlan?.feature_flags && effectivePlan.feature_flags.multi_user === false) {
+          return fail('Paket pembeli saat ini belum mendukung multi-user. Silakan upgrade ke paket yang mendukung multi-user.')
         }
-        const maxUsers = Number.isFinite(Number(callerPlan?.max_users)) ? Math.trunc(Number(callerPlan?.max_users)) : 1
-        const used = store.users.filter(item => item.hak_akses !== 'developer').length
+        const maxUsers = Number.isFinite(Number(effectivePlan?.max_users)) ? Math.trunc(Number(effectivePlan?.max_users)) : 1
+        const used = store.users.filter(item => item.hak_akses !== 'developer' && item.status_user !== 'Nonaktif').length
         if (maxUsers !== -1 && used >= maxUsers) {
-          return fail(`Paket pembeli hanya mengizinkan ${maxUsers} pengguna lokal termasuk owner. Ubah Max User di Developer Panel -> Paket untuk menambah kasir lagi.`)
+          return fail(`Paket pembeli hanya mengizinkan ${maxUsers} pengguna aktif termasuk owner (${used}/${maxUsers} terpakai). Upgrade paket Anda untuk menambah kasir lagi.`)
         }
       }
 
+      // Sanitize permissions to prevent non-developer granting developer panel
+      const userPermissions = { ...(data.permissions ?? {}) }
+      if (!isDeveloper) {
+        delete userPermissions['nav_license_admin']
+      }
+
+      const mustChangePassword = data.must_change_password !== undefined
+        ? (data.must_change_password ? 1 : 0)
+        : 0
+
       const row: MobileStore['users'][number] = {
-        nama_pengguna: String(data.nama_pengguna),
-        nama_lengkap: String(data.nama_lengkap ?? data.nama_pengguna),
+        nama_pengguna: cleanNamaPengguna,
+        nama_lengkap: String(data.nama_lengkap ?? cleanNamaPengguna),
         email: data.email ?? null,
         no_telp: data.no_telp ?? null,
         hak_akses: role,
@@ -4250,8 +4422,8 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         password_hash_type: 'bcrypt',
         pin_hash: pin ? await hashMobilePassword(pin) : null,
         pin_enabled: pin && pinEnabled ? 1 : 0,
-        must_change_password: 1,
-        permissions: data.permissions ?? {},
+        must_change_password: mustChangePassword,
+        permissions: userPermissions,
       }
       store.users.unshift(row)
       saveStore(store)
@@ -4259,7 +4431,8 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     }
 
     case 'user:update': {
-      const row = store.users.find(item => item.nama_pengguna === String(args[0] ?? ''))
+      const targetUsername = String(args[0] ?? '').trim().toLowerCase()
+      const row = store.users.find(item => item.nama_pengguna.trim().toLowerCase() === targetUsername)
       if (!row) return fail('User tidak ditemukan')
       const data = args[1] as AnyRecord
       const pin = String(data.pin ?? '')
@@ -4268,6 +4441,16 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       if (pinEnabled && nextRole !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
       if ((pin || pinEnabled) && !pin && !row.pin_hash) return fail('Isi PIN kasir sebelum mengaktifkan login PIN')
       if (pin && !/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
+
+      const callerUsername = String(data._caller ?? '').trim().toLowerCase()
+      const caller = store.users.find(item => item.nama_pengguna.trim().toLowerCase() === callerUsername)
+      const isCallerDev = caller?.hak_akses === 'developer'
+
+      const userPermissions = data.permissions !== undefined ? { ...(data.permissions ?? {}) } : row.permissions
+      if (!isCallerDev && userPermissions) {
+        delete userPermissions['nav_license_admin']
+      }
+
       Object.assign(row, {
         nama_lengkap: data.nama_lengkap ?? row.nama_lengkap,
         email: data.email ?? row.email,
@@ -4276,7 +4459,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         hak_akses: data.hak_akses === undefined ? row.hak_akses : nextRole,
         access_expires_at: data.access_expires_at ?? row.access_expires_at,
         pin_enabled: pinEnabled && nextRole === 'kasir' ? 1 : 0,
-        permissions: data.permissions ?? row.permissions,
+        permissions: userPermissions,
       })
       if (pin) row.pin_hash = await hashMobilePassword(pin)
       if (data.password) {
@@ -4285,7 +4468,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         row.password_hash = await hashMobilePassword(String(data.password))
         row.password_hash_type = 'bcrypt'
         row.password = undefined
-        row.must_change_password = 1
+        row.must_change_password = data.must_change_password !== undefined ? (data.must_change_password ? 1 : 0) : 0
       }
       saveStore(store)
       try {

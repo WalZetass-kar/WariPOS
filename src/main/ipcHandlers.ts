@@ -253,9 +253,23 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     invokeRendererChannel('auth:loginPin', [username, pin, deviceInfo], authLoginPin)
   ))
 
-  const authChangePassword = registerChannel('auth:changePassword', (username: string, oldPass: string, newPass: string, deviceInfo?: any) => (
-    AuthController.changePassword(username, oldPass, newPass, deviceInfo)
+  const authVerifyPinKasir = registerChannel('auth:verifyPinKasir', async (username: string, pin: string, deviceInfo?: any) => (
+    authLoginPin(username, pin, deviceInfo)
   ))
+  ipcMain.handle('auth:verifyPinKasir', (_e, username: string, pin: string, deviceInfo?: any) => (
+    invokeRendererChannel('auth:verifyPinKasir', [username, pin, deviceInfo], authVerifyPinKasir)
+  ))
+
+  const authChangePassword = registerChannel('auth:changePassword', (usernameOrPayload: any, oldPass?: string, newPass?: string, deviceInfo?: any) => {
+    if (usernameOrPayload && typeof usernameOrPayload === 'object') {
+      const u = String(usernameOrPayload.username ?? '').trim()
+      const o = String(usernameOrPayload.oldPassword ?? usernameOrPayload.oldPass ?? '')
+      const n = String(usernameOrPayload.newPassword ?? usernameOrPayload.newPass ?? '')
+      const d = usernameOrPayload.deviceInfo ?? oldPass
+      return AuthController.changePassword(u, o, n, d)
+    }
+    return AuthController.changePassword(usernameOrPayload, oldPass ?? '', newPass ?? '', deviceInfo)
+  })
   ipcMain.handle('auth:changePassword', (_e, username: string, oldPass: string, newPass: string, deviceInfo?: any) => (
     invokeRendererChannel('auth:changePassword', [username, oldPass, newPass, deviceInfo], authChangePassword)
   ))
@@ -654,8 +668,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'integrations:save', (data: any) => IndustrySettingsController.save(data))
   handle(ipcMain, 'integrations:testAi', (data?: any) => AssistantController.test(data))
   handle(ipcMain, 'integrations:listAiModels', (data?: any) => AssistantController.listModels(data))
-  handle(ipcMain, 'integrations:testGoogleSheets', () => IndustrySettingsController.testGoogleSheets())
+  handle(ipcMain, 'integrations:testGoogleSheets', (_e, data?: any) => IndustrySettingsController.testGoogleSheets(data))
   handle(ipcMain, 'integrations:exportDashboardToSheets', (summary: any) => IndustrySettingsController.exportDashboardToSheets(summary))
+  handle(ipcMain, 'integrations:exportReportToSheets', (payload: any) => IndustrySettingsController.exportReportToSheets(payload))
 
   // ─── SCHEDULER ─────────────────────────────────────────────────────
   handle(ipcMain, 'scheduler:runStokCheck', () => SchedulerService.runStokCheck())

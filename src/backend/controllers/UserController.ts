@@ -13,7 +13,7 @@ const ROLE_HIERARCHY = ['developer', 'admin', 'operator', 'kasir']
 const CAN_MANAGE_PERMISSIONS = ['developer'] // Can set permissions for others
 const UNLIMITED_ACCESS_ROLES = ['developer']
 const LOCAL_ROLES = new Set(ROLE_HIERARCHY)
-const ADMIN_MANAGED_ROLES = new Set(['operator', 'kasir'])
+const ADMIN_MANAGED_ROLES = new Set(['admin', 'operator', 'kasir'])
 const PIN_PATTERN = /^\d{4,8}$/
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -76,13 +76,17 @@ function getCallerAccount(username?: string | null) {
   return row ?? null
 }
 
-function countPlanManagedLocalUsers(): number {
-  const row = sqlite.prepare(`
+function countPlanManagedLocalUsers(_caller?: string | null): number {
+  const staffRow = sqlite.prepare(`
     SELECT COUNT(*) AS c
     FROM mediasoft_pengguna
     WHERE COALESCE(hak_akses, '') != 'developer'
+      AND COALESCE(is_buyer, 0) = 0
+      AND COALESCE(status_user, 'Aktif') = 'Aktif'
   `).get() as { c?: number } | undefined
-  return Number(row?.c ?? 0)
+  const staffCount = Number(staffRow?.c ?? 0)
+  // + 1 for store owner
+  return staffCount + 1
 }
 
 function validateLocalUserLimit(caller?: string | null): string | null {
@@ -95,17 +99,18 @@ function validateLocalUserLimit(caller?: string | null): string | null {
 
   const status = getSubscriptionStatus(caller)
   if (status.is_expired) {
-    return 'Paket pembeli sudah berakhir. Upgrade atau perpanjang paket sebelum menambah pengguna lokal.'
+    return 'Paket pembeli sudah berakhir. Silakan upgrade atau perpanjang paket langganan Anda terlebih dahulu.'
   }
   if (status.feature_flags.multi_user === false) {
-    return 'Paket pembeli belum mengaktifkan multi-user. Aktifkan fitur multi_user di Developer Panel -> Paket.'
+    return 'Paket Anda saat ini belum mendukung fitur multi-user. Silakan upgrade ke paket Mingguan, Pro Bulanan, atau Tahunan.'
   }
 
   const maxUsers = Number(status.max_users ?? 1)
   if (maxUsers !== -1) {
-    const used = countPlanManagedLocalUsers()
+    const used = countPlanManagedLocalUsers(caller)
     if (used >= maxUsers) {
-      return `Paket pembeli hanya mengizinkan ${maxUsers} pengguna lokal termasuk owner. Ubah Max User di Developer Panel -> Paket untuk menambah kasir lagi.`
+      const planName = status.plan_name ? `Paket ${status.plan_name}` : 'Paket langganan Anda'
+      return `${planName} telah mencapai batas kuota (${used}/${maxUsers} pengguna termasuk owner). Silakan upgrade paket untuk menambah pengguna/kasir lagi.`
     }
   }
 
@@ -168,6 +173,7 @@ export class UserController {
     permissions?: Record<string, boolean>
     pin?: string
     pin_enabled?: boolean | number
+    must_change_password?: boolean | number
     subscription_plan_id?: number | null
     subscription_expires_at?: string | null
     is_buyer?: boolean | number
@@ -204,6 +210,19 @@ export class UserController {
       const localUserLimitError = validateLocalUserLimit(data._caller)
       if (localUserLimitError) return { success: false, message: localUserLimitError }
 
+      // Inherit subscription from caller/store buyer if not explicitly provided
+      let subPlanId = data.subscription_plan_id ?? null
+      let subExpiresAt = normalizeAccessExpiresAt(data.subscription_expires_at)
+        ?? getDefaultSubscriptionExpiry(subPlanId)
+
+      if (!subPlanId && data._caller) {
+        const callerStatus = getSubscriptionStatus(data._caller)
+        if (callerStatus.plan_id) {
+          subPlanId = callerStatus.plan_id
+          subExpiresAt = callerStatus.expires_at
+        }
+      }
+
       await PenggunaModel.create({
         nama_pengguna: data.nama_pengguna,
         kata_sandi: plainPassword,
@@ -214,12 +233,11 @@ export class UserController {
         access_expires_at: UNLIMITED_ACCESS_ROLES.includes(role)
           ? null
           : normalizeAccessExpiresAt(data.access_expires_at),
-        must_change_password: 1,
+        must_change_password: data.must_change_password !== undefined ? (data.must_change_password ? 1 : 0) : 0,
         pin_hash: data.pin ? await hashPassword(data.pin) : null,
         pin_enabled: data.pin && data.pin_enabled ? 1 : 0,
-        subscription_plan_id: data.subscription_plan_id ?? null,
-        subscription_expires_at: normalizeAccessExpiresAt(data.subscription_expires_at)
-          ?? getDefaultSubscriptionExpiry(data.subscription_plan_id),
+        subscription_plan_id: subPlanId,
+        subscription_expires_at: subExpiresAt,
         is_buyer: data.is_buyer ? 1 : 0,
       })
 
@@ -669,6 +687,7 @@ export class UserController {
       const run = sqlite.transaction(() => {
         removeExisting.run(username)
         for (const [menu_code, allowed] of Object.entries(permissions)) {
+          if (menu_code === 'nav_license_admin' && !isDeveloperAccount(user)) continue
           insert.run(username, menu_code, allowed ? 'True' : 'False')
         }
       })

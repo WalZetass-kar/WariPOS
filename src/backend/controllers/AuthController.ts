@@ -10,6 +10,7 @@ import { sqlite } from '../../database/connection.js'
 import { LicenseController } from './LicenseController.js'
 import { tryCloudSignIn, updatePasswordCloud } from '../../shared/supabase/auth.js'
 import { syncBuyerLicense } from '../../shared/supabase/license.js'
+import { getKnownPlanDefaults } from '../../shared/planDefaults.js'
 
 function isAccessExpired(expiresAt?: string | null): boolean {
   if (!expiresAt) return false
@@ -192,22 +193,58 @@ function ensureTrialPlan(): number {
 }
 
 function ensurePlanFromRemote(plan: any): number {
-  const name = String(plan?.name ?? plan?.code ?? TRIAL_PLAN_NAME)
+  const code = String(plan?.code ?? '').trim()
+  const name = String(plan?.name ?? (code || TRIAL_PLAN_NAME)).trim()
+  const defaults = getKnownPlanDefaults(code || name)
+
   const existing = sqlite
-    .prepare(`SELECT id FROM mediasoft_subscription_plans WHERE name = ? LIMIT 1`)
-    .get(name) as { id: number } | undefined
+    .prepare(`SELECT * FROM mediasoft_subscription_plans WHERE (code IS NOT NULL AND code != '' AND code = ?) OR name = ? LIMIT 1`)
+    .get(code || name, name) as any
 
   const now = new Date().toISOString()
-  const features = plan?.description ? [String(plan.description)] : []
-  const price = Math.round(Number(plan?.price ?? 0))
-  const duration = Math.max(0, Math.trunc(Number(plan?.duration_days ?? TRIAL_DAYS)))
-  const isTrial = String(plan?.code ?? '').toUpperCase() === 'TRIAL_3_DAYS' || name === TRIAL_PLAN_NAME
-  const featureFlags = JSON.stringify(plan?.feature_flags ?? (isTrial ? TRIAL_FEATURE_FLAGS : {}))
+  let features = plan?.description ? [String(plan.description)] : []
+  if (features.length === 0 && existing?.features) {
+    try { features = JSON.parse(existing.features) } catch {}
+  }
+  const price = Math.round(Number(plan?.price ?? existing?.price ?? 0))
+  const duration = Math.max(0, Math.trunc(Number(plan?.duration_days ?? defaults.duration_days ?? existing?.duration_days ?? TRIAL_DAYS)))
+  const isTrial = (code && code.toUpperCase() === 'TRIAL_3_DAYS') || name === TRIAL_PLAN_NAME
+
+  const resolvedMaxDevices = Number.isFinite(Number(plan?.max_devices))
+    ? Math.trunc(Number(plan.max_devices))
+    : (defaults.max_devices ?? (Number.isFinite(Number(existing?.max_devices)) ? Math.trunc(Number(existing.max_devices)) : 1))
+
+  const resolvedMaxTransactions = Number.isFinite(Number(plan?.max_transactions_per_day))
+    ? Math.trunc(Number(plan.max_transactions_per_day))
+    : (defaults.max_transactions_per_day ?? (Number.isFinite(Number(existing?.max_transactions_per_day)) ? Math.trunc(Number(existing.max_transactions_per_day)) : -1))
+
+  const resolvedMaxProducts = Number.isFinite(Number(plan?.max_products))
+    ? Math.trunc(Number(plan.max_products))
+    : (defaults.max_products ?? (Number.isFinite(Number(existing?.max_products)) ? Math.trunc(Number(existing.max_products)) : -1))
+
+  const resolvedMaxUsers = Number.isFinite(Number(plan?.max_users))
+    ? Math.trunc(Number(plan.max_users))
+    : (defaults.max_users ?? (Number.isFinite(Number(existing?.max_users)) ? Math.trunc(Number(existing.max_users)) : 1))
+
+  let resolvedFlags: Record<string, boolean> = {}
+  if (plan?.feature_flags && typeof plan.feature_flags === 'object' && Object.keys(plan.feature_flags).length > 0) {
+    resolvedFlags = plan.feature_flags
+  } else if (defaults.feature_flags && Object.keys(defaults.feature_flags).length > 0) {
+    resolvedFlags = defaults.feature_flags
+  } else if (existing?.feature_flags) {
+    try { resolvedFlags = JSON.parse(existing.feature_flags) } catch {}
+  } else if (isTrial) {
+    resolvedFlags = TRIAL_FEATURE_FLAGS
+  }
+
+  const featureFlags = JSON.stringify(resolvedFlags)
 
   if (existing?.id) {
     sqlite.prepare(`
       UPDATE mediasoft_subscription_plans
-      SET price = ?,
+      SET code = COALESCE(?, code),
+          name = COALESCE(?, name),
+          price = ?,
           duration_days = ?,
           features = ?,
           is_active = ?,
@@ -220,16 +257,18 @@ function ensurePlanFromRemote(plan: any): number {
           feature_flags = ?
       WHERE id = ?
     `).run(
+      code || defaults.code || null,
+      name,
       price,
       duration,
       JSON.stringify(features),
       isTrial ? 0 : 1,
       plan?.is_recommended ? 1 : 0,
       now,
-      Number.isFinite(Number(plan?.max_devices)) ? Math.trunc(Number(plan.max_devices)) : 1,
-      Number.isFinite(Number(plan?.max_transactions_per_day)) ? Math.trunc(Number(plan.max_transactions_per_day)) : -1,
-      Number.isFinite(Number(plan?.max_products)) ? Math.trunc(Number(plan.max_products)) : -1,
-      Number.isFinite(Number(plan?.max_users)) ? Math.trunc(Number(plan.max_users)) : 1,
+      resolvedMaxDevices,
+      resolvedMaxTransactions,
+      resolvedMaxProducts,
+      resolvedMaxUsers,
       featureFlags,
       existing.id,
     )
@@ -238,10 +277,11 @@ function ensurePlanFromRemote(plan: any): number {
 
   const result = sqlite.prepare(`
     INSERT INTO mediasoft_subscription_plans
-      (name, price, duration_days, features, is_active, is_recommended, created_at,
+      (code, name, price, duration_days, features, is_active, is_recommended, created_at,
        max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
+    code || defaults.code || null,
     name,
     price,
     duration,
@@ -249,10 +289,10 @@ function ensurePlanFromRemote(plan: any): number {
     isTrial ? 0 : 1,
     plan?.is_recommended ? 1 : 0,
     now,
-    Number.isFinite(Number(plan?.max_devices)) ? Math.trunc(Number(plan.max_devices)) : 1,
-    Number.isFinite(Number(plan?.max_transactions_per_day)) ? Math.trunc(Number(plan.max_transactions_per_day)) : -1,
-    Number.isFinite(Number(plan?.max_products)) ? Math.trunc(Number(plan.max_products)) : -1,
-    Number.isFinite(Number(plan?.max_users)) ? Math.trunc(Number(plan.max_users)) : 1,
+    resolvedMaxDevices,
+    resolvedMaxTransactions,
+    resolvedMaxProducts,
+    resolvedMaxUsers,
     featureFlags,
   )
   return Number(result.lastInsertRowid)
@@ -360,13 +400,14 @@ async function upsertRemoteBuyerCache(input: {
   remote: any
   existingUser?: AuthUserRecord | null
 }) {
-  const customer = input.remote?.customer ?? {}
-  const plan = input.remote?.plan ?? {}
+  const customer = input.remote?.customer ?? input.remote?.user ?? {}
+  const plan = input.remote?.subscription?.plan ?? input.remote?.plan ?? {}
   const subscription = input.remote?.subscription ?? {}
-  const email = String(customer.email ?? input.loginName).trim().toLowerCase()
+  const email = String(customer.email ?? (EMAIL_PATTERN.test(input.loginName) ? input.loginName : '')).trim().toLowerCase()
   const localByEmail = email ? findLocalUserByEmail(email) : undefined
   const username = input.existingUser?.nama_pengguna
     ?? localByEmail?.nama_pengguna
+    ?? (customer.name ? String(customer.name).trim() : undefined)
     ?? (EMAIL_PATTERN.test(input.loginName) ? input.loginName.trim().toLowerCase() : email)
 
   if (!username) {
@@ -418,54 +459,92 @@ async function loginRemoteBuyer(input: {
   device: AuthDeviceInfo
   existingUser?: AuthUserRecord | null
 }) {
-  const email = EMAIL_PATTERN.test(input.loginName)
+  let email = EMAIL_PATTERN.test(input.loginName)
     ? input.loginName.trim().toLowerCase()
     : (input.existingUser?.email ?? '').trim().toLowerCase()
+
+  // If loginName is a username and not in existingUser, try to resolve email from remote users
+  if (!email && input.loginName) {
+    try {
+      const remoteUsers = await LicenseController.getUsers()
+      if (remoteUsers?.success && Array.isArray(remoteUsers.data)) {
+        const cleanLogin = input.loginName.trim().toLowerCase()
+        const matched = remoteUsers.data.find((u: any) =>
+          (u.name && String(u.name).trim().toLowerCase() === cleanLogin) ||
+          (u.email && String(u.email).trim().toLowerCase() === cleanLogin) ||
+          (u.email && String(u.email).trim().toLowerCase().split('@')[0] === cleanLogin)
+        )
+        if (matched?.email) {
+          email = String(matched.email).trim().toLowerCase()
+        }
+      }
+    } catch {}
+  }
+
+  if (!email) {
+    const clean = input.loginName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (clean) {
+      email = `${clean}@zetass.dev`
+    }
+  }
+
   if (!EMAIL_PATTERN.test(email)) return null
 
-  // 1. Direct Supabase Cloud Auth attempt
-  const cloudRes = await tryCloudSignIn(email, input.password)
-  if (cloudRes.success && cloudRes.user) {
-    const syncRes = await syncBuyerLicense({ email, deviceInfo: input.device })
-    const user = await upsertRemoteBuyerCache({
-      loginName: input.loginName,
-      password: input.password,
-      remote: {
-        customer: { id: cloudRes.user.id, email: cloudRes.user.email, name: cloudRes.user.user_metadata?.name || input.loginName },
-        subscription: syncRes.data?.subscription,
-        access_token: cloudRes.session?.access_token,
-        refresh_token: cloudRes.session?.refresh_token,
+  // 1. Direct Supabase Cloud Auth attempt (if GoTrue Auth record exists)
+  try {
+    const cloudRes = await tryCloudSignIn(email, input.password)
+    if (cloudRes.success && cloudRes.user) {
+      const syncRes = await syncBuyerLicense({ email, deviceInfo: input.device })
+      const user = await upsertRemoteBuyerCache({
+        loginName: input.loginName,
+        password: input.password,
+        remote: {
+          customer: { id: cloudRes.user.id, email: cloudRes.user.email, name: cloudRes.user.user_metadata?.name || input.loginName },
+          subscription: syncRes.data?.subscription,
+          access_token: cloudRes.session?.access_token,
+          refresh_token: cloudRes.session?.refresh_token,
+        },
+        existingUser: input.existingUser,
+      })
+      if (user) {
+        return { success: true, user, remote: { customer: cloudRes.user, access_token: cloudRes.session?.access_token } }
+      }
+    }
+  } catch {}
+
+  // 2. LicenseController loginBuyer via license server Edge Function (/customer/login)
+  try {
+    const remote = await LicenseController.loginBuyer({ email, password: input.password }, input.device)
+    if (remote?.success && remote.data) {
+      const user = await upsertRemoteBuyerCache({
+        loginName: input.loginName,
+        password: input.password,
+        remote: remote.data,
+        existingUser: input.existingUser,
+      })
+      if (user) {
+        return { success: true, user, remote: remote.data }
+      }
+    }
+
+    const failureMessage = remote?.message || 'Login pembeli ke license server gagal'
+    if (failureMessage.toLowerCase().includes('tidak ditemukan') && input.existingUser?.nama_pengguna) {
+      sqlite.prepare(`DELETE FROM mediasoft_pengguna WHERE nama_pengguna = ? AND is_buyer = 1`).run(input.existingUser.nama_pengguna)
+    }
+    return {
+      success: false,
+      message: failureMessage,
+      data: {
+        ...((remote?.data as any) ?? {}),
+        error_code: (remote?.data as any)?.error_code ?? (failureMessage.toLowerCase().includes('tidak ditemukan') ? 'NOT_FOUND' : undefined),
       },
-      existingUser: input.existingUser,
-    })
-    if (!user) return { success: false, message: 'Akun pembeli gagal disimpan di device ini' }
-    return { success: true, user, remote: { customer: cloudRes.user, access_token: cloudRes.session?.access_token } }
-  }
-
-  // 2. Fallback to LicenseController if cloud auth is handled by central license server
-  const remote = await LicenseController.loginBuyer({ email, password: input.password }, input.device)
-  if (remote?.success && remote.data) {
-    const user = await upsertRemoteBuyerCache({
-      loginName: input.loginName,
-      password: input.password,
-      remote: remote.data,
-      existingUser: input.existingUser,
-    })
-    if (!user) return { success: false, message: 'Akun pembeli gagal disimpan di device ini' }
-    return { success: true, user, remote: remote.data }
-  }
-
-  const failureMessage = cloudRes.message || remote?.message || 'Login pembeli ke server Supabase gagal'
-  if (failureMessage.toLowerCase().includes('tidak ditemukan') && input.existingUser?.nama_pengguna) {
-    sqlite.prepare(`DELETE FROM mediasoft_pengguna WHERE nama_pengguna = ? AND is_buyer = 1`).run(input.existingUser.nama_pengguna)
-  }
-  return {
-    success: false,
-    message: failureMessage,
-    data: {
-      ...((remote?.data as any) ?? {}),
-      error_code: (remote?.data as any)?.error_code ?? (failureMessage.toLowerCase().includes('tidak ditemukan') ? 'NOT_FOUND' : undefined),
-    },
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Gagal terhubung ke license server pusat',
+      data: { error_code: 'CONNECTION_ERROR' },
+    }
   }
 }
 
@@ -777,7 +856,13 @@ export class AuthController {
     }
 
     // Find active user
-    const user = PenggunaModel.findActiveByUsername(username)
+    let user = PenggunaModel.findActiveByUsername(username)
+    if (!user && EMAIL_PATTERN.test(username)) {
+      const byEmail = findLocalUserByEmail(username)
+      if (byEmail?.nama_pengguna) {
+        user = PenggunaModel.findActiveByUsername(byEmail.nama_pengguna)
+      }
+    }
     const shouldTryRemoteAdmin = EMAIL_PATTERN.test(username) || user?.hak_akses === 'developer'
     if (shouldTryRemoteAdmin) {
       const remoteAdmin = await loginRemoteAdmin({ loginName: username, password, device, existingUser: user ?? null })
@@ -895,7 +980,7 @@ export class AuthController {
       }
       if (remoteLogin && !remoteLogin.success) {
         const code = String((remoteLogin.data as any)?.error_code ?? '').toUpperCase()
-        if (code === 'OFFLINE') {
+        if (code === 'OFFLINE' || code === 'CONNECTION_ERROR' || (user.subscription_expires_at && !isAccessExpired(user.subscription_expires_at))) {
           ActivityLogModel.create({
             username,
             aktivitas: 'REMOTE_LICENSE_OFFLINE_FALLBACK',
@@ -905,7 +990,7 @@ export class AuthController {
             device_id: device.deviceId ?? null,
             user_agent: device.userAgent ?? null,
             event_type: 'subscription',
-            detail: `License server tidak dapat dijangkau. Login memakai cache lokal sampai sync berikutnya. ${deviceDetail(device)}`,
+            detail: `License server tidak dapat dijangkau atau fallback aktif. Login memakai cache lokal. ${deviceDetail(device)}`,
           })
         } else {
           return {
@@ -1287,12 +1372,28 @@ export class AuthController {
    * Change password with validation
    */
   static async changePassword(
-    username: string,
-    oldPassword: string,
-    newPassword: string,
+    usernameOrPayload: string | { username?: string; oldPassword?: string; oldPass?: string; newPassword?: string; newPass?: string; deviceInfo?: any },
+    oldPasswordInput?: string,
+    newPasswordInput?: string,
     deviceInfo?: AuthDeviceInfo | string | null
   ) {
-    const device = withDetectedDeviceInfo(normalizeDeviceInfo(deviceInfo))
+    let username = ''
+    let oldPassword = ''
+    let newPassword = ''
+    let deviceInput = deviceInfo
+
+    if (usernameOrPayload && typeof usernameOrPayload === 'object') {
+      username = String(usernameOrPayload.username ?? '').trim()
+      oldPassword = String(usernameOrPayload.oldPassword ?? usernameOrPayload.oldPass ?? '')
+      newPassword = String(usernameOrPayload.newPassword ?? usernameOrPayload.newPass ?? '')
+      deviceInput = usernameOrPayload.deviceInfo ?? deviceInfo
+    } else {
+      username = String(usernameOrPayload ?? '').trim()
+      oldPassword = String(oldPasswordInput ?? '')
+      newPassword = String(newPasswordInput ?? '')
+    }
+
+    const device = withDetectedDeviceInfo(normalizeDeviceInfo(deviceInput))
     const user = PenggunaModel.findActiveByUsername(username)
     if (!user) {
       return { success: false, message: 'User tidak ditemukan' }

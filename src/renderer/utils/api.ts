@@ -15,7 +15,7 @@ const READ_PATTERNS: readonly string[] = [
   'getSettings', 'getPermissions', 'getBirthdayToday',
   'getTransaksi', 'getKasById', 'getAllKas', 'getActiveKas',
   'getUnreadCount', 'getHistory', 'getDetails', 'getUsageCount',
-  'calculate', 'ask', 'testAi', 'listAiModels', 'testGoogleSheets', 'exportDashboardToSheets',
+  'calculate', 'ask', 'testAi', 'listAiModels', 'testGoogleSheets', 'exportDashboardToSheets', 'exportReportToSheets',
   'syncBuyerLicense',
 ] as const
 

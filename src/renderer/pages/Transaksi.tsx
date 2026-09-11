@@ -389,8 +389,8 @@ export default function Transaksi() {
         jenisBayar: state.jenisBayar,
         customer: state.selectedCustomer,
         poinEarned,
-        tableNumber: state.tipePesanan === 'DINE_IN' ? state.nomorMeja : undefined,
-        orderType: state.tipePesanan,
+        tableNumber: posMode === 'restaurant' && state.tipePesanan === 'DINE_IN' ? state.nomorMeja : undefined,
+        orderType: posMode === 'restaurant' ? state.tipePesanan : undefined,
       }
 
       const pdfBlob = await generateReceiptPdf(receiptData)
@@ -423,8 +423,8 @@ export default function Transaksi() {
     diskon_promo: state.promoDiskon,
     kode_promo: state.promoCode || undefined,
     shift_id: state.activeShiftId ?? undefined,
-    tipe_pesanan: state.tipePesanan,
-    nomor_meja: state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || undefined) : undefined,
+    tipe_pesanan: posMode === 'restaurant' ? state.tipePesanan : 'TAKEAWAY',
+    nomor_meja: posMode === 'restaurant' && state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || undefined) : undefined,
   })
 
   const broadcastCustomerDisplay = useCallback((extra?: Record<string, any>) => {
@@ -441,7 +441,7 @@ export default function Transaksi() {
         total: totalBayar,
         storeName: 'WariPOS',
         nomor_antrian: formatQueueNumber(upcomingQueueSeq),
-        nomor_meja: state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
+        nomor_meja: posMode === 'restaurant' && state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
         nama_pelanggan: state.selectedCustomer?.nama_customer || null,
         status: state.cart.length > 0 ? 'scanning' : 'idle',
         ...extra,
@@ -454,7 +454,7 @@ export default function Transaksi() {
         bc.close()
       } catch {}
     } catch {}
-  }, [state.cart, subTotal, totalBayar, state.tipePesanan, state.nomorMeja, state.selectedCustomer])
+  }, [state.cart, subTotal, totalBayar, state.tipePesanan, state.nomorMeja, state.selectedCustomer, posMode])
 
   useEffect(() => {
     broadcastCustomerDisplay()
@@ -466,14 +466,16 @@ export default function Transaksi() {
 
     const itemList = state.cart.map((i, idx) => `${idx + 1}. ${i.nama_barang} (${i.qty}x) = ${formatRupiah(i.harga_jual * i.qty)}`).join('\n')
     const currentQueue = formatQueueNumber(getCurrentDailyQueueNumber())
+    const orderTypeLine = posMode === 'restaurant'
+      ? `Tipe Order    : *${state.tipePesanan === 'DINE_IN' ? 'Makan di Tempat (Dine-In)' : state.tipePesanan === 'TAKEAWAY' ? 'Bungkus (Takeaway)' : 'Pengiriman (Delivery)'}* ${state.nomorMeja ? `(Meja: ${state.nomorMeja})` : ''}\n`
+      : ''
     const msg = 
 `*STRUK TRANSAKSI WARIPOS*
 ----------------------------------------
 No. Transaksi : *${state.lastKd || '-'}*
 No. Antrian   : *${currentQueue}*
 Waktu         : ${new Date().toLocaleString('id-ID')}
-Tipe Order    : *${state.tipePesanan === 'DINE_IN' ? 'Makan di Tempat (Dine-In)' : state.tipePesanan === 'TAKEAWAY' ? 'Bungkus (Takeaway)' : 'Pengiriman (Delivery)'}* ${state.nomorMeja ? `(Meja: ${state.nomorMeja})` : ''}
-Kasir         : ${user?.nama_pengguna || 'Kasir'}
+${orderTypeLine}Kasir         : ${user?.nama_pengguna || 'Kasir'}
 Pelanggan     : ${state.selectedCustomer?.nama_customer || 'Pelanggan Umum'}
 ----------------------------------------
 *DAFTAR PESANAN:*
@@ -505,9 +507,9 @@ Terima kasih atas kunjungan Anda!`
         nomor_antrian: queueInfo.seq,
         nomor_antrian_formatted: queueInfo.formatted,
         kd_transaksi: r.data?.kd_transaksi,
-        nomor_meja: state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
+        nomor_meja: posMode === 'restaurant' && state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
         nama_pelanggan: state.selectedCustomer?.nama_customer || null,
-        jenis_order: state.tipePesanan,
+        jenis_order: posMode === 'restaurant' ? state.tipePesanan : 'TAKEAWAY',
       })
 
       state.setMobileCartDrawerOpen(false)
@@ -517,7 +519,7 @@ Terima kasih atas kunjungan Anda!`
         paidAmount: payload.yang_dibayar,
         kembalian: Math.max(0, payload.yang_dibayar - totalBayar),
         nomor_antrian: queueInfo.formatted,
-        nomor_meja: state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
+        nomor_meja: posMode === 'restaurant' && state.tipePesanan === 'DINE_IN' ? (state.nomorMeja.trim() || null) : null,
         nama_pelanggan: state.selectedCustomer?.nama_customer || null,
         poinEarned: poinEarned,
       })
@@ -1075,12 +1077,11 @@ Terima kasih atas kunjungan Anda!`
         <div className="flex-1 flex flex-col min-h-0 relative">
           <div className="flex-1 overflow-y-auto space-y-3 pr-0.5 pb-24 scrollbar-thin">
             {/* Big Total Header Card */}
-            <div className="p-4 rounded-2xl bg-red-600 text-white shadow-sm text-center space-y-1">
-              <p className="text-xs font-bold text-red-100 uppercase tracking-wider">Total Pembayaran</p>
+            <div className="p-4 rounded-2xl bg-primary-600 text-white shadow-sm text-center space-y-1">
+              <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Total Pembayaran</p>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight font-mono">{formatRupiah(totalBayar)}</h2>
-              <p className="text-[11px] text-red-100 opacity-90">
-                {totalCartQty} Item · {state.tipePesanan === 'DINE_IN' ? 'Dine In' : state.tipePesanan === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}
-                {state.nomorMeja ? ` (Meja ${state.nomorMeja})` : ''}
+              <p className="text-[11px] text-white/90">
+                {totalCartQty} Item{posMode === 'restaurant' ? ` · ${state.tipePesanan === 'DINE_IN' ? 'Dine In' : state.tipePesanan === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}${state.nomorMeja ? ` (Meja ${state.nomorMeja})` : ''}` : ''}
               </p>
             </div>
 

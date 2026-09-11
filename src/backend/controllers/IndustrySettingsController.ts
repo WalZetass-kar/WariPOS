@@ -1,6 +1,6 @@
 import { sqlite } from '../../database/connection.js'
 import { normalizeIndustrySettings, type IndustrySettings } from '../../shared/industrySettings.js'
-import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport.js'
+import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload, type GoogleSheetsPayload } from '../../shared/googleSheetsExport.js'
 import type { DashboardSummary } from '../../shared/types.js'
 import { decryptData, encryptData } from '../services/crypto.js'
 
@@ -103,6 +103,7 @@ async function postToGoogleSheets(url: string, payload: unknown) {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
       signal: controller.signal,
+      redirect: 'follow',
     })
     const data = await response.json().catch(() => null) as { success?: boolean; message?: string } | null
     if (!response.ok) {
@@ -164,14 +165,16 @@ export class IndustrySettingsController {
     return readSettings()
   }
 
-  static async testGoogleSheets() {
+  static async testGoogleSheets(overrideSettings?: any) {
     try {
-      const settings = readSettings()
-      if (!settings.googleSheetsEnabled || !settings.googleSheetsWebAppUrl) {
-        return { success: false, message: 'Google Sheets belum diaktifkan atau URL Apps Script belum diisi' }
+      const saved = readSettings()
+      const settings = overrideSettings ? { ...saved, ...overrideSettings } : saved
+      const url = String(settings.googleSheetsWebAppUrl || '').trim()
+      if (!url) {
+        return { success: false, message: 'URL Web App Apps Script belum diisi' }
       }
-      const result = await postToGoogleSheets(settings.googleSheetsWebAppUrl, testGoogleSheetsPayload())
-      return { success: true, data: result, message: 'Koneksi Google Sheets berhasil' }
+      const result = await postToGoogleSheets(url, testGoogleSheetsPayload())
+      return { success: true, data: result, message: 'Koneksi Google Sheets berhasil tersambung' }
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : String(error) }
     }
@@ -193,6 +196,32 @@ export class IndustrySettingsController {
         success: true,
         data: { mode: 'apps-script', result },
         message: 'Dashboard berhasil dikirim ke Google Sheets',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        data: { mode: 'clipboard' },
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  static async exportReportToSheets(payload: GoogleSheetsPayload) {
+    try {
+      const settings = readSettings()
+      if (!settings.googleSheetsEnabled || !settings.googleSheetsWebAppUrl) {
+        return {
+          success: false,
+          data: { mode: 'clipboard' },
+          message: 'Google Sheets otomatis belum dikonfigurasi',
+        }
+      }
+
+      const result = await postToGoogleSheets(settings.googleSheetsWebAppUrl, payload)
+      return {
+        success: true,
+        data: { mode: 'apps-script', result },
+        message: 'Laporan berhasil dikirim ke Google Sheets',
       }
     } catch (error) {
       return {

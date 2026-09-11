@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown, Clock, Wifi, WifiOff, LogOut, Settings as SettingsIcon } from 'lucide-react'
+import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown, Clock, Wifi, WifiOff, LogOut, Settings as SettingsIcon, Store, UtensilsCrossed } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useAppStore } from '../stores'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { api } from '../utils/api'
 import { isDemoMode } from '../utils/demo'
@@ -96,8 +97,9 @@ interface TopbarProps {
 export default function Topbar({ onMenuClick }: TopbarProps) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { mode, toggleMode } = useTheme()
+  const { mode, isDark, toggleMode } = useTheme()
   const { user } = useAuth()
+  const { posMode, setPosMode } = useAppStore()
   const { isOnline } = useNetworkStatus()
   const [storeName, setStoreName] = useState('WariPOS')
   const [notifs, setNotifs] = useState<Notifikasi[]>([])
@@ -225,6 +227,21 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           </button>
         ) : null}
 
+        {/* Mode Operasional Bisnis Quick Switcher */}
+        <button
+          type="button"
+          onClick={() => setPosMode(posMode === 'retail' ? 'restaurant' : 'retail')}
+          className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+            posMode === 'restaurant'
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 shadow-xs'
+              : 'bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 shadow-xs'
+          }`}
+          title={posMode === 'retail' ? 'Mode Toko Retail aktif. Klik untuk beralih ke Mode Restoran F&B.' : 'Mode Restoran F&B aktif. Klik untuk beralih ke Mode Toko Retail.'}
+        >
+          {posMode === 'restaurant' ? <UtensilsCrossed size={14} className="text-amber-500" /> : <Store size={14} className="text-primary-500" />}
+          <span className="hidden sm:inline">{posMode === 'restaurant' ? 'Resto F&B' : 'Mode Toko'}</span>
+        </button>
+
         {/* Shift Kasir Shortcut */}
         <button
           type="button"
@@ -248,8 +265,8 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
         </span>
 
-        <button onClick={toggleMode} aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
-          {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        <button onClick={toggleMode} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}>
+          {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
         {/* Notification Bell */}
