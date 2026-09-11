@@ -5,6 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
 import * as schema from './schema.js'
+import { BASE_SCHEMA_SQL, BASE_SEED_SQL } from './baseSchema.js'
 
 function copyBundledDatabaseIfNeeded(targetPath: string) {
   if (fs.existsSync(targetPath)) return
@@ -37,6 +38,15 @@ sqlite.pragma('foreign_keys = ON')
 // Run migrations on startup
 function runMigrations() {
   try {
+    // Ensure all 123 base tables exist on fresh clone or new database
+    const hasCoreTables = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='mediasoft_penjualan'").get()
+    if (!hasCoreTables) {
+      console.log('[Database] Fresh database detected. Initializing all base tables...')
+      sqlite.exec(BASE_SCHEMA_SQL)
+      sqlite.exec(BASE_SEED_SQL)
+      console.log('[Database] Base tables and seed reference data initialized successfully.')
+    }
+
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS mediasoft_pengguna (
         nama_pengguna TEXT PRIMARY KEY,
