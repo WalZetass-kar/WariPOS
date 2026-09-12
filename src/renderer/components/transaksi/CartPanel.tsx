@@ -25,7 +25,7 @@ export default function CartPanel({
     <div className="flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-3 shrink-0">
       <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800 mb-2">
         <div className="flex items-center gap-2">
-          <ShoppingCart size={16} className="text-primary-600 dark:text-primary-400" />
+          <ShoppingCart size={16} className="text-red-600" />
           <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">Keranjang Belanja</span>
           <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
             {totalCartQty} Item

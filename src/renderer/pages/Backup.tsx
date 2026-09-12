@@ -180,7 +180,7 @@ export default function BackupPage() {
               <div className="w-12 h-12 rounded-2xl bg-primary-500 flex items-center justify-center text-white shrink-0 shadow-lg">
                 <Database size={20} />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Total Backup
                 </p>
@@ -193,7 +193,7 @@ export default function BackupPage() {
               <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center text-white shrink-0 shadow-lg">
                 <HardDrive size={20} />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Total Ukuran
                 </p>
@@ -206,11 +206,11 @@ export default function BackupPage() {
               <div className="w-12 h-12 rounded-2xl bg-pink-500 flex items-center justify-center text-white shrink-0 shadow-lg">
                 <Clock size={20} />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Backup Terakhir
                 </p>
-                <p className="text-sm font-bold text-slate-800 dark:text-white">
+                <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
                   {latest ? fmtDate(latest.tgl_backup) : "Belum ada"}
                 </p>
               </div>
@@ -268,66 +268,78 @@ export default function BackupPage() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-700/50 -mx-6">
-            {backups.map((b, idx) => (
+          <div className="space-y-3">
+            {backups.map((b) => (
               <div
                 key={b.kd_backup}
-                className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-primary-50/50 dark:hover:bg-slate-700/30 ${idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-800/30" : ""}`}
+                className="p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/70 shadow-xs hover:border-primary-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
-                <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
-                  <Database
-                    size={18}
-                    className="text-primary-600 dark:text-primary-400"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono font-medium text-slate-700 dark:text-slate-200 truncate">
-                    {b.nama_file}
-                  </p>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <Clock size={11} />
-                      {fmtDate(b.tgl_backup)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <HardDrive size={11} />
-                      {fmt(b.ukuran)}
-                    </span>
-                    {b.username && <span>oleh {b.username}</span>}
+                {/* File Information */}
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                    <Database size={18} />
                   </div>
-                  {b.keterangan && (
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {b.keterangan}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm font-mono font-bold text-slate-800 dark:text-slate-100 break-all leading-snug">
+                      {b.nama_file}
                     </p>
-                  )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1 shrink-0">
+                        <Clock size={12} className="text-slate-400" />
+                        <span>{fmtDate(b.tgl_backup)}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 shrink-0">
+                        <HardDrive size={12} className="text-slate-400" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{fmt(b.ukuran)}</span>
+                      </span>
+                      {b.username && (
+                        <span className="shrink-0 text-slate-400">
+                          oleh <span className="font-medium text-slate-600 dark:text-slate-300">{b.username}</span>
+                        </span>
+                      )}
+                    </div>
+                    {b.keterangan && (
+                      <p className="text-[11px] sm:text-xs text-slate-400 mt-1 break-words">
+                        {b.keterangan}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-1.5 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
                   <button
+                    type="button"
                     onClick={() => handleDownload(b)}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors"
-                    title="Download"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition-colors active:scale-95"
+                    title="Download File Backup"
                   >
-                    <Download size={15} />
+                    <Download size={14} />
+                    <span>Unduh</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setSelected(b);
                       setModal("restore");
                     }}
-                    className="p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 transition-colors"
-                    title="Restore"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100 text-xs font-semibold transition-colors active:scale-95"
+                    title="Restore Database"
                   >
-                    <Upload size={15} />
+                    <Upload size={14} />
+                    <span>Restore</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setSelected(b);
                       setModal("delete");
                     }}
-                    className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors"
-                    title="Hapus"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-100 text-xs font-semibold transition-colors active:scale-95"
+                    title="Hapus File Backup"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={14} />
+                    <span>Hapus</span>
                   </button>
                 </div>
               </div>

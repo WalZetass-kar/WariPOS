@@ -61,15 +61,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="fixed left-1/2 top-3 sm:top-4 z-50 flex w-[min(calc(100vw-2rem),360px)] -translate-x-1/2 flex-col gap-1.5 pointer-events-none">
         {toasts.map(t => {
           const Icon = icons[t.type]
+          const isCart = t.message.toLowerCase().includes('keranjang')
           return (
             <div
               key={t.id}
-              className={`flex items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border shadow-lg backdrop-blur-md pointer-events-auto toast-smooth-animate ${colors[t.type]}`}
+              className={`flex items-center gap-2 rounded-xl border shadow-lg backdrop-blur-md pointer-events-auto toast-smooth-animate ${
+                isCart ? 'px-3 py-1.5 text-xs' : 'px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm'
+              } ${colors[t.type]}`}
             >
-              <Icon size={16} className="shrink-0" />
-              <span className="text-xs sm:text-sm font-semibold truncate flex-1">{t.message}</span>
+              <Icon size={isCart ? 14 : 16} className="shrink-0" />
+              <span className="font-semibold truncate flex-1">{t.message}</span>
               <button onClick={() => remove(t.id)} className="p-0.5 opacity-60 hover:opacity-100 shrink-0">
-                <X size={13} />
+                <X size={12} />
               </button>
             </div>
           )

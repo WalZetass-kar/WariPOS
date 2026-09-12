@@ -262,7 +262,7 @@ export default function RemoteLicensePopup() {
 
   return (
     <div
-      className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md modal-backdrop-animate"
+      className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-900/40 p-3 sm:p-4 backdrop-blur-sm modal-backdrop-animate"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           close()
@@ -270,19 +270,19 @@ export default function RemoteLicensePopup() {
       }}
     >
       <div
-        className="relative my-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/95 text-white shadow-2xl ring-1 ring-white/10 p-5 sm:p-6 modal-card-animate"
+        className="relative my-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xl p-5 sm:p-6 modal-card-animate"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle Ambient Glow */}
-        <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full bg-primary-500/5 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl" />
 
         {/* Close Button */}
         {!isBlocking && (
           <button
             type="button"
             onClick={close}
-            className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/15 hover:text-white transition"
+            className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-white transition"
             aria-label="Tutup"
           >
             <X className="h-4 w-4" />
@@ -290,42 +290,38 @@ export default function RemoteLicensePopup() {
         )}
 
         <div className="relative space-y-4">
-          {/* ─── Header Minimalis ───────────────────────────────────── */}
-          <div className="text-center space-y-1">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-bold tracking-wide mb-1">
-              <ShieldCheck size={13} className="text-amber-400" />
-              <span>UPGRADE LISENSI RESMI</span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              {popup.title || 'Pilih Paket Lisensi Toko Anda'}
+          {/* Header */}
+          <div className="text-center space-y-1 pt-1">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {popup.title || 'Pilih Paket Toko Anda'}
             </h2>
-            <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
               {popup.description || 'Nikmati kebebasan transaksi tanpa batas, kelola stok akurat, dan ekspor laporan pembukuan toko.'}
             </p>
           </div>
 
-          {/* ─── Demo Warning (Jika Akun Demo) ────────────────────────── */}
+          {/* Demo Warning (Jika Akun Demo) */}
           {demoState.is_demo && (
-            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold">
+            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 text-xs font-semibold">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 <span>Batas Demo: <strong>{remainingUsage} transaksi tersisa</strong></span>
               </div>
-              <span className="text-[11px] text-amber-200/70 hidden sm:inline">Akses penuh setelah aktivasi</span>
+              <span className="text-[11px] text-amber-700 dark:text-amber-300 hidden sm:inline">Akses penuh setelah aktivasi</span>
             </div>
           )}
 
-          {/* ─── Kartu Paket Minimalis ────────────────────────────────── */}
+          {/* Kartu Paket */}
           {showPlans && (
             <div>
               {plansLoading ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-xs text-slate-400">
-                  <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
-                  Memuat daftar paket lisensi...
+                  <Loader2 className="h-4 w-4 animate-spin text-primary-600" />
+                  Memuat daftar paket...
                 </div>
               ) : plans.length === 0 ? (
-                <div className="rounded-2xl border border-white/5 bg-white/5 p-6 text-center text-xs text-slate-400">
-                  Belum ada paket aktif. Hubungi WhatsApp admin untuk informasi lisensi.
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-6 text-center text-xs text-slate-500">
+                  Belum ada paket aktif. Hubungi WhatsApp admin untuk informasi paket.
                 </div>
               ) : (
                 <div className="grid gap-2.5 sm:grid-cols-3">
@@ -340,42 +336,42 @@ export default function RemoteLicensePopup() {
                         onClick={() => setSelectedPlanCode(plan.code)}
                         className={`group relative flex flex-col justify-between rounded-2xl p-4 cursor-pointer transition-all duration-150 border text-left ${
                           active
-                            ? 'border-amber-400/90 bg-amber-500/[0.08] shadow-md shadow-amber-500/5 ring-1 ring-amber-400/40'
-                            : 'border-slate-800/80 bg-slate-950/40 hover:bg-slate-800/60 hover:border-slate-700'
+                            ? 'border-primary-600 bg-primary-50/70 dark:bg-primary-950/40 dark:border-primary-500 shadow-md shadow-primary-600/10 ring-1 ring-primary-500/40'
+                            : 'border-slate-200 bg-slate-50/70 hover:bg-white hover:border-primary-300 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:bg-slate-900'
                         }`}
                       >
                         {isRecommended && (
-                          <div className="absolute -top-2.5 right-3 rounded-full bg-amber-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-950 shadow-sm">
-                            Rekomendasi
+                          <div className="absolute -top-2.5 right-3 rounded-full bg-primary-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm">
+                            Pilihan Populer
                           </div>
                         )}
 
                         <div>
                           {/* Nama & Durasi */}
                           <div className="flex items-start justify-between gap-1 mb-2">
-                            <h4 className="text-xs font-black text-white group-hover:text-amber-300 transition-colors">
+                            <h4 className="text-xs font-black text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                               {plan.name}
                             </h4>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-slate-300">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                               {getPlanPeriodLabel(plan)}
                             </span>
                           </div>
 
                           {/* Harga */}
                           <div className="my-2">
-                            <div className="text-lg font-black text-white leading-none">
+                            <div className="text-lg font-black text-slate-900 dark:text-white leading-none">
                               {formatPlanPrice(plan)}
                             </div>
-                            <span className="text-[10px] text-slate-400 font-medium">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                               {plan.duration_days === 0 ? 'Sekali bayar selamanya' : `Masa aktif ${getPlanPeriodLabel(plan)}`}
                             </span>
                           </div>
 
-                          {/* Bullet Fitur Minimalis */}
-                          <ul className="mt-3 space-y-1.5 border-t border-slate-800/60 pt-2.5">
+                          {/* Bullet Fitur */}
+                          <ul className="mt-3 space-y-1.5 border-t border-slate-200/80 dark:border-slate-800/80 pt-2.5">
                             {highlights.map((item, idx) => (
-                              <li key={idx} className="flex items-center gap-1.5 text-[11px] text-slate-300 leading-tight">
-                                <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              <li key={idx} className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300 leading-tight">
+                                <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                 <span>{item}</span>
                               </li>
                             ))}
@@ -383,11 +379,11 @@ export default function RemoteLicensePopup() {
                         </div>
 
                         {/* Indikator Pilih */}
-                        <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[10px] font-bold">
-                          <span className={active ? 'text-amber-300' : 'text-slate-500'}>
+                        <div className="mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[10px] font-bold">
+                          <span className={active ? 'text-primary-600 dark:text-primary-400' : 'text-slate-400'}>
                             {active ? '● Dipilih' : '○ Pilih Paket'}
                           </span>
-                          {active && <span className="text-emerald-400 text-[10px]">Siap Beli</span>}
+                          {active && <span className="text-emerald-600 dark:text-emerald-400 text-[10px]">Siap Beli</span>}
                         </div>
                       </div>
                     )
@@ -397,50 +393,50 @@ export default function RemoteLicensePopup() {
             </div>
           )}
 
-          {/* ─── Pilihan Metode Pembayaran & Tombol Beli ──────────────── */}
+          {/* Pilihan Metode Pembayaran & Tombol Beli */}
           {selectedPlan && (
-            <div className="space-y-3 pt-2 border-t border-slate-800/80">
+            <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
               {/* Switcher Metode Pembayaran */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] px-1 font-semibold text-slate-400">
+                <div className="flex items-center justify-between text-[11px] px-1 font-semibold text-slate-600 dark:text-slate-400">
                   <span>Pilihan Metode Pembayaran:</span>
-                  <span className="text-emerald-400 flex items-center gap-1">
+                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-bold">
                     <ShieldCheck size={13} />
-                    Aktivasi Resmi Terjamin
+                    Aktivasi Terjamin
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {/* Option 1: WhatsApp / Transfer Manual (ACTIVE) */}
+                  {/* Option 1: WhatsApp / Transfer Manual */}
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('whatsapp')}
                     className={`flex items-center justify-between p-3 rounded-2xl border text-left transition-all ${
                       paymentMethod === 'whatsapp'
-                        ? 'border-emerald-500/80 bg-emerald-950/30 text-white ring-1 ring-emerald-500/40 shadow-sm'
-                        : 'border-slate-800 bg-slate-950/40 text-slate-400 hover:border-slate-700'
+                        ? 'border-emerald-600 bg-emerald-50/80 dark:bg-emerald-950/30 text-slate-900 dark:text-white ring-1 ring-emerald-500/40 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40 text-slate-600 dark:text-slate-400 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
                         <MessageCircle size={16} />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                           <span>Manual via WhatsApp</span>
-                          <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-extrabold">
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[9px] font-extrabold">
                             AKTIF
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400">BCA / Mandiri / BRI / QRIS Manual</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">BCA / Mandiri / BRI / QRIS</p>
                       </div>
                     </div>
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${paymentMethod === 'whatsapp' ? 'border-emerald-400 bg-emerald-500 text-slate-950' : 'border-slate-700'}`}>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${paymentMethod === 'whatsapp' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700'}`}>
                       {paymentMethod === 'whatsapp' && <Check size={10} strokeWidth={3} />}
                     </div>
                   </button>
 
-                  {/* Option 2: Midtrans Otomatis (UNDER MAINTENANCE) */}
+                  {/* Option 2: Midtrans Otomatis */}
                   <button
                     type="button"
                     onClick={() => {
@@ -449,26 +445,26 @@ export default function RemoteLicensePopup() {
                     }}
                     className={`relative flex items-center justify-between p-3 rounded-2xl border text-left transition-all ${
                       paymentMethod === 'midtrans'
-                        ? 'border-amber-500/60 bg-amber-950/20 text-white ring-1 ring-amber-500/30'
-                        : 'border-slate-800/60 bg-slate-950/20 text-slate-500 hover:border-slate-750'
+                        ? 'border-amber-500/60 bg-amber-50 dark:bg-amber-950/20 text-slate-900 dark:text-white ring-1 ring-amber-500/30'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 text-slate-500 dark:text-slate-400 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0">
                         <CreditCard size={16} />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                           <span>Midtrans Otomatis</span>
-                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-extrabold flex items-center gap-0.5">
+                          <span className="px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[9px] font-extrabold flex items-center gap-0.5">
                             <Wrench size={9} />
                             MAINTENANCE
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-500">Dalam pemeliharaan berkala</p>
+                        <p className="text-[10px] text-slate-400">Dalam pemeliharaan berkala</p>
                       </div>
                     </div>
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${paymentMethod === 'midtrans' ? 'border-amber-400 bg-amber-500 text-slate-950' : 'border-slate-800'}`}>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${paymentMethod === 'midtrans' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-300 dark:border-slate-700'}`}>
                       {paymentMethod === 'midtrans' && <Check size={10} strokeWidth={3} />}
                     </div>
                   </button>
@@ -477,18 +473,18 @@ export default function RemoteLicensePopup() {
 
               {/* Maintenance / Info Alert */}
               {paymentMethod === 'midtrans' && (
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs flex items-start gap-2.5">
-                  <Wrench size={15} className="text-amber-400 shrink-0 mt-0.5" />
+                <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                  <Wrench size={15} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div className="text-[11px] leading-relaxed">
-                    <strong className="text-amber-300 font-bold block">Gateway Midtrans Sedang Pemeliharaan Sistem:</strong>
-                    Untuk mengaktifkan lisensi seketika, silakan klik tombol WhatsApp di bawah. Admin kami siap membantu verifikasi dan aktivasi lisensi langsung.
+                    <strong className="text-amber-800 dark:text-amber-300 font-bold block">Gateway Midtrans Sedang Pemeliharaan Sistem:</strong>
+                    Untuk aktivasi seketika, silakan klik tombol WhatsApp di bawah. Admin kami siap membantu verifikasi dan aktivasi langsung.
                   </div>
                 </div>
               )}
 
               {paymentMessage && paymentMethod !== 'midtrans' && (
-                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   <span>{paymentMessage}</span>
                 </div>
               )}
@@ -498,7 +494,7 @@ export default function RemoteLicensePopup() {
                 <button
                   type="button"
                   onClick={close}
-                  className="w-full sm:w-auto text-xs text-slate-400 hover:text-slate-200 px-3 py-2 transition"
+                  className="w-full sm:w-auto text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 px-3 py-2 transition"
                 >
                   Nanti Saja
                 </button>
@@ -515,18 +511,16 @@ export default function RemoteLicensePopup() {
                     <MessageCircle className="h-4 w-4" />
                   )}
                   <span>
-                    Beli Paket {selectedPlan.name} • {formatPlanPrice(selectedPlan)}
+                    Pilih Paket {selectedPlan.name} • {formatPlanPrice(selectedPlan)}
                   </span>
                 </button>
               </div>
 
               {/* Trust Footer Notes */}
-              <div className="pt-2 text-center text-[10px] text-slate-500 flex items-center justify-center gap-3 border-t border-slate-800/40">
-                <span className="flex items-center gap-1"><ShieldCheck size={12} className="text-emerald-500" /> Lisensi Toko Resmi</span>
+              <div className="pt-2 text-center text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-center gap-3 border-t border-slate-100 dark:border-slate-800">
+                <span className="flex items-center gap-1"><ShieldCheck size={12} className="text-emerald-600" /> Aktivasi Aman & Terjamin</span>
                 <span>•</span>
-                <span className="flex items-center gap-1"><Zap size={12} className="text-amber-500" /> Aktivasi Cepat</span>
-                <span>•</span>
-                <span className="flex items-center gap-1"><MessageCircle size={12} className="text-primary-500" /> Bantuan WhatsApp 24/7</span>
+                <span>Bebas Transaksi Tanpa Batas</span>
               </div>
             </div>
           )}

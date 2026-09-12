@@ -112,7 +112,7 @@ const QUICK_ACTIONS = [
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   sender: 'assistant',
-  text: 'Halo! Saya **Wari AI Autonomous Assistant**.\n\nSaya memegang kendali operasional penuh untuk mengeksekusi aksi di WariPOS:\n- **Restock Otomatis**: Ketik *"Restock semua produk yang habis masing-masing 20 pcs"* atau sebut nama produk.\n- **Tambah Produk / Promo**: Buat produk atau kupon diskon baru langsung dari chat.\n- **Backup Database**: Ketik *"Backup database sekarang"*.\n- **Navigasi Seluruh Tab**: Ketik *"Buka [nama tab]"* (contoh: *"Buka kasir"*, *"Buka kitchen"*, *"Buka shift"*, *"Buka seluruh tab"*).\n\nSilakan ketik perintah aksi atau pilih menu cepat di bawah.',
+  text: 'Halo! Saya **Wari AI**, asisten toko Anda.\n\nAnda dapat menanyakan stok barang, analisis penjualan, menghitung HPP, atau meminta saya menjalankan tugas seperti membuka halaman atau membuat produk baru.\n\nAda yang bisa saya bantu hari ini?',
   timestamp: new Date(),
 }
 
@@ -463,26 +463,16 @@ export default function Assistant() {
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
-                Wari AI Asisten
-              </h1>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/50">
-                <Zap size={10} className="text-indigo-500 fill-indigo-500 animate-pulse" />
-                Agentic Controller Aktif
-              </span>
-              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                aiOnlineReady ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${aiOnlineReady ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                {aiOnlineReady ? `Online (${aiProviderLabel})` : 'Lokal Offline'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">Kontrol penuh operasional toko, restock otomatis, dan asisten bisnis</p>
+            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
+              Wari AI
+            </h1>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              Asisten Pintar Toko Anda
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={createNewSession}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-700 active:scale-95 text-xs font-bold text-white shadow-xs transition-all"
@@ -506,19 +496,10 @@ export default function Assistant() {
 
           <button
             onClick={() => navigate('/settings')}
-            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title="Pengaturan AI"
           >
-            <Settings size={14} />
-            <span>Settings</span>
-          </button>
-
-          <button
-            onClick={() => setShowInfoModal(true)}
-            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Informasi Model"
-          >
-            <Info size={15} />
+            <Settings size={15} />
           </button>
         </div>
       </header>
@@ -532,24 +513,6 @@ export default function Assistant() {
           className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 scrollbar-thin"
         >
           <div className="max-w-4xl mx-auto space-y-6">
-            
-            {/* Warning Banner if unconfigured (compact) */}
-            {aiConfig && !aiOnlineReady && (
-              <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <ZapOff size={15} className="text-amber-600 shrink-0" />
-                  <span className="text-slate-700 dark:text-slate-300">
-                    Mode AI berjalan offline. Hubungkan API Key di Pengaturan untuk respon yang lebih luas.
-                  </span>
-                </div>
-                <button
-                  onClick={() => navigate('/settings')}
-                  className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] shrink-0"
-                >
-                  Setup
-                </button>
-              </div>
-            )}
 
             {/* EMPTY STATE / WELCOME PROMPTS */}
             {isOnlyWelcomeMessage && (
