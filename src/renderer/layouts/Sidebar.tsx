@@ -448,9 +448,9 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
         <button
           onClick={handleLogout}
           title={isCollapsed ? 'Keluar' : undefined}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-colors ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}`}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-950/25 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-700 transition-colors ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}`}
         >
-          <LogOut size={16} className="shrink-0" />
+          <LogOut size={16} className="shrink-0 text-red-600 dark:text-red-400" />
           <span className={`${isCollapsed ? 'lg:hidden' : ''}`}>Keluar</span>
         </button>
       </div>

@@ -1,9 +1,11 @@
-import React from 'react'
-import { MessageCircle, Bluetooth, Printer } from 'lucide-react'
+import React, { useState } from 'react'
+import { MessageCircle, Bluetooth, Printer, FileImage, FileText } from 'lucide-react'
 import Modal from '../../components/Modal'
 import Button from '../../components/Button'
 import Struk from '../../components/Struk'
 import { formatRupiah } from '../../utils/format'
+import { exportReceiptSoftFile } from '../../utils/receiptExporter'
+import { useToast } from '../../contexts/ToastContext'
 import { CartItem, Customer } from '../../../shared/types'
 
 interface StrukModalProps {
@@ -36,6 +38,20 @@ export default function StrukModal({
   open, cart, subTotal, pajakAmount, pajakPersen, totalBayar, promoDiskon, paidAmount, kembalian, lastKd, jenisBayar, selectedCustomer, poinEarned, user, strukRef, manualWaPhone, btPrinting, bluetoothPrinterConnected,
   onClose, onSendWhatsApp, onHandlePrint, onHandleBluetoothPrint, onChangeManualWaPhone
 }: StrukModalProps) {
+  const toast = useToast()
+  const [softLoading, setSoftLoading] = useState<'png' | 'pdf' | null>(null)
+
+  const handleExportSoftFile = async (format: 'png' | 'pdf') => {
+    if (!strukRef.current) return toast('Preview struk belum siap', 'error')
+    setSoftLoading(format)
+    const res = await exportReceiptSoftFile(strukRef.current, lastKd || `TRX-${Date.now()}`, format)
+    setSoftLoading(null)
+    if (res.success) {
+      toast(`Struk soft file (${format.toUpperCase()}) berhasil disimpan: ${res.fileName}`)
+    } else {
+      toast(res.error || 'Gagal menyimpan soft file struk', 'error')
+    }
+  }
   return (
     <Modal
       open={open}
@@ -69,6 +85,28 @@ export default function StrukModal({
               className="flex-1 sm:flex-initial font-bold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               Cetak Struk
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<FileImage size={15} className="text-blue-500" />}
+              onClick={() => handleExportSoftFile('png')}
+              loading={softLoading === 'png'}
+              disabled={!!softLoading}
+              className="flex-1 sm:flex-initial font-bold rounded-xl border border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-950/30 text-blue-600 dark:text-blue-400 text-xs"
+              title="Simpan Struk Soft File (Format Gambar PNG Identik)"
+            >
+              Soft PNG
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<FileText size={15} className="text-amber-500" />}
+              onClick={() => handleExportSoftFile('pdf')}
+              loading={softLoading === 'pdf'}
+              disabled={!!softLoading}
+              className="flex-1 sm:flex-initial font-bold rounded-xl border border-amber-200 dark:border-amber-900/50 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-amber-600 dark:text-amber-400 text-xs"
+              title="Simpan Struk Soft File (Format Dokumen PDF Identik)"
+            >
+              Soft PDF
             </Button>
           </div>
           <Button

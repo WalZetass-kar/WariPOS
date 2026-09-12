@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Eye, Printer, Bluetooth } from 'lucide-react'
+import { Eye, Printer, Bluetooth, FileImage, FileText } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -14,6 +14,7 @@ import { formatRupiah, formatDateTime } from '../utils/format'
 import { useReactToPrint } from 'react-to-print'
 import { bluetoothPrinter } from '../utils/bluetoothPrinter'
 import { useToast } from '../contexts/ToastContext'
+import { exportReceiptSoftFile } from '../utils/receiptExporter'
 import type { Penjualan, PenjualanDetailItem } from '../../shared/types'
 
 export default function Riwayat() {
@@ -44,8 +45,21 @@ export default function Riwayat() {
   const toast = useToast()
   const [showBtModal, setShowBtModal] = useState(false)
   const [btPrinting, setBtPrinting] = useState(false)
+  const [softLoading, setSoftLoading] = useState<'png' | 'pdf' | null>(null)
 
   const handlePrint = useReactToPrint({ content: () => strukRef.current })
+
+  const handleExportSoftFile = async (format: 'png' | 'pdf') => {
+    if (!strukRef.current || !detail) return toast('Preview struk belum siap', 'error')
+    setSoftLoading(format)
+    const res = await exportReceiptSoftFile(strukRef.current, detail.header.kd_tansaksi_jual, format)
+    setSoftLoading(null)
+    if (res.success) {
+      toast(`Struk soft file (${format.toUpperCase()}) berhasil disimpan: ${res.fileName}`)
+    } else {
+      toast(res.error || 'Gagal menyimpan soft file struk', 'error')
+    }
+  }
 
   const handleBluetoothPrint = async () => {
     if (!detail) return
@@ -164,6 +178,26 @@ export default function Riwayat() {
             >
               {btPrinting ? 'Mencetak...' : bluetoothPrinter.isConnected() ? 'Cetak Thermal BT' : 'Printer BT'}
             </Button>
+            <Button
+              variant="secondary"
+              icon={<FileImage size={14} className="text-blue-500" />}
+              onClick={() => handleExportSoftFile('png')}
+              loading={softLoading === 'png'}
+              disabled={!!softLoading}
+              className="w-full sm:w-auto font-bold border-blue-200 dark:border-blue-900/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+            >
+              Soft PNG
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<FileText size={14} className="text-amber-500" />}
+              onClick={() => handleExportSoftFile('pdf')}
+              loading={softLoading === 'pdf'}
+              disabled={!!softLoading}
+              className="w-full sm:w-auto font-bold border-amber-200 dark:border-amber-900/50 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+            >
+              Soft PDF
+            </Button>
             <Button icon={<Printer size={14} />} onClick={handlePrint} className="w-full sm:w-auto">Cetak Ulang Struk</Button>
           </div>
         }
@@ -205,8 +239,8 @@ export default function Riwayat() {
               </table>
             </div>
 
-            {/* Hidden print target */}
-            <div className="hidden">
+            {/* Offscreen print & soft file target */}
+            <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none opacity-0">
               <div ref={strukRef}>
                 <Struk
                   cart={cartItems}

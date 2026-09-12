@@ -59,15 +59,26 @@ export class ShiftController {
   
   static delete(id: number) {
     ensureTable()
-    const shift = sqlite.prepare('SELECT status FROM mediasoft_shifts WHERE id = ?').get(id) as any
-    if (!shift) {
-      return { success: false, error: 'Shift tidak ditemukan' }
+    try {
+      const shift = sqlite.prepare('SELECT status FROM mediasoft_shifts WHERE id = ?').get(id) as any
+      if (!shift) {
+        return { success: false, message: 'Shift tidak ditemukan' }
+      }
+      if (shift.status === 'OPEN') {
+        return { success: false, message: 'Tidak dapat menghapus shift yang masih terbuka' }
+      }
+
+      const runDelete = sqlite.transaction(() => {
+        // Lepas referensi shift_id di penjualan agar tidak memicu foreign key constraint failed
+        sqlite.prepare('UPDATE mediasoft_penjualan SET shift_id = NULL WHERE shift_id = ?').run(id)
+        sqlite.prepare('DELETE FROM mediasoft_shifts WHERE id = ?').run(id)
+      })
+
+      runDelete()
+      return { success: true, message: 'Riwayat shift berhasil dihapus' }
+    } catch (err) {
+      console.error('[ShiftController.delete] Error:', err)
+      return { success: false, message: String(err) }
     }
-    if (shift.status === 'OPEN') {
-      return { success: false, error: 'Tidak dapat menghapus shift yang masih terbuka' }
-    }
-    
-    sqlite.prepare('DELETE FROM mediasoft_shifts WHERE id = ?').run(id)
-    return { success: true }
   }
 }

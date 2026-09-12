@@ -36,12 +36,13 @@ export default function Modal({ open, onClose, title, children, footer, size = '
         className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm modal-backdrop-animate transition-opacity"
         onClick={onClose}
       />
-      {/* Dialog / Responsive Bottom Sheet on mobile */}
-      <div className={`relative w-full ${sizes[size]} glass-card shadow-2xl modal-card-animate p-4 sm:p-5 max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-5`}>
+      {/* Dialog / Responsive Bottom Sheet on mobile with flex-col layout */}
+      <div className={`relative w-full ${sizes[size]} glass-card shadow-2xl modal-card-animate flex flex-col max-h-[90dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl overflow-hidden`}>
         {/* Mobile handle indicator */}
-        <div className="sm:hidden w-10 h-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-3" />
+        <div className="sm:hidden w-10 h-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mt-2.5 mb-1 shrink-0" />
 
-        <div className="flex items-center justify-between mb-3 sm:mb-5">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800/80 shrink-0">
           <h2 className="text-base sm:text-xl font-bold text-slate-800 dark:text-white leading-tight">{title}</h2>
           <button 
             type="button"
@@ -51,8 +52,20 @@ export default function Modal({ open, onClose, title, children, footer, size = '
             <X size={20} />
           </button>
         </div>
-        <div className="text-slate-600 dark:text-slate-300 text-sm">{children}</div>
-        {footer && <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">{footer}</div>}
+
+        {/* Modal Scrollable Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-3 sm:py-4 text-slate-600 dark:text-slate-300 text-sm overscroll-contain">
+          {children}
+        </div>
+
+        {/* Sticky/Pinned Modal Action Footer */}
+        {footer && (
+          <div className="shrink-0 px-4 sm:px-5 py-3 sm:py-3.5 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800/80 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3.5">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+              {footer}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

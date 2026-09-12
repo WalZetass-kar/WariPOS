@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
 import * as XLSX from 'xlsx'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
@@ -297,4 +298,53 @@ export async function generateTableStickerPdf(
   doc.text('Pilih menu & bayar langsung dari meja', 45, 103, { align: 'center' })
 
   return doc.output('blob')
+}
+
+/**
+ * Ekspor soft file struk langsung dari elemen preview DOM ke file PNG atau PDF.
+ * Desain dijamin 100% identik dengan tampilan preview yang sedang aktif pada aplikasi.
+ */
+export async function exportReceiptSoftFile(
+  element: HTMLElement,
+  invoiceNumber: string,
+  format: 'png' | 'pdf' = 'png'
+): Promise<{ success: boolean; fileName: string; error?: string }> {
+  try {
+    const canvas = await html2canvas(element, {
+      scale: 2, // Kualitas tinggi retina
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    })
+
+    const cleanInvoice = (invoiceNumber || `TRX-${Date.now()}`).replace(/[^\w-]/g, '_')
+
+    if (format === 'png') {
+      const fileName = `Struk-${cleanInvoice}.png`
+      const dataUrl = canvas.toDataURL('image/png')
+      const saved = await saveFileToDevice(fileName, dataUrl, 'image/png')
+      return { success: saved, fileName }
+    } else {
+      // PDF dengan ukuran presisi canvas struk
+      const imgData = canvas.toDataURL('image/png')
+      // Konversi pixel ke mm (1 px ≈ 0.264583 mm) dikompensasi scale: 2
+      const mmWidth = (canvas.width * 0.264583) / 2
+      const mmHeight = (canvas.height * 0.264583) / 2
+
+      const pdf = new jsPDF({
+        orientation: mmHeight > mmWidth ? 'portrait' : 'landscape',
+        unit: 'mm',
+        format: [Math.max(58, mmWidth), Math.max(80, mmHeight)],
+      })
+
+      pdf.addImage(imgData, 'PNG', 0, 0, mmWidth, mmHeight)
+      const pdfBlob = pdf.output('blob')
+      const fileName = `Struk-${cleanInvoice}.pdf`
+      const saved = await saveFileToDevice(fileName, pdfBlob, 'application/pdf')
+      return { success: saved, fileName }
+    }
+  } catch (error) {
+    console.error('[exportReceiptSoftFile] Gagal menghasilkan soft file:', error)
+    return { success: false, fileName: '', error: String(error) }
+  }
 }

@@ -573,7 +573,7 @@ export default function Laporan() {
       {/* ── Mobile Top Header (Android App Style) ── */}
       <div className="flex sm:hidden items-center justify-between gap-2.5 pt-0.5">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-primary-600 to-rose-500 text-white shadow-md shadow-primary-600/20 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-primary-600 text-white shadow-md shadow-primary-600/20 flex items-center justify-center shrink-0">
             <BarChart2 size={20} />
           </div>
           <div className="min-w-0">
@@ -622,7 +622,7 @@ export default function Laporan() {
       <div className="hidden sm:flex justify-between items-center gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 tracking-tight">
-            <div className="p-2 rounded-2xl bg-gradient-to-tr from-primary-600 to-rose-500 text-white shadow-md shadow-primary-600/20">
+            <div className="p-2 rounded-2xl bg-primary-600 text-white shadow-md shadow-primary-600/20">
               <BarChart2 size={24} />
             </div>
             <span>Laporan & Analitik Keuangan</span>
@@ -673,7 +673,7 @@ export default function Laporan() {
               onClick={() => setTab(t.key)}
               className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap active:scale-95 ${
                 isActive
-                  ? 'bg-gradient-to-r from-primary-600 to-rose-600 text-white shadow-md shadow-primary-600/25 ring-1 ring-white/20'
+                  ? 'bg-primary-600 text-white shadow-md shadow-primary-600/25'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-slate-800/60'
               }`}
             >
@@ -771,7 +771,7 @@ export default function Laporan() {
                 type="button"
                 onClick={load}
                 disabled={loading}
-                className="flex-1 sm:flex-initial h-10 px-4 rounded-xl bg-gradient-to-r from-primary-600 to-rose-600 hover:from-primary-700 hover:to-rose-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-50"
+                className="flex-1 sm:flex-initial h-10 px-4 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-50"
               >
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                 <span>{loading ? 'Memperbarui...' : 'Perbarui Laporan'}</span>
@@ -1702,7 +1702,7 @@ export default function Laporan() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary-600 to-rose-500 text-white font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-primary-600 text-white font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
                             {initial}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -1830,11 +1830,11 @@ function HeroKpiCard({
   gradient?: 'emerald' | 'rose' | 'blue' | 'primary'
   breakdown?: Array<{ label: string; value: string; tone?: string }>
 }) {
-  const gradientStyles = {
-    emerald: 'from-emerald-500/15 via-emerald-500/5 to-transparent border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
-    rose: 'from-rose-500/15 via-rose-500/5 to-transparent border-rose-500/30 text-rose-600 dark:text-rose-400',
-    blue: 'from-blue-500/15 via-blue-500/5 to-transparent border-blue-500/30 text-blue-600 dark:text-blue-400',
-    primary: 'from-primary-500/15 via-primary-500/5 to-transparent border-primary-500/30 text-primary-600 dark:text-primary-400',
+  const cardStyle = {
+    emerald: 'border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400',
+    rose: 'border-rose-200 dark:border-rose-900/50 bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400',
+    blue: 'border-blue-200 dark:border-blue-900/50 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400',
+    primary: 'border-primary-200 dark:border-primary-900/50 bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400',
   }[gradient]
 
   const iconBg = {
@@ -1845,7 +1845,7 @@ function HeroKpiCard({
   }[gradient]
 
   return (
-    <div className={`rounded-2xl sm:rounded-3xl border bg-gradient-to-br ${gradientStyles} p-4 sm:p-5 shadow-sm relative overflow-hidden`}>
+    <div className={`rounded-2xl sm:rounded-3xl border ${cardStyle} p-4 sm:p-5 shadow-sm relative overflow-hidden`}>
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`p-2 rounded-xl sm:rounded-2xl shadow-md ${iconBg} shrink-0`}>

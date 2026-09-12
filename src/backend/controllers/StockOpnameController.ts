@@ -4,16 +4,22 @@ export class StockOpnameController {
   static create(data: any) {
     const opnameNumber = `OPN${Date.now()}`
     try {
-      if (!Array.isArray(data.items) || data.items.length === 0) {
-        return { success: false, message: 'Item opname tidak boleh kosong' }
-      }
+      const items = Array.isArray(data.items) ? data.items : []
 
       const save = sqlite.transaction(() => {
-        const result = sqlite.prepare('INSERT INTO mediasoft_stock_opname (opname_number, opname_date, notes, created_by) VALUES (?, ?, ?, ?)').run(opnameNumber, data.opname_date, data.notes, data.created_by)
+        const result = sqlite.prepare('INSERT INTO mediasoft_stock_opname (opname_number, opname_date, notes, created_by, status, total_items, total_difference) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+          opnameNumber,
+          data.opname_date,
+          data.notes || null,
+          data.created_by || null,
+          'PENDING',
+          0,
+          0
+        )
         const opnameId = Number(result.lastInsertRowid)
         let totalDiff = 0
         
-        for (const item of data.items) {
+        for (const item of items) {
           const barangId = String(item.barang_id || item.kd_barang || '').trim()
           const systemStock = Number(item.system_stock ?? item.stok_sistem ?? 0)
           const physicalStock = Number(item.physical_stock ?? item.stok_fisik ?? 0)
@@ -25,10 +31,12 @@ export class StockOpnameController {
 
           const diff = physicalStock - systemStock
           totalDiff += Math.abs(diff)
-          sqlite.prepare('INSERT INTO mediasoft_stock_opname_details (opname_id, barang_id, system_stock, physical_stock, difference, notes) VALUES (?, ?, ?, ?, ?, ?)').run(opnameId, barangId, systemStock, physicalStock, diff, item.notes)
+          sqlite.prepare('INSERT INTO mediasoft_stock_opname_details (opname_id, barang_id, system_stock, physical_stock, difference, notes) VALUES (?, ?, ?, ?, ?, ?)').run(opnameId, barangId, systemStock, physicalStock, diff, item.notes || null)
         }
         
-        sqlite.prepare('UPDATE mediasoft_stock_opname SET total_items = ?, total_difference = ? WHERE id = ?').run(data.items.length, totalDiff, opnameId)
+        if (items.length > 0) {
+          sqlite.prepare('UPDATE mediasoft_stock_opname SET total_items = ?, total_difference = ? WHERE id = ?').run(items.length, totalDiff, opnameId)
+        }
         return opnameId
       })
 

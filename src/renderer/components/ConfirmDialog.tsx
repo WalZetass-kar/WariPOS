@@ -68,14 +68,14 @@ export default function ConfirmDialog({
       title={title}
       size="sm"
       footer={
-        <>
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:justify-end">
           <Button variant="secondary" onClick={onClose} className="w-full sm:w-auto" disabled={loading}>
             {cancelText}
           </Button>
           <Button variant={config.buttonVariant} onClick={onConfirm} loading={loading} className="w-full sm:w-auto">
             {confirmText}
           </Button>
-        </>
+        </div>
       }
     >
       <div className="space-y-4">

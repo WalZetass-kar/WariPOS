@@ -34,7 +34,13 @@ export default function StockOpname() {
     try {
       const r = await api<any[]>('opname:getAll')
       if (r.success) {
-        const validData = (r.data ?? []).filter(item => item && item.id && item.opname_number)
+        const validData = (r.data ?? [])
+          .filter(item => item && (item.id !== undefined || item.opname_number))
+          .map(item => ({
+            ...item,
+            opname_number: item.opname_number || `OPN${item.id ?? Date.now()}`,
+            status: item.status || 'PENDING'
+          }))
         setOpnames(validData)
       }
     } finally {
@@ -160,68 +166,154 @@ export default function StockOpname() {
         {loadingData ? (
           <TableSkeleton rows={5} columns={7} />
         ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b dark:border-slate-700">
-                <th className="text-left p-3 text-slate-700 dark:text-slate-200">No Opname</th>
-                <th className="text-left p-3 text-slate-700 dark:text-slate-200">Tanggal</th>
-                <th className="text-left p-3 text-slate-700 dark:text-slate-200">Total Item</th>
-                <th className="text-left p-3 text-slate-700 dark:text-slate-200">Total Selisih</th>
-                <th className="text-left p-3 text-slate-700 dark:text-slate-200">Dibuat Oleh</th>
-                <th className="text-left p-3 text-slate-700 dark:text-slate-200">Status</th>
-                <th className="text-left p-3 text-slate-700 dark:text-slate-200">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {opnames.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-500">
-                    Belum ada data stok opname
-                  </td>
-                </tr>
-              ) : (
-                opnames.map(opname => (
-                  <tr key={opname.id} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700">
-                    <td className="p-3 font-mono text-slate-700 dark:text-slate-200">{opname.opname_number}</td>
-                    <td className="p-3 text-slate-700 dark:text-slate-200">{new Date(opname.opname_date).toLocaleDateString('id-ID')}</td>
-                    <td className="p-3 text-slate-700 dark:text-slate-200">{opname.total_items || 0}</td>
-                    <td className={`p-3 font-semibold ${(opname.total_difference || 0) < 0 ? 'text-red-600' : (opname.total_difference || 0) > 0 ? 'text-green-600' : 'text-slate-500'}`}>
-                      {opname.total_difference || 0}
-                    </td>
-                    <td className="p-3 text-slate-700 dark:text-slate-200">{opname.created_by_name}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        opname.status === 'APPROVED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        opname.status === 'COMPLETED' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400' :
-                        'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                      }`}>{opname.status}</span>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex gap-1">
-                        <button onClick={() => openDetail(opname)} className="p-1.5 rounded-lg hover:bg-primary-50 dark:hover:bg-slate-600 text-primary-500 transition-colors" title="Detail">
-                          <Eye size={14} />
-                        </button>
-                        {opname.status === 'PENDING' && (
-                          <>
-                            <button onClick={() => openInputStok(opname)} className="p-1.5 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 text-pink-500 transition-colors" title="Input Stok">
-                              <Package size={14} />
-                            </button>
-                            <button onClick={() => { setSelectedOpname(opname); setModal('approve') }} className="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 transition-colors" title="Approve">
-                              <Check size={14} />
-                            </button>
-                            <button onClick={() => { setSelectedOpname(opname); setModal('delete') }} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors" title="Hapus">
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
+        <div className="space-y-3">
+          {/* Mobile Card View */}
+          <div className="block md:hidden space-y-3">
+            {opnames.length === 0 ? (
+              <p className="p-6 text-center text-slate-400 text-sm">Belum ada data stok opname</p>
+            ) : (
+              opnames.map(opname => {
+                const isPending = opname.status === 'PENDING' || opname.status === 'DRAFT'
+                return (
+                  <div key={opname.id} className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100">{opname.opname_number}</span>
+                        <p className="text-[11px] text-slate-400">{new Date(opname.opname_date).toLocaleDateString('id-ID')}</p>
                       </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                        opname.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' :
+                        opname.status === 'COMPLETED' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' :
+                        'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                      }`}>
+                        {opname.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 dark:border-slate-800/80 text-xs">
+                      <div>
+                        <p className="text-[10px] text-slate-400">Total Item</p>
+                        <p className="font-bold text-slate-700 dark:text-slate-200">{opname.total_items || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400">Total Selisih</p>
+                        <p className={`font-bold ${(opname.total_difference || 0) < 0 ? 'text-red-600' : (opname.total_difference || 0) > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
+                          {opname.total_difference || 0}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400">Dibuat Oleh</p>
+                        <p className="font-semibold text-slate-700 dark:text-slate-200 truncate">{opname.created_by_name || '-'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                      <button
+                        onClick={() => openDetail(opname)}
+                        className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/30 text-xs font-bold flex items-center gap-1"
+                      >
+                        <Eye size={13} />
+                        <span>Detail</span>
+                      </button>
+                      {isPending && (
+                        <>
+                          <button
+                            onClick={() => openInputStok(opname)}
+                            className="px-2.5 py-1.5 rounded-xl border border-primary-200 dark:border-primary-800/50 bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 text-xs font-bold flex items-center gap-1"
+                          >
+                            <Package size={13} />
+                            <span>Input Stok</span>
+                          </button>
+                          <button
+                            onClick={() => { setSelectedOpname(opname); setModal('approve') }}
+                            className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm"
+                          >
+                            <Check size={13} />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => { setSelectedOpname(opname); setModal('delete') }}
+                            className="p-1.5 rounded-xl border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                            title="Hapus"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b dark:border-slate-700">
+                  <th className="text-left p-3 text-slate-700 dark:text-slate-200">No Opname</th>
+                  <th className="text-left p-3 text-slate-700 dark:text-slate-200">Tanggal</th>
+                  <th className="text-left p-3 text-slate-700 dark:text-slate-200">Total Item</th>
+                  <th className="text-left p-3 text-slate-700 dark:text-slate-200">Total Selisih</th>
+                  <th className="text-left p-3 text-slate-700 dark:text-slate-200">Dibuat Oleh</th>
+                  <th className="text-left p-3 text-slate-700 dark:text-slate-200">Status</th>
+                  <th className="text-left p-3 text-slate-700 dark:text-slate-200">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {opnames.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-gray-500">
+                      Belum ada data stok opname
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  opnames.map(opname => {
+                    const isPending = opname.status === 'PENDING' || opname.status === 'DRAFT'
+                    return (
+                      <tr key={opname.id} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700">
+                        <td className="p-3 font-mono text-slate-700 dark:text-slate-200">{opname.opname_number}</td>
+                        <td className="p-3 text-slate-700 dark:text-slate-200">{new Date(opname.opname_date).toLocaleDateString('id-ID')}</td>
+                        <td className="p-3 text-slate-700 dark:text-slate-200">{opname.total_items || 0}</td>
+                        <td className={`p-3 font-semibold ${(opname.total_difference || 0) < 0 ? 'text-red-600' : (opname.total_difference || 0) > 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                          {opname.total_difference || 0}
+                        </td>
+                        <td className="p-3 text-slate-700 dark:text-slate-200">{opname.created_by_name}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            opname.status === 'APPROVED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            opname.status === 'COMPLETED' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400' :
+                            'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          }`}>{opname.status}</span>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex gap-1">
+                            <button onClick={() => openDetail(opname)} className="p-1.5 rounded-lg hover:bg-primary-50 dark:hover:bg-slate-600 text-primary-500 transition-colors" title="Detail">
+                              <Eye size={14} />
+                            </button>
+                            {isPending && (
+                              <>
+                                <button onClick={() => openInputStok(opname)} className="p-1.5 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 text-primary-600 dark:text-primary-400 transition-colors" title="Input Stok">
+                                  <Package size={14} />
+                                </button>
+                                <button onClick={() => { setSelectedOpname(opname); setModal('approve') }} className="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 transition-colors" title="Approve">
+                                  <Check size={14} />
+                                </button>
+                                <button onClick={() => { setSelectedOpname(opname); setModal('delete') }} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors" title="Hapus">
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
         )}
       </Card>
@@ -297,7 +389,7 @@ export default function StockOpname() {
         footer={
           <div className="flex gap-2 justify-end w-full">
             <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto font-bold">Tutup</Button>
-            <Button loading={loading} onClick={handleAddItem} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20">
+            <Button loading={loading} onClick={handleAddItem} className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white font-bold border-0 shadow-md shadow-primary-600/20">
               Simpan Item
             </Button>
           </div>
@@ -305,7 +397,7 @@ export default function StockOpname() {
       >
         <div className="space-y-4">
           <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex justify-between items-center">
-            <span>No. Opname: <strong className="text-red-600">{selectedOpname?.opname_number}</strong></span>
+            <span>No. Opname: <strong className="text-primary-600 dark:text-primary-400">{selectedOpname?.opname_number}</strong></span>
             <span>{new Date(selectedOpname?.opname_date || '').toLocaleDateString('id-ID')}</span>
           </div>
           
@@ -319,7 +411,7 @@ export default function StockOpname() {
                 const prod = products.find(p => p.kd_barang === e.target.value)
                 if (prod && !stokFisik) setStokFisik(String(prod.stok || 0))
               }}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:border-primary-600 focus:ring-1 focus:ring-primary-600/30"
             >
               <option value="">-- Pilih Produk yang Dihitung --</option>
               {products.map(p => (

@@ -1452,27 +1452,27 @@ Terima kasih atas kunjungan Anda!`
           >
             <div
               onClick={() => { state.setMobileCheckoutTab('cart'); state.setMobileCartDrawerOpen(true) }}
-              className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/95 dark:bg-slate-900/95 text-white shadow-2xl shadow-red-600/30 border border-red-500/40 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
+              className="flex items-center justify-between py-2 px-3 sm:py-2.5 sm:px-3.5 rounded-2xl bg-slate-950/95 dark:bg-slate-900/95 text-white shadow-xl shadow-slate-900/30 border border-primary-500/40 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
             >
-              <div className="flex items-center gap-3">
-                <div className="relative p-2.5 rounded-xl bg-red-600 text-white font-bold shadow-sm">
-                  <ShoppingCart size={18} />
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="relative p-2 rounded-xl bg-primary-600 text-white font-bold shadow-sm shrink-0">
+                  <ShoppingCart size={16} />
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow">
                     {totalCartQty}
                   </span>
                 </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Tagihan ({totalCartQty} item)</p>
-                  <p className="text-base font-black text-white font-mono">{formatRupiah(totalBayar)}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">Total ({totalCartQty} item)</p>
+                  <p className="text-sm font-black text-white font-mono leading-tight truncate">{formatRupiah(totalBayar)}</p>
                 </div>
               </div>
 
               <button
                 type="button"
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
+                className="px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm shrink-0 active:scale-95 transition-transform"
               >
-                <span>Keranjang & Bayar</span>
-                <ArrowRight size={14} />
+                <span>Keranjang</span>
+                <ArrowRight size={13} />
               </button>
             </div>
           </motion.div>

@@ -5321,8 +5321,15 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'shift:close':
       return updateSimpleRow(store, store.shifts, args[0], { ...(args[1] as AnyRecord), end_time: now(), status: 'CLOSED' }) as IpcResponse<T>
 
-    case 'shift:delete':
+    case 'shift:delete': {
+      const shiftId = toNumber(args[0])
+      store.penjualan.forEach(p => {
+        if (toNumber(p.shift_id) === shiftId) {
+          p.shift_id = null
+        }
+      })
       return deleteSimpleRow(store, store.shifts, args[0]) as IpcResponse<T>
+    }
 
     case 'debt:getAll':
       return ok((args[0] ? store.debts.filter(item => item.type === args[0]) : store.debts) as T)
@@ -5350,14 +5357,74 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'debt:delete':
       return deleteSimpleRow(store, store.debts, args[0]) as IpcResponse<T>
 
-    case 'opname:getAll':
+    case 'opname:getAll': {
+      let changed = false
+      store.stockOpnames.forEach((item, idx) => {
+        if (!item.opname_number) {
+          item.opname_number = `OPN${item.id || (Date.now() - idx * 1000)}`
+          changed = true
+        }
+        if (!item.status || item.status === 'DRAFT') {
+          item.status = 'PENDING'
+          changed = true
+        }
+        if (item.total_items === undefined) {
+          const items = store.stockOpnameItems[String(item.id)] ?? []
+          item.total_items = items.length
+          item.total_difference = items.reduce((sum: number, it: AnyRecord) => sum + Math.abs(toNumber(it.selisih ?? it.difference)), 0)
+          changed = true
+        }
+        if (!item.created_by_name) {
+          item.created_by_name = (store.users.find(u => u.nama_pengguna === item.created_by)?.nama_lengkap) || item.created_by || 'Admin'
+          changed = true
+        }
+      })
+      if (changed) saveStore(store)
       return ok(store.stockOpnames as T)
+    }
 
-    case 'opname:create':
-      return createSimpleRow(store, store.stockOpnames, 'opname', { ...(args[0] as AnyRecord), status: 'DRAFT' }) as IpcResponse<T>
+    case 'opname:create': {
+      const payload = (args[0] ?? {}) as AnyRecord
+      const opnameNumber = `OPN${Date.now()}`
+      const createdByName = (store.users.find(u => u.nama_pengguna === payload.created_by)?.nama_lengkap) || payload.created_by || 'Admin'
+      const newId = nextCounter(store, 'opname')
+      const row: AnyRecord = {
+        ...payload,
+        id: newId,
+        opname_number: opnameNumber,
+        status: 'PENDING',
+        total_items: 0,
+        total_difference: 0,
+        created_by_name: createdByName,
+        created_at: now()
+      }
+      store.stockOpnames.unshift(row)
+      store.stockOpnameItems[String(newId)] = []
+      saveStore(store)
+      return ok(row as T, 'Stok opname berhasil dibuat')
+    }
 
-    case 'opname:approve':
-      return updateSimpleRow(store, store.stockOpnames, args[0], { status: 'APPROVED', approved_by: args[1] }) as IpcResponse<T>
+    case 'opname:approve': {
+      const opnameId = String(args[0])
+      const approvedBy = args[1]
+      const opname = store.stockOpnames.find(o => String(o.id) === opnameId)
+      if (!opname) return fail('Opname tidak ditemukan')
+      if (opname.status === 'APPROVED') return fail('Opname sudah disetujui')
+
+      const items = store.stockOpnameItems[opnameId] ?? []
+      for (const item of items) {
+        const kd = String(item.kd_barang || item.barang_id || '')
+        const prod = store.barang.find(b => String(b.kd_barang) === kd)
+        if (prod) {
+          prod.stok = Number(item.stok_fisik ?? item.physical_stock ?? 0)
+        }
+      }
+      opname.status = 'APPROVED'
+      opname.approved_by = approvedBy
+      opname.approved_at = now()
+      saveStore(store)
+      return ok(opname as T, 'Stok opname berhasil diapprove')
+    }
 
     case 'opname:getDetails':
     case 'opname:getItems':
@@ -5365,9 +5432,39 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'opname:addItem': {
       const data = args[0] as AnyRecord
-      const id = String(data.opname_id)
-      const row = { ...data, id: nextCounter(store, 'opname') }
-      store.stockOpnameItems[id] = [...(store.stockOpnameItems[id] ?? []), row]
+      const opnameId = String(data.opname_id)
+      const kdBarang = String(data.kd_barang || data.barang_id || '')
+      const prod = store.barang.find(b => String(b.kd_barang) === kdBarang)
+      const namaBarang = prod?.nama_barang || data.nama_barang || kdBarang
+      const systemStock = Number(data.stok_sistem ?? data.system_stock ?? prod?.stok ?? 0)
+      const physicalStock = Number(data.stok_fisik ?? data.physical_stock ?? 0)
+      const diff = physicalStock - systemStock
+      const itemId = nextCounter(store, 'opname')
+      const row: AnyRecord = {
+        ...data,
+        id: itemId,
+        opname_id: Number(opnameId) || opnameId,
+        barang_id: kdBarang,
+        kd_barang: kdBarang,
+        nama_barang: namaBarang,
+        system_stock: systemStock,
+        stok_sistem: systemStock,
+        physical_stock: physicalStock,
+        stok_fisik: physicalStock,
+        difference: diff,
+        selisih: diff,
+        created_at: now()
+      }
+      const existingItems = store.stockOpnameItems[opnameId] ?? []
+      store.stockOpnameItems[opnameId] = [...existingItems, row]
+
+      // Update parent opname
+      const parent = store.stockOpnames.find(o => String(o.id) === opnameId)
+      if (parent) {
+        const allItems = store.stockOpnameItems[opnameId]
+        parent.total_items = allItems.length
+        parent.total_difference = allItems.reduce((s: number, it: AnyRecord) => s + Math.abs(Number(it.selisih ?? it.difference) || 0), 0)
+      }
       saveStore(store)
       return ok(row as T, 'Item opname disimpan')
     }

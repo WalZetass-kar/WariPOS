@@ -147,7 +147,7 @@ export default function AppLayout() {
         message="Apakah Anda yakin ingin keluar dari akun WariPOS? Sesi Anda pada perangkat ini akan diakhiri."
         confirmText="Ya, Keluar"
         cancelText="Batal"
-        variant="warning"
+        variant="danger"
       />
     </div>
   )
