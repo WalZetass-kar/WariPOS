@@ -9,17 +9,29 @@ import { hasMinRole } from '../../shared/config/rbac'
 /**
  * Calculates a mathematically exact circular notch path with smooth tangent shoulder fillets.
  * Snugly and uniformly cradles the floating 66px Kasir button with a continuous 5.5px air gap.
+ * Button physical center is at (cx, 5) with outer boundary of radius 37px (33px radius + 4px ring).
+ * Notch circular arc is concentric at (cx, 5) with radius 42.5px, providing an exact 5.5px uniform gap.
+ * Shoulder fillets of radius R2 = 14px meet the top edge (y=0) and the notch arc with C1 tangent continuity.
  */
 function getNotchPath(w: number, h: number = 74) {
   const rTop = 20 // Top corner radius of navbar
   const cx = w / 2
 
-  // Exact Tangent Geometry Parameters for 66px button:
-  const R1 = 43
-  const R2 = 12
-  const xShoulder = 52.31
-  const xInflect = 40.90
-  const yInflect = 8.29
+  // Center of floating 66px button:
+  // button: width 66, height 66, marginTop -28
+  // center y = -28 + (66 / 2) = 5
+  const cy = 5
+  // Outer radius including ring-4 (4px): 33 + 4 = 37
+  // Uniform 5.5px air gap around the button
+  const R1 = 42.5
+  // Smooth shoulder fillet radius
+  const R2 = 14
+
+  const D = R1 + R2 // 56.5
+  const dy = R2 - cy // 9
+  const xShoulder = Math.sqrt(D * D - dy * dy) // ~55.7786
+  const xInflect = xShoulder * (R1 / D) // ~41.9576
+  const yInflect = cy + dy * (R1 / D) // ~11.7699
 
   const pLeftShoulder = cx - xShoulder
   const pLeftInflect = cx - xInflect
@@ -30,8 +42,8 @@ function getNotchPath(w: number, h: number = 74) {
     `M 0,${rTop}`,
     `A ${rTop},${rTop} 0 0,1 ${rTop},0`,
     `L ${pLeftShoulder.toFixed(2)},0`,
-    `A ${R2},${R2} 0 0,1 ${pLeftInflect.toFixed(2)},${yInflect}`,
-    `A ${R1},${R1} 0 0,0 ${pRightInflect.toFixed(2)},${yInflect}`,
+    `A ${R2},${R2} 0 0,1 ${pLeftInflect.toFixed(2)},${yInflect.toFixed(2)}`,
+    `A ${R1},${R1} 0 0,0 ${pRightInflect.toFixed(2)},${yInflect.toFixed(2)}`,
     `A ${R2},${R2} 0 0,1 ${pRightShoulder.toFixed(2)},0`,
     `L ${(w - rTop).toFixed(2)},0`,
     `A ${rTop},${rTop} 0 0,1 ${w},${rTop}`,
@@ -50,6 +62,7 @@ export default function MobileBottomNav() {
   const [pressing, setPressing] = useState(false)
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([])
   const [navWidth, setNavWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 375))
+  const navRef = useRef<HTMLElement>(null)
   const btnRef = useRef<HTMLAnchorElement>(null)
   const rippleId = useRef(0)
 
@@ -59,11 +72,24 @@ export default function MobileBottomNav() {
     }
   }
 
-  // Track window resize so notch SVG scales perfectly with zero distortion
+  // Track nav element width and window resize so notch SVG scales perfectly with zero distortion
   useEffect(() => {
-    const handleResize = () => setNavWidth(window.innerWidth)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    const updateWidth = () => {
+      if (navRef.current) {
+        const rect = navRef.current.getBoundingClientRect()
+        if (rect.width > 0) {
+          setNavWidth(rect.width)
+          return
+        }
+      }
+      if (typeof window !== 'undefined') {
+        setNavWidth(window.innerWidth)
+      }
+    }
+
+    updateWidth()
+    window.addEventListener('resize', updateWidth)
+    return () => window.removeEventListener('resize', updateWidth)
   }, [])
 
   // Mount entrance slide-up animation
@@ -111,6 +137,7 @@ export default function MobileBottomNav() {
       <div className="h-[84px] lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} />
 
       <nav
+        ref={navRef}
         className="fixed inset-x-0 bottom-0 z-40 select-none lg:hidden"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
@@ -201,7 +228,7 @@ export default function MobileBottomNav() {
           </div>
 
           {/* Center Gap Space for Floating Button & Notch */}
-          <div className="w-[82px] h-full shrink-0" />
+          <div className="w-[114px] h-full shrink-0" />
 
           {/* Right Menu Items (Laporan, Pengaturan) */}
           <div className="flex items-center justify-around flex-1 max-w-[148px] h-full pt-1">
