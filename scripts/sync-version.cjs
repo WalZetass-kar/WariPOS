@@ -14,7 +14,7 @@ if (fs.existsSync(capacitorConfigPath)) {
   let content = fs.readFileSync(capacitorConfigPath, 'utf8')
   content = content.replace(
     /appName:\s*['"][^'"]*['"]/,
-    `appName: 'Zetass Pos'`
+    `appName: 'WariPOS'`
   )
   fs.writeFileSync(capacitorConfigPath, content)
   console.log('Synced capacitor.config.ts')
