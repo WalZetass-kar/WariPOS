@@ -148,16 +148,18 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
           </div>
         )}
 
-        <div className="space-y-1 mb-3">
+        <div className="space-y-1.5 mb-3">
           {cart.map(item => {
             const disc = (item.harga_jual * item.disc) / 100
             const itemTotal = (item.harga_jual - disc) * item.qty
             return (
-              <div key={item.kd_barang} className="border-b border-dotted border-slate-100 pb-1">
-                <p className="truncate font-medium">{item.nama_barang}</p>
-                <div className="flex justify-between text-slate-500 text-[9px]">
+              <div key={item.kd_barang} className="border-b border-dotted border-slate-200 dark:border-slate-700 pb-1.5 last:border-0">
+                <p className="break-words whitespace-normal font-medium text-[10px] text-slate-900 leading-snug">
+                  {item.nama_barang}
+                </p>
+                <div className="flex justify-between items-baseline text-slate-500 text-[9px] mt-0.5">
                   <span>{item.qty} x {formatRupiah(item.harga_jual)}{item.disc > 0 ? ` (-${item.disc}%)` : ''}</span>
-                  <span className="font-bold text-slate-700">{formatRupiah(itemTotal)}</span>
+                  <span className="font-bold text-slate-800 ml-2 shrink-0">{formatRupiah(itemTotal)}</span>
                 </div>
               </div>
             )

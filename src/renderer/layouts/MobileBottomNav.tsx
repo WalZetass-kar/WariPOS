@@ -8,21 +8,18 @@ import { hasMinRole } from '../../shared/config/rbac'
 
 /**
  * Calculates a mathematically exact circular notch path with smooth tangent shoulder fillets.
- * Snugly and uniformly cradles the floating 60px Kasir button with a continuous 5.5px air gap.
+ * Snugly and uniformly cradles the floating 66px Kasir button with a continuous 5.5px air gap.
  */
-function getNotchPath(w: number, h: number = 72) {
+function getNotchPath(w: number, h: number = 74) {
   const rTop = 20 // Top corner radius of navbar
   const cx = w / 2
 
-  // Exact Tangent Geometry Parameters:
-  // Button center: (cx, 4), Button outer radius: 33.5px (with 3.5px ring)
-  // Cutout radius: R1 = 39px (5.5px uniform clearance)
-  // Shoulder radius: R2 = 12px (tangent to y=0 and tangent to R1)
-  const R1 = 39
+  // Exact Tangent Geometry Parameters for 66px button:
+  const R1 = 43
   const R2 = 12
-  const xShoulder = 50.37
-  const xInflect = 38.52
-  const yInflect = 10.12
+  const xShoulder = 52.31
+  const xInflect = 40.90
+  const yInflect = 8.29
 
   const pLeftShoulder = cx - xShoulder
   const pLeftInflect = cx - xInflect
@@ -106,12 +103,12 @@ export default function MobileBottomNav() {
     setTimeout(() => setPressing(false), 180)
   }
 
-  const pathD = getNotchPath(navWidth, 72)
+  const pathD = getNotchPath(navWidth, 74)
 
   return (
     <>
       {/* Spacer to prevent content from hiding behind floating nav on mobile */}
-      <div className="h-[80px] lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} />
+      <div className="h-[84px] lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} />
 
       <nav
         className="fixed inset-x-0 bottom-0 z-40 select-none lg:hidden"
@@ -124,12 +121,12 @@ export default function MobileBottomNav() {
             : 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease',
         }}
       >
-        {/* Light Mode SVG Background with Soft Multi-Layered Ambient Shadow */}
+        {/* Light Mode SVG Background with Soft Ambient Shadow */}
         <svg
-          className="pointer-events-none absolute inset-0 h-[72px] w-full dark:hidden"
-          viewBox={`0 0 ${navWidth} 72`}
+          className="pointer-events-none absolute inset-0 h-[74px] w-full dark:hidden"
+          viewBox={`0 0 ${navWidth} 74`}
           style={{
-            filter: 'drop-shadow(0 -4px 14px rgba(0, 0, 0, 0.04)) drop-shadow(0 -10px 28px rgba(0, 0, 0, 0.06))',
+            filter: 'drop-shadow(0 -3px 12px rgba(0, 0, 0, 0.05))',
           }}
         >
           <path d={pathD} fill="#FFFFFF" />
@@ -138,10 +135,10 @@ export default function MobileBottomNav() {
 
         {/* Dark Mode SVG Background */}
         <svg
-          className="pointer-events-none absolute inset-0 h-[72px] w-full hidden dark:block"
-          viewBox={`0 0 ${navWidth} 72`}
+          className="pointer-events-none absolute inset-0 h-[74px] w-full hidden dark:block"
+          viewBox={`0 0 ${navWidth} 74`}
           style={{
-            filter: 'drop-shadow(0 -4px 14px rgba(0, 0, 0, 0.25)) drop-shadow(0 -10px 32px rgba(0, 0, 0, 0.4))',
+            filter: 'drop-shadow(0 -3px 16px rgba(0, 0, 0, 0.3))',
           }}
         >
           <path d={pathD} fill="#0F172A" />
@@ -149,7 +146,7 @@ export default function MobileBottomNav() {
         </svg>
 
         {/* Menu Navigation Container */}
-        <div className="relative z-10 flex items-center justify-between h-[72px] px-3 sm:px-8">
+        <div className="relative z-10 flex items-center justify-between h-[74px] px-3 sm:px-8">
           {/* Left Menu Items (Dashboard, Produk) */}
           <div className="flex items-center justify-around flex-1 max-w-[148px] h-full pt-1">
             {leftItems.map(({ to, label, icon: Icon }) => (
@@ -160,10 +157,10 @@ export default function MobileBottomNav() {
                 onClick={triggerHaptic}
                 aria-label={label}
                 className={({ isActive }) =>
-                  `relative flex flex-col items-center justify-center py-1.5 px-2.5 sm:px-3 rounded-2xl transition-colors duration-200 ${
+                  `relative flex flex-col items-center justify-center py-1.5 px-2.5 sm:px-3 rounded-xl transition-colors duration-200 ${
                     isActive
-                      ? 'text-primary-600 dark:text-primary-400 font-extrabold'
-                      : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 font-medium'
+                      ? 'text-primary-600 dark:text-primary-400 font-bold'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'
                   }`
                 }
               >
@@ -172,21 +169,21 @@ export default function MobileBottomNav() {
                     {isActive && (
                       <motion.div
                         layoutId="mobile-nav-active-pill"
-                        className="absolute inset-0 rounded-2xl bg-primary-50/90 dark:bg-primary-950/45 border border-primary-200/60 dark:border-primary-900/40 shadow-sm"
+                        className="absolute inset-0 rounded-xl bg-primary-50/90 dark:bg-primary-950/50 border border-primary-200/70 dark:border-primary-900/50 shadow-xs"
                         transition={{ type: 'spring', stiffness: 420, damping: 30 }}
                       />
                     )}
                     <motion.div
-                      animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
+                      animate={{ scale: isActive ? 1.05 : 1, y: isActive ? -1 : 0 }}
                       transition={{ type: 'spring', stiffness: 450, damping: 24 }}
                       className="relative flex flex-col items-center"
                     >
                       <Icon
-                        size={19}
-                        strokeWidth={isActive ? 2.3 : 1.8}
+                        size={22}
+                        strokeWidth={isActive ? 2.1 : 1.85}
                         className="transition-colors duration-200"
                       />
-                      <span className="text-[10px] leading-none mt-1 font-bold tracking-tight truncate max-w-[56px]">
+                      <span className="text-[10px] leading-none mt-1 font-semibold tracking-tight truncate max-w-[58px]">
                         {label}
                       </span>
                     </motion.div>
@@ -204,7 +201,7 @@ export default function MobileBottomNav() {
           </div>
 
           {/* Center Gap Space for Floating Button & Notch */}
-          <div className="w-[74px] h-full shrink-0" />
+          <div className="w-[82px] h-full shrink-0" />
 
           {/* Right Menu Items (Laporan, Pengaturan) */}
           <div className="flex items-center justify-around flex-1 max-w-[148px] h-full pt-1">
@@ -215,10 +212,10 @@ export default function MobileBottomNav() {
                 onClick={triggerHaptic}
                 aria-label={label}
                 className={({ isActive }) =>
-                  `relative flex flex-col items-center justify-center py-1.5 px-2.5 sm:px-3 rounded-2xl transition-colors duration-200 ${
+                  `relative flex flex-col items-center justify-center py-1.5 px-2.5 sm:px-3 rounded-xl transition-colors duration-200 ${
                     isActive
-                      ? 'text-primary-600 dark:text-primary-400 font-extrabold'
-                      : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 font-medium'
+                      ? 'text-primary-600 dark:text-primary-400 font-bold'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'
                   }`
                 }
               >
@@ -227,21 +224,21 @@ export default function MobileBottomNav() {
                     {isActive && (
                       <motion.div
                         layoutId="mobile-nav-active-pill"
-                        className="absolute inset-0 rounded-2xl bg-primary-50/90 dark:bg-primary-950/45 border border-primary-200/60 dark:border-primary-900/40 shadow-sm"
+                        className="absolute inset-0 rounded-xl bg-primary-50/90 dark:bg-primary-950/50 border border-primary-200/70 dark:border-primary-900/50 shadow-xs"
                         transition={{ type: 'spring', stiffness: 420, damping: 30 }}
                       />
                     )}
                     <motion.div
-                      animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
+                      animate={{ scale: isActive ? 1.05 : 1, y: isActive ? -1 : 0 }}
                       transition={{ type: 'spring', stiffness: 450, damping: 24 }}
                       className="relative flex flex-col items-center"
                     >
                       <Icon
-                        size={19}
-                        strokeWidth={isActive ? 2.3 : 1.8}
+                        size={22}
+                        strokeWidth={isActive ? 2.1 : 1.85}
                         className="transition-colors duration-200"
                       />
-                      <span className="text-[10px] leading-none mt-1 font-bold tracking-tight truncate max-w-[56px]">
+                      <span className="text-[10px] leading-none mt-1 font-semibold tracking-tight truncate max-w-[58px]">
                         {label}
                       </span>
                     </motion.div>
@@ -259,7 +256,7 @@ export default function MobileBottomNav() {
           </div>
         </div>
 
-        {/* Center Floating Action Button (Kasir) */}
+        {/* Center Floating Action Button (Kasir) - Mengikuti Tema Terpilih */}
         <NavLink
           ref={btnRef}
           to="/transaksi"
@@ -269,11 +266,11 @@ export default function MobileBottomNav() {
           onPointerDown={handlePointerDown}
           className="absolute left-1/2 top-0 z-20 block group"
           style={{
-            width: 60,
-            height: 60,
-            marginTop: -26,
+            width: 66,
+            height: 66,
+            marginTop: -28,
             transform: entered
-              ? `translateX(-50%) scale(${pressing ? 0.92 : isKasirActive ? 1.03 : 1})`
+              ? `translateX(-50%) scale(${pressing ? 0.93 : isKasirActive ? 1.02 : 1})`
               : 'translateX(-50%) scale(0.4)',
             opacity: entered ? 1 : 0,
             transition: entered
@@ -282,18 +279,16 @@ export default function MobileBottomNav() {
           }}
         >
           <div
-            className={`relative flex flex-col items-center justify-center w-full h-full rounded-full overflow-hidden transition-all duration-300 select-none ${
-              isKasirActive
-                ? 'bg-primary-600 text-white ring-[3.5px] ring-white dark:ring-slate-900 shadow-[0_10px_26px_-3px_rgba(0,0,0,0.35),_0_4px_12px_rgba(0,0,0,0.14)]'
-                : 'bg-primary-600 text-white ring-[3.5px] ring-white dark:ring-slate-900 shadow-[0_8px_20px_-3px_rgba(0,0,0,0.25),_0_3px_10px_rgba(0,0,0,0.1)] hover:opacity-95'
+            className={`relative flex flex-col items-center justify-center w-full h-full rounded-full overflow-hidden transition-all duration-200 select-none bg-primary-600 text-white ring-4 ring-white dark:ring-slate-900 shadow-lg shadow-primary-600/30 hover:opacity-95 ${
+              isKasirActive ? 'ring-primary-200/80 dark:ring-primary-900/80' : ''
             }`}
           >
             <ShoppingCart
-              size={20}
-              strokeWidth={2.3}
-              className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition-transform duration-200 group-hover:scale-110"
+              size={22}
+              strokeWidth={2}
+              className="text-white transition-transform duration-200 group-hover:scale-105"
             />
-            <span className="text-[10.5px] font-black tracking-tight text-white leading-none mt-0.5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">
+            <span className="text-[11px] font-extrabold tracking-tight text-white leading-none mt-0.5">
               Kasir
             </span>
 
@@ -301,7 +296,7 @@ export default function MobileBottomNav() {
             {ripples.map(r => (
               <span
                 key={r.id}
-                className="pointer-events-none absolute rounded-full bg-white/35"
+                className="pointer-events-none absolute rounded-full bg-white/30"
                 style={{
                   left: r.x - 10,
                   top: r.y - 10,
@@ -311,11 +306,6 @@ export default function MobileBottomNav() {
                 }}
               />
             ))}
-
-            {/* Active Glow Ring */}
-            {isKasirActive && (
-              <span className="absolute inset-0 rounded-full ring-2 ring-white/40 animate-ping pointer-events-none opacity-40" />
-            )}
           </div>
         </NavLink>
       </nav>

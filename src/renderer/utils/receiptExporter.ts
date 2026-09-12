@@ -85,41 +85,121 @@ export async function saveFileToDevice(
 }
 
 /**
- * Generate a receipt PDF matching standard receipt layout
+ * Calculate dynamic receipt page height in mm based on content lines
+ */
+export function calculateReceiptPdfHeight(data: ReceiptData): number {
+  let estimatedY = 8 // Top margin
+
+  // Store header
+  estimatedY += 6
+
+  // Store address
+  if (data.storeAddress) {
+    const approxLines = Math.max(1, Math.ceil(data.storeAddress.length / 38))
+    estimatedY += approxLines * 3.6
+  }
+
+  // Store phone
+  if (data.storePhone) {
+    estimatedY += 4
+  }
+
+  // Divider
+  estimatedY += 4
+
+  // Invoice info
+  estimatedY += 3.5 // No Trx
+  estimatedY += 3.5 // Tgl
+  estimatedY += 3.5 // Kasir
+  if (data.tableNumber) estimatedY += 3.5
+  if (data.customer?.nama_customer || (data.customer as any)?.nama) estimatedY += 3.5
+  estimatedY += 4
+
+  // Divider
+  estimatedY += 4
+
+  // ITEM & TOTAL header
+  estimatedY += 4.5
+
+  // Items
+  for (const item of data.cart) {
+    const nameLength = (item.nama_barang || '').length
+    const nameLines = Math.max(1, Math.ceil(nameLength / 36))
+    estimatedY += nameLines * 3.6 // Product name lines
+    estimatedY += 4.2 // Quantity x unit price and total line
+    estimatedY += 1.5 // Space between items
+  }
+
+  // Divider
+  estimatedY += 4
+
+  // Totals
+  estimatedY += 3.8 // Subtotal
+  if (data.promoDiskon > 0) estimatedY += 3.8
+  if (data.pajakAmount > 0) estimatedY += 3.8
+  estimatedY += 1
+  estimatedY += 5.2 // TOTAL
+  estimatedY += 1
+  estimatedY += 3.8 // Metode bayar
+  estimatedY += 3.8 // Bayar
+  estimatedY += 3.8 // Kembalian
+  if (data.poinEarned && data.poinEarned > 0) estimatedY += 5.5
+
+  // Divider + Footer
+  estimatedY += 4
+  estimatedY += 6
+  if (data.storeFooter) {
+    const footerLines = Math.max(1, Math.ceil(data.storeFooter.length / 40))
+    estimatedY += footerLines * 3.5
+  } else {
+    estimatedY += 4
+  }
+
+  // Bottom padding
+  estimatedY += 10
+
+  return Math.max(75, Math.ceil(estimatedY))
+}
+
+/**
+ * Generate a receipt PDF matching standard receipt layout with dynamic vertical stacking
  */
 export async function generateReceiptPdf(data: ReceiptData): Promise<Blob> {
+  const pageHeight = calculateReceiptPdfHeight(data)
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: [80, Math.max(180, 100 + data.cart.length * 10)],
+    format: [80, pageHeight],
   })
 
   let y = 8
   const left = 5
   const right = 75
   const center = 40
+  const printableWidth = right - left // 70mm
 
   // Header
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12)
+  doc.setFontSize(11)
   doc.text(data.storeName || 'WARIPOS', center, y, { align: 'center' })
-  y += 5
+  y += 5.5
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   if (data.storeAddress) {
-    doc.text(data.storeAddress, center, y, { align: 'center', maxWidth: 70 })
-    y += 4
+    const addrLines = doc.splitTextToSize(data.storeAddress, printableWidth)
+    doc.text(addrLines, center, y, { align: 'center' })
+    y += addrLines.length * 3.4
   }
   if (data.storePhone) {
     doc.text(`Telp: ${data.storePhone}`, center, y, { align: 'center' })
-    y += 4
+    y += 3.8
   }
 
   // Divider
   doc.setLineDashPattern([1, 1], 0)
   doc.line(left, y, right, y)
-  y += 4
+  y += 3.8
 
   // Invoice info
   doc.setFontSize(7.5)
@@ -136,41 +216,52 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Blob> {
     y += 3.5
     doc.text(`Pelanggan: ${data.customer?.nama_customer || (data.customer as any)?.nama}`, left, y)
   }
-  y += 4
+  y += 3.8
 
   // Divider
   doc.line(left, y, right, y)
   y += 4
 
-  // Items
+  // Items Header
   doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
   doc.text('ITEM', left, y)
   doc.text('TOTAL', right, y, { align: 'right' })
-  y += 4
-  doc.setFont('helvetica', 'normal')
+  y += 4.2
 
+  // Items List with Dynamic Vertical Stacking
   for (const item of data.cart) {
-    doc.text(item.nama_barang, left, y, { maxWidth: 50 })
-    const itemTotal = (item.harga_jual - (item.harga_jual * (item.disc || 0)) / 100) * item.qty
-    doc.text(formatRupiah(itemTotal), right, y, { align: 'right' })
-    y += 3.5
-    doc.setFontSize(7)
-    doc.text(`${item.qty} x ${formatRupiah(item.harga_jual)}${item.disc ? ` (Disc ${item.disc}%)` : ''}`, left + 2, y)
+    // 1. Nama produk memiliki ruang sendiri dan di-wrap secara dinamis
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    const nameLines = doc.splitTextToSize(item.nama_barang || '', printableWidth)
+    doc.text(nameLines, left, y)
+    y += nameLines.length * 3.6
+
+    // 2. Baris detail quantity x harga di kiri, total harga di kanan
+    const disc = (item.harga_jual * (item.disc || 0)) / 100
+    const itemTotal = (item.harga_jual - disc) * item.qty
+    const qtyPriceStr = `${item.qty} x ${formatRupiah(item.harga_jual)}${item.disc ? ` (Disc ${item.disc}%)` : ''}`
+    const totalStr = formatRupiah(itemTotal)
+
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(7.5)
-    y += 4
+    doc.text(qtyPriceStr, left, y)
+    doc.text(totalStr, right, y, { align: 'right' })
+    y += 4.5 // Vertical spacing sebelum item berikutnya
   }
 
-  // Divider
+  // Divider setelah seluruh item selesai
   doc.line(left, y, right, y)
   y += 4
 
-  // Totals
+  // Totals Section
   const printRow = (label: string, value: string, bold = false) => {
     if (bold) doc.setFont('helvetica', 'bold')
     else doc.setFont('helvetica', 'normal')
     doc.text(label, left, y)
     doc.text(value, right, y, { align: 'right' })
-    y += 3.5
+    y += 3.6
   }
 
   printRow('Subtotal', formatRupiah(data.subTotal))
@@ -180,11 +271,11 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Blob> {
   if (data.pajakAmount > 0) {
     printRow(`Pajak (${data.pajakPersen}%)`, formatRupiah(data.pajakAmount))
   }
-  y += 1
+  y += 0.8
   doc.setFontSize(9)
   printRow('TOTAL', formatRupiah(data.totalBayar), true)
   doc.setFontSize(7.5)
-  y += 1
+  y += 0.8
   printRow('Metode Bayar', data.jenisBayar)
   printRow('Bayar', formatRupiah(data.paidAmount))
   printRow('Kembalian', formatRupiah(data.kembalian))
@@ -192,13 +283,21 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Blob> {
   if (data.poinEarned && data.poinEarned > 0) {
     y += 2
     doc.text(`Poin Diperoleh: +${data.poinEarned} Poin`, center, y, { align: 'center' })
+    y += 3.5
   }
 
+  // Divider sebelum Footer
+  doc.line(left, y, right, y)
+  y += 4.5
+
   // Footer
-  y += 6
   doc.setFont('helvetica', 'italic')
   doc.setFontSize(7.5)
-  doc.text(data.storeFooter || 'Terima kasih atas kunjungan Anda!', center, y, { align: 'center' })
+  const footerLines = doc.splitTextToSize(
+    data.storeFooter || 'Terima kasih atas kunjungan Anda!',
+    printableWidth
+  )
+  doc.text(footerLines, center, y, { align: 'center' })
 
   return doc.output('blob')
 }

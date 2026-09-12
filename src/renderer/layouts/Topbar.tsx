@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown, Clock, Wifi, WifiOff, LogOut, Settings as SettingsIcon, Store, UtensilsCrossed } from 'lucide-react'
+import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown, Clock, Wifi, WifiOff, LogOut, Settings as SettingsIcon, Store, UtensilsCrossed, X } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useAppStore } from '../stores'
@@ -284,59 +284,128 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             )}
           </button>
 
-          {/* Dropdown */}
+          {/* Centered Modal Backdrop & Dialog */}
           {showNotif && (
-            <div className="fixed left-1/2 top-16 z-50 w-[min(calc(100vw-2rem),360px)] -translate-x-1/2 glass-card shadow-2xl rounded-2xl overflow-hidden border border-white/40 dark:border-slate-700/40 dropdown-popover-animate">
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">
-                  Notifikasi {unreadCount > 0 && <span className="ml-1 text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5">{unreadCount}</span>}
-                </span>
-                {unreadCount > 0 && (
-                  <button onClick={markAllRead} className="text-xs text-primary-500 hover:text-primary-600 flex items-center gap-1">
-                    <CheckCheck size={12} /> Tandai semua
-                  </button>
-                )}
-              </div>
+            <>
+              {/* Thin Transparent Backdrop Overlay */}
+              <div
+                className="fixed inset-0 z-[100] bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-[1px] transition-opacity"
+                onClick={() => setShowNotif(false)}
+                aria-hidden="true"
+              />
 
-              {/* List */}
-              <div className="max-h-80 overflow-y-auto scrollbar-thin">
-                {notifs.length === 0 ? (
-                  <div className="py-10 text-center text-slate-400 text-sm">
-                    <Bell size={28} className="mx-auto mb-2 opacity-30" />
-                    Tidak ada notifikasi
+              {/* Centered Modal Card */}
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="notif-dialog-title"
+                className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[101] w-[88vw] max-w-[400px] max-h-[82vh] flex flex-col bg-white dark:bg-slate-900 rounded-[20px] border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/20 overflow-hidden"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <h3 id="notif-dialog-title" className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                      Notifikasi
+                    </h3>
+                    {unreadCount > 0 && (
+                      <span className="text-[11px] font-bold bg-red-500 text-white rounded-full px-2 py-0.5 leading-none">
+                        {unreadCount}
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  notifs.slice(0, 20).map(n => (
-                    <div key={n.kd_notifikasi} className={`flex gap-3 px-4 py-3 border-b border-slate-50 dark:border-slate-700/50 transition-colors ${!n.dibaca ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}`}>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${JENIS_COLOR[n.jenis] ?? JENIS_COLOR.INFO}`}>
-                            {n.jenis}
-                          </span>
-                          {!n.dibaca && <span className="w-1.5 h-1.5 bg-primary-500 rounded-full shrink-0" />}
-                        </div>
-                        <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{n.judul}</p>
-                        <p className="text-xs text-slate-400 truncate">{n.pesan}</p>
-                        <p className="text-[10px] text-slate-300 dark:text-slate-600 mt-0.5">
-                          {new Date(n.tgl_dibuat).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </p>
+
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllRead}
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:underline font-semibold flex items-center gap-1 mr-1"
+                      >
+                        <CheckCheck size={13} />
+                        <span>Tandai semua</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowNotif(false)}
+                      aria-label="Tutup notifikasi"
+                      className="w-7 h-7 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Body Content */}
+                <div className="overflow-y-auto max-h-[60vh] overscroll-contain">
+                  {notifs.length === 0 ? (
+                    <div className="h-56 flex flex-col items-center justify-center p-6 text-center text-slate-400 dark:text-slate-500">
+                      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center mb-3">
+                        <Bell size={24} className="opacity-40 text-slate-500 dark:text-slate-400" />
                       </div>
-                      <div className="flex flex-col gap-1 shrink-0">
-                        {!n.dibaca && (
-                          <button onClick={() => markRead(n.kd_notifikasi)} className="p-1 rounded hover:bg-primary-100 dark:hover:bg-primary-900/30 text-primary-500" title="Tandai dibaca">
-                            <Check size={12} />
-                          </button>
-                        )}
-                        <button onClick={() => deleteNotif(n.kd_notifikasi)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400" title="Hapus">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                      <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Tidak ada notifikasi</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Semua info dan stok aman terkendali</p>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {notifs.slice(0, 30).map(n => (
+                        <div
+                          key={n.kd_notifikasi}
+                          className={`flex gap-3 px-4 py-3 transition-colors ${
+                            !n.dibaca
+                              ? 'bg-primary-50/40 dark:bg-primary-950/20'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${JENIS_COLOR[n.jenis] ?? JENIS_COLOR.INFO}`}>
+                                {n.jenis}
+                              </span>
+                              {!n.dibaca && <span className="w-1.5 h-1.5 bg-primary-600 rounded-full shrink-0" />}
+                            </div>
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-snug break-words">
+                              {n.judul}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words leading-relaxed">
+                              {n.pesan}
+                            </p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                              {new Date(n.tgl_dibuat).toLocaleString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </div>
+                          <div className="flex flex-col gap-1 shrink-0 pt-0.5">
+                            {!n.dibaca && (
+                              <button
+                                type="button"
+                                onClick={() => markRead(n.kd_notifikasi)}
+                                className="p-1 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/40 text-primary-600 dark:text-primary-400 transition-colors"
+                                title="Tandai dibaca"
+                              >
+                                <Check size={13} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => deleteNotif(n.kd_notifikasi)}
+                              className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-red-500 dark:text-red-400 transition-colors"
+                              title="Hapus"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 

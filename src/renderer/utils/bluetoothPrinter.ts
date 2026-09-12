@@ -284,17 +284,35 @@ class BluetoothPrinterService {
 
       rawText += `${'-'.repeat(paperWidth)}\n`
 
-      // 4. Daftar Item
+      // 4. Daftar Item dengan Dynamic Word Wrapping
       for (const item of data.items) {
-        const itemLine = `${item.nama}\n`
+        // Nama produk di-wrap per baris sesuai lebar kertas (58mm: 32 chars, 80mm: 48 chars)
+        const words = (item.nama || '').split(' ')
+        const nameLines: string[] = []
+        let currentLine = ''
+        for (const word of words) {
+          if ((currentLine ? `${currentLine} ${word}` : word).length <= paperWidth) {
+            currentLine = currentLine ? `${currentLine} ${word}` : word
+          } else {
+            if (currentLine) nameLines.push(currentLine)
+            currentLine = word.length > paperWidth ? word.slice(0, paperWidth) : word
+          }
+        }
+        if (currentLine) nameLines.push(currentLine)
+
+        for (const line of nameLines) {
+          rawText += `${line}\n`
+        }
+
+        // Baris kuantitas dan harga satuan di kiri, subtotal item di kanan
         const priceStr = `${item.qty} x ${item.harga.toLocaleString('id-ID')}`
         const totalStr = item.subtotal.toLocaleString('id-ID')
         const spaceCount = Math.max(1, paperWidth - priceStr.length - totalStr.length)
-        const subLine = `  ${priceStr}${' '.repeat(spaceCount - 2)}${totalStr}\n`
+        const subLine = `${priceStr}${' '.repeat(spaceCount)}${totalStr}\n`
 
-        rawText += itemLine + subLine
+        rawText += subLine
         if (item.catatan) {
-          rawText += `   * ${item.catatan}\n`
+          rawText += ` * ${item.catatan}\n`
         }
       }
 
