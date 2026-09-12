@@ -19,7 +19,7 @@ import { canManageOperations, canOpenDeveloperPanel } from '../../shared/config/
 /** Standard blocked response — consistent across all layers */
 export const DEMO_BLOCKED_RESPONSE: IpcResponse = {
   success: false,
-  message: '🔒 Mode Demo (READ ONLY): Aksi ini tidak diizinkan. Silakan login dengan akun biasa untuk menggunakan fitur penuh.',
+  message: ' Mode Demo (READ ONLY): Aksi ini tidak diizinkan. Silakan login dengan akun biasa untuk menggunakan fitur penuh.',
 }
 
 const ACCESS_DENIED_RESPONSE: IpcResponse = {
@@ -705,7 +705,7 @@ export function withDemoGuard<T extends (...args: any[]) => any>(
         return { ...DEMO_BLOCKED_RESPONSE }
       }
 
-      console.warn(`🚫 ACCESS DENIED: channel="${channel}" user="${demoSession.getUsername()}" role="${demoSession.getRole()}"`)
+      console.warn(` ACCESS DENIED: channel="${channel}" user="${demoSession.getUsername()}" role="${demoSession.getRole()}"`)
       return { ...ACCESS_DENIED_RESPONSE }
     }
 

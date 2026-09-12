@@ -53,6 +53,7 @@ interface AuthContextValue {
   user: UserSession | null
   /** Whether the current user is in demo mode (UX helper) */
   isDemo: boolean
+  isRestoring: boolean
   login: (user: UserSession) => void
   logout: () => void
   refreshUser: () => void
@@ -116,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const restored = restoreSession()
     return restored ? toPublicSession(restored) : null
   })
+  const [isRestoring, setIsRestoring] = useState(() => Boolean(restoreSession()))
 
   const isDemo = useMemo(() => user?.hak_akses === 'demo', [user])
 
@@ -178,55 +180,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    secureStorage.ready(['pos_session', 'rememberMe', 'auth_device_id']).then(() => {
-      if (cancelled) return
-      setStorageReady(true)
-      const restored = restoreSession()
-      if (restored && !user) setUser(toPublicSession(restored))
-    })
-    return () => { cancelled = true }
-  }, [])
+
+    const initAuth = async () => {
+      try {
+        await secureStorage.ready(['pos_session', 'rememberMe', 'auth_device_id'])
+        if (cancelled) return
+        setStorageReady(true)
+
+        await api('auth:init').catch(() => {})
+        if (cancelled) return
+
+        const stored = restoreSession()
+        if (!stored || !stored.sessionToken || !stored.nama_pengguna) {
+          if (stored) logout()
+          if (!cancelled) setIsRestoring(false)
+          return
+        }
+
+        const result = await api<UserSession>('auth:restoreSession', {
+          username: stored.nama_pengguna,
+          sessionToken: stored.sessionToken,
+          deviceInfo: collectAuthDeviceInfo(),
+          remoteLicenseToken: stored.remote_license_token ?? null,
+          remoteLicenseRefreshToken: stored.remote_license_refresh_token ?? null,
+        })
+
+        if (cancelled) return
+
+        if (result?.success && result.data) {
+          const restored = result.data as UserSession
+          const nextStored: StoredSession = {
+            ...restored,
+            sessionToken: stored.sessionToken,
+            sessionExpiresAt: stored.sessionExpiresAt,
+            deviceId: stored.deviceId,
+            remote_license_token: restored.remote_license_token ?? stored.remote_license_token ?? null,
+            remote_license_refresh_token: restored.remote_license_refresh_token ?? stored.remote_license_refresh_token ?? null,
+            remote_customer_id: restored.remote_customer_id ?? stored.remote_customer_id ?? null,
+            remote_auth_user_id: restored.remote_auth_user_id ?? stored.remote_auth_user_id ?? null,
+            loginAt: stored.loginAt,
+            expiresAt: Math.min(stored.expiresAt, new Date(stored.sessionExpiresAt).getTime()),
+          }
+          setUser(toPublicSession(nextStored))
+          secureStorage.setJSON('pos_session', nextStored)
+        } else {
+          logout()
+        }
+      } catch {
+        if (!cancelled) logout()
+      } finally {
+        if (!cancelled) setIsRestoring(false)
+      }
+    }
+
+    void initAuth()
+
+    return () => {
+      cancelled = true
+    }
+  }, [logout])
 
   useEffect(() => {
-    let cancelled = false
-    api('auth:init').then(() => {
-      if (cancelled) return
-      const stored = restoreSession()
-      if (stored) {
-        setUser(toPublicSession(stored))
-        if (stored.sessionToken && stored.nama_pengguna) {
-          api<UserSession>('auth:restoreSession', {
-            username: stored.nama_pengguna,
-            sessionToken: stored.sessionToken,
-            deviceInfo: collectAuthDeviceInfo(),
-            remoteLicenseToken: stored.remote_license_token ?? null,
-            remoteLicenseRefreshToken: stored.remote_license_refresh_token ?? null,
-          }).then(result => {
-            if (cancelled) return
-            if (result?.success && result.data) {
-              const restored = result.data as UserSession
-              const nextStored: StoredSession = {
-                ...restored,
-                sessionToken: stored.sessionToken,
-                sessionExpiresAt: stored.sessionExpiresAt,
-                deviceId: stored.deviceId,
-                remote_license_token: restored.remote_license_token ?? stored.remote_license_token ?? null,
-                remote_license_refresh_token: restored.remote_license_refresh_token ?? stored.remote_license_refresh_token ?? null,
-                remote_customer_id: restored.remote_customer_id ?? stored.remote_customer_id ?? null,
-                remote_auth_user_id: restored.remote_auth_user_id ?? stored.remote_auth_user_id ?? null,
-                loginAt: stored.loginAt,
-                expiresAt: Math.min(stored.expiresAt, new Date(stored.sessionExpiresAt).getTime()),
-              }
-              setUser(toPublicSession(nextStored))
-              secureStorage.setJSON('pos_session', nextStored)
-            } else if (result && !result.success && ['BLOCKED', 'SUSPENDED', 'SESSION_INVALID', 'EXPIRED'].includes(String(result.error_code || ''))) {
-              logout()
-            }
-          }).catch(() => {})
-        }
-      }
-    })
-    return () => { cancelled = true }
+    const handleAuthRequired = () => {
+      logout()
+    }
+    window.addEventListener('auth:required', handleAuthRequired)
+    return () => {
+      window.removeEventListener('auth:required', handleAuthRequired)
+    }
   }, [logout])
 
   const lastHeartbeatRef = useRef(0)
@@ -355,7 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 },
               }))
             }
-          } else if (!cancelled && restoreRes && !restoreRes.success && ['BLOCKED', 'SUSPENDED', 'SESSION_INVALID', 'EXPIRED'].includes(String(restoreRes.error_code || ''))) {
+          } else if (!cancelled && restoreRes && !restoreRes.success) {
             logout()
           }
         }
@@ -483,7 +504,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isDemo, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isDemo, isRestoring, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
@@ -495,6 +516,7 @@ export function useAuth(): AuthContextValue {
     return {
       user: null,
       isDemo: false,
+      isRestoring: false,
       login: async () => false,
       logout: async () => {},
       refreshUser: async () => {},

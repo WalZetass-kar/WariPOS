@@ -643,6 +643,7 @@ const PRE_AUTH_CHANNELS: Set<string> = new Set([
   'auth:checkIdentitas',
   'auth:restoreSession',
   'system:checkDb',
+  'identitas:get',
   'auth:logout',
   'demo:getStatus',
   'license:checkAppUpdate',

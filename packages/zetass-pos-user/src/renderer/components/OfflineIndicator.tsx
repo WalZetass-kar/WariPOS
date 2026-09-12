@@ -9,7 +9,7 @@ export default function OfflineIndicator() {
 
   const check = async () => {
     try {
-      const r = await api('identitas:get')
+      const r = await api<{ test: number }>('system:checkDb')
       if (r.success) {
         setStatus('ok')
       } else {

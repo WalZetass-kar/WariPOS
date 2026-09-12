@@ -1153,7 +1153,7 @@ export class AuthController {
     const sessionToken = typeof input === 'string' ? '' : (input.sessionToken ?? '')
     const device = typeof input === 'string' ? {} : withDetectedDeviceInfo(normalizeDeviceInfo(input.deviceInfo))
     if (!username) {
-      return { success: false, message: 'Session tidak valid' }
+      return { success: false, error_code: 'SESSION_INVALID', message: 'Session tidak valid' }
     }
 
     if (!sessionToken || !AuthSessionModel.validate(sessionToken, username)) {
@@ -1167,12 +1167,12 @@ export class AuthController {
         user_agent: device.userAgent ?? null,
         detail: `Token sesi tidak valid atau sudah kedaluwarsa. ${deviceDetail(device)}`,
       })
-      return { success: false, message: 'Session tidak valid atau sudah kedaluwarsa' }
+      return { success: false, error_code: 'SESSION_INVALID', message: 'Session tidak valid atau sudah kedaluwarsa' }
     }
 
     let user = PenggunaModel.findActiveByUsername(username)
     if (!user) {
-      return { success: false, message: 'User tidak ditemukan atau tidak aktif' }
+      return { success: false, error_code: 'USER_NOT_FOUND', message: 'User tidak ditemukan atau tidak aktif' }
     }
 
     if (user.is_buyer) {
@@ -1204,7 +1204,7 @@ export class AuthController {
 
     const expiresAt = getEffectiveAccessExpiresAt(user)
     if (!user.is_buyer && !hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
-      return { success: false, message: 'Masa akses akun sudah berakhir' }
+      return { success: false, error_code: 'EXPIRED', message: 'Masa akses akun sudah berakhir' }
     }
 
     if (device.deviceId && DeviceController.isRevoked(username, device.deviceId)) {
@@ -1219,11 +1219,11 @@ export class AuthController {
         event_type: 'device',
         detail: `Session restore ditolak karena device revoked. ${deviceDetail(device)}`,
       })
-      return { success: false, message: 'Device sudah direvoke atau diblokir' }
+      return { success: false, error_code: 'DEVICE_REVOKED', message: 'Device sudah direvoke atau diblokir' }
     }
 
     if (user.must_change_password) {
-      return { success: false, message: 'Password wajib diganti sebelum session dipulihkan' }
+      return { success: false, error_code: 'MUST_CHANGE_PASSWORD', message: 'Password wajib diganti sebelum session dipulihkan' }
     }
 
     if (

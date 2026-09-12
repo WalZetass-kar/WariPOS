@@ -56,7 +56,7 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
   const isRead = isReadChannel(channel)
   
   if (demoMode && !isRead) {
-    console.warn(`🔒 [DEMO PRE-FLIGHT] Blocked: ${channel}`)
+    console.warn(`[DEMO PRE-FLIGHT] Blocked: ${channel}`)
     return {
       success: false,
       message: getDemoBlockedMessage(),
@@ -70,18 +70,23 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
 
   // ─── INVOKE THE IPC CHANNEL ────────────────────────────────────────
   try {
-    if (!window.api?.invoke) {
-      return await mobileApi<T>(channel, ...args)
+    const result = !window.api?.invoke
+      ? await mobileApi<T>(channel, ...args)
+      : await window.api.invoke(channel, ...args) as IpcResponse<T>
+
+    const errorCode = (result as any)?.error_code
+    if (errorCode === 'AUTH_REQUIRED' && channel !== 'auth:restoreSession' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:required'))
     }
 
-    return await window.api.invoke(channel, ...args) as IpcResponse<T>
+    return result
   } catch (error: any) {
     // During development, Vite can hot-reload the renderer while the Electron
     // main process still runs the old IPC registry.
     const message = error?.message || 'Terjadi kesalahan pada sistem'
     const missingHandler = /No handler registered/i.test(message)
 
-    console.error(`❌ API Error [${channel}]:`, error)
+    console.error(`[API Error] [${channel}]:`, error)
     return {
       success: false,
       message: missingHandler

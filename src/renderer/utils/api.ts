@@ -104,6 +104,11 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
         createTimeoutPromise<IpcResponse<T>>(REQUEST_TIMEOUT_MS),
       ])
 
+      const errorCode = (result as any)?.error_code
+      if (errorCode === 'AUTH_REQUIRED' && channel !== 'auth:restoreSession' && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:required'))
+      }
+
       return result
     } catch (error: any) {
       lastError = error
