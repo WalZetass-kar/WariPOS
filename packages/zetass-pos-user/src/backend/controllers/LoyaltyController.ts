@@ -10,7 +10,8 @@ function initTables() {
         min_points INTEGER NOT NULL,
         discount_percent INTEGER DEFAULT 0,
         benefits TEXT,
-        color TEXT DEFAULT '#FFD700'
+        color TEXT DEFAULT '#FFD700',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `).run()
   } catch (e) {
@@ -41,8 +42,8 @@ export class LoyaltyController {
   static createTier(data: any) {
     try {
       const result = sqlite.prepare(`
-        INSERT INTO mediasoft_loyalty_tiers (name, min_points, discount_percent, benefits, color)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO mediasoft_loyalty_tiers (name, min_points, discount_percent, benefits, color, created_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
       `).run(data.name, data.min_points, data.discount_percent || 0, data.benefits || '', data.color || '#FFD700')
       return { success: true, data: { id: result.lastInsertRowid } }
     } catch (error) {

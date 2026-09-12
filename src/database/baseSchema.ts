@@ -647,8 +647,8 @@ CREATE TABLE IF NOT EXISTS mediasoft_loyalty_tiers (
   min_points INTEGER NOT NULL,
   discount_percent INTEGER DEFAULT 0,
   benefits TEXT,
-  color TEXT DEFAULT '#gray',
-  created_at TEXT NOT NULL
+  color TEXT DEFAULT '#FFD700',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS mediasoft_marketplace_channels (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -50,7 +50,8 @@ export function initDatabase() {
         min_points INTEGER NOT NULL,
         discount_percent INTEGER DEFAULT 0,
         benefits TEXT,
-        color TEXT DEFAULT '#FFD700'
+        color TEXT DEFAULT '#FFD700',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `).run()
     
@@ -178,7 +179,7 @@ export function initDatabase() {
     const taxCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_tax_settings').get() as any
     if (taxCount?.count === 0) {
       sqlite.prepare('INSERT INTO mediasoft_tax_settings (name, rate, is_active) VALUES (?, ?, ?)').run('PPN 10%', 10, 1)
-      console.log('✅ Default tax created')
+      console.log(' Default tax created')
     }
     
     const loyaltyCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_loyalty_tiers').get() as any
@@ -190,13 +191,13 @@ export function initDatabase() {
         { name: 'Platinum', min_points: 5000, discount_percent: 10, benefits: '2x point + 10% diskon', color: '#E5E4E2' },
       ]
       for (const t of tiers) {
-        sqlite.prepare('INSERT INTO mediasoft_loyalty_tiers (name, min_points, discount_percent, benefits, color) VALUES (?, ?, ?, ?, ?)').run(t.name, t.min_points, t.discount_percent, t.benefits, t.color)
+        sqlite.prepare('INSERT INTO mediasoft_loyalty_tiers (name, min_points, discount_percent, benefits, color, created_at) VALUES (?, ?, ?, ?, ?, datetime(\'now\'))').run(t.name, t.min_points, t.discount_percent, t.benefits, t.color)
       }
-      console.log('✅ Default loyalty tiers created')
+      console.log(' Default loyalty tiers created')
     }
     
-    console.log('✅ Database initialization complete')
+    console.log(' Database initialization complete')
   } catch (error) {
-    console.error('❌ Database initialization failed:', error)
+    console.error(' Database initialization failed:', error)
   }
 }

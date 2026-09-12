@@ -361,6 +361,39 @@ function runMigrations() {
           }
         }
       }
+
+      // Ensure mediasoft_loyalty_tiers table has DEFAULT on created_at
+      try {
+        const loyaltySql = sqlite.prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mediasoft_loyalty_tiers'"
+        ).get() as { sql?: string } | undefined
+        if (loyaltySql?.sql && loyaltySql.sql.includes('created_at TEXT NOT NULL') && !loyaltySql.sql.includes('DEFAULT')) {
+          console.log('Rebuilding loyalty tiers table with valid default created_at...')
+          sqlite.pragma('foreign_keys = OFF')
+          try {
+            sqlite.exec(`
+              CREATE TABLE IF NOT EXISTS mediasoft_loyalty_tiers_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                min_points INTEGER NOT NULL,
+                discount_percent INTEGER DEFAULT 0,
+                benefits TEXT,
+                color TEXT DEFAULT '#FFD700',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+              );
+              INSERT INTO mediasoft_loyalty_tiers_new (id, name, min_points, discount_percent, benefits, color, created_at)
+                SELECT id, name, min_points, discount_percent, benefits, color, COALESCE(created_at, datetime('now'))
+                FROM mediasoft_loyalty_tiers;
+              DROP TABLE mediasoft_loyalty_tiers;
+              ALTER TABLE mediasoft_loyalty_tiers_new RENAME TO mediasoft_loyalty_tiers;
+            `)
+          } finally {
+            sqlite.pragma('foreign_keys = ON')
+          }
+        }
+      } catch (err) {
+        console.warn('[Migration] Loyalty tier table migration note:', err)
+      }
     
   } catch (error: any) {
     console.error(' Migration error:', error.message)
