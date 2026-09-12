@@ -1,6 +1,6 @@
 {
   "name": "waripos",
-  "version": "2.1.0",
+  "version": "2.2.2",
   "description": "WariPOS - Desktop & Mobile Point of Sale Application",
   "type": "module",
   "main": "dist-electron/main/index.js",
