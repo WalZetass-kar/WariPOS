@@ -219,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
               setUser(toPublicSession(nextStored))
               secureStorage.setJSON('pos_session', nextStored)
-            } else if (result && !result.success && ['BLOCKED', 'SUSPENDED', 'SESSION_INVALID'].includes(String(result.error_code || ''))) {
+            } else if (result && !result.success && ['BLOCKED', 'SUSPENDED', 'SESSION_INVALID', 'EXPIRED'].includes(String(result.error_code || ''))) {
               logout()
             }
           }).catch(() => {})
@@ -355,6 +355,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 },
               }))
             }
+          } else if (!cancelled && restoreRes && !restoreRes.success && ['BLOCKED', 'SUSPENDED', 'SESSION_INVALID', 'EXPIRED'].includes(String(restoreRes.error_code || ''))) {
+            logout()
           }
         }
 

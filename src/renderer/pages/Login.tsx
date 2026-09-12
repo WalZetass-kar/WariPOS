@@ -234,7 +234,7 @@ export default function Login() {
 
       const userSession = (r.data as any)?.user ?? ((r.data as any)?.nama_pengguna ? (r.data as unknown as UserSession) : undefined)
       if (r.success && userSession) {
-        toast('Pendaftaran akun trial berhasil!', 'success')
+        toast('Pendaftaran akun berhasil! Masa trial 3 hari akses penuh telah aktif.', 'success')
         await completeLogin(userSession)
       } else {
         setError(r.message || 'Pendaftaran trial gagal')
@@ -542,7 +542,7 @@ export default function Login() {
                 </h2>
                 <p className="text-slate-500 dark:text-slate-400 text-xs mt-1.5 leading-relaxed max-w-xs">
                   {showRegisterForm
-                    ? 'Lengkapi formulir untuk memulai masa trial 3 hari gratis.'
+                    ? 'Lengkapi formulir untuk memulai masa trial 3 hari gratis dengan semua fitur terbuka penuh.'
                     : 'Gunakan akun Anda untuk membuka sesi kasir & manajemen toko.'}
                 </p>
               </div>

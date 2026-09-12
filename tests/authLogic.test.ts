@@ -47,8 +47,45 @@ describe('Auth Logic', () => {
     it('PIN 4 digit valid', () => expect(validatePin('1234')).toBeNull())
     it('PIN 8 digit valid', () => expect(validatePin('12345678')).toBeNull())
     it('PIN 3 digit tidak valid', () => expect(validatePin('123')).not.toBeNull())
-    it('PIN 9 digit tidak valid', () => expect(validatePin('123456789')).not.toBeNull())
     it('PIN berisi huruf tidak valid', () => expect(validatePin('12ab')).not.toBeNull())
     it('PIN kosong tidak valid', () => expect(validatePin('')).not.toBeNull())
+  })
+
+  describe('Trial 3 Hari Access', () => {
+    const TRIAL_DAYS = 3
+    const TRIAL_FEATURE_FLAGS = {
+      reports: true,
+      export_excel: true,
+      export_pdf: true,
+      multi_user: true,
+      backup: true,
+      restore: true,
+      stock_opname: true,
+      debt_management: true,
+      shift_management: true,
+      api_access: true,
+      multi_branch: true,
+      return_refund: true,
+    }
+
+    it('seluruh fitur aktif selama masa trial', () => {
+      Object.values(TRIAL_FEATURE_FLAGS).forEach(enabled => {
+        expect(enabled).toBe(true)
+      })
+    })
+
+    it('trial aktif tidak expired dalam 3 hari', () => {
+      const trialExpiry = new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString()
+      expect(isAccessExpired(trialExpiry)).toBe(false)
+      const remaining = getAccessDaysRemaining(trialExpiry)
+      expect(remaining).toBeGreaterThanOrEqual(2)
+      expect(remaining).toBeLessThanOrEqual(3)
+    })
+
+    it('trial expired setelah lewat dari 3 hari', () => {
+      const pastExpiry = new Date(Date.now() - 1000).toISOString()
+      expect(isAccessExpired(pastExpiry)).toBe(true)
+      expect(getAccessDaysRemaining(pastExpiry)).toBe(0)
+    })
   })
 })

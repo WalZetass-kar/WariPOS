@@ -48,18 +48,18 @@ const PIN_PATTERN = /^\d{4,8}$/
 const TRIAL_PLAN_NAME = 'Trial 3 Hari'
 const TRIAL_DAYS = 3
 const TRIAL_FEATURE_FLAGS = {
-  reports: false,
-  export_excel: false,
-  export_pdf: false,
-  multi_user: false,
-  backup: false,
-  restore: false,
-  stock_opname: false,
-  debt_management: false,
-  shift_management: false,
-  api_access: false,
-  multi_branch: false,
-  return_refund: false,
+  reports: true,
+  export_excel: true,
+  export_pdf: true,
+  multi_user: true,
+  backup: true,
+  restore: true,
+  stock_opname: true,
+  debt_management: true,
+  shift_management: true,
+  api_access: true,
+  multi_branch: true,
+  return_refund: true,
 }
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -158,10 +158,32 @@ function toSession(user: AuthUserRecord, auth?: {
 
 function ensureTrialPlan(): number {
   const existing = sqlite
-    .prepare(`SELECT id FROM mediasoft_subscription_plans WHERE name = ? LIMIT 1`)
-    .get(TRIAL_PLAN_NAME) as { id: number } | undefined
+    .prepare(`SELECT id, feature_flags FROM mediasoft_subscription_plans WHERE name = ? LIMIT 1`)
+    .get(TRIAL_PLAN_NAME) as { id: number; feature_flags?: string } | undefined
 
-  if (existing?.id) return existing.id
+  const trialFeatures = JSON.stringify([
+    'Trial akses penuh 3 hari',
+    'Semua fitur & modul aktif',
+    'Laporan, Excel & PDF aktif',
+    'Multi-user kasir & admin',
+    'Tanpa batasan transaksi & produk selama trial',
+  ])
+  const trialFlags = JSON.stringify(TRIAL_FEATURE_FLAGS)
+
+  if (existing?.id) {
+    sqlite.prepare(`
+      UPDATE mediasoft_subscription_plans
+      SET duration_days = ?,
+          features = ?,
+          max_devices = 3,
+          max_transactions_per_day = -1,
+          max_products = -1,
+          max_users = 10,
+          feature_flags = ?
+      WHERE id = ?
+    `).run(TRIAL_DAYS, trialFeatures, trialFlags, existing.id)
+    return existing.id
+  }
 
   const result = sqlite.prepare(`
     INSERT INTO mediasoft_subscription_plans
@@ -172,21 +194,15 @@ function ensureTrialPlan(): number {
     TRIAL_PLAN_NAME,
     0,
     TRIAL_DAYS,
-    JSON.stringify([
-      'Trial terbatas 3 hari',
-      '1 device',
-      '20 transaksi per hari',
-      '30 produk',
-      'Fitur premium terkunci',
-    ]),
+    trialFeatures,
     0,
     0,
     new Date().toISOString(),
-    1,
-    20,
-    30,
-    1,
-    JSON.stringify(TRIAL_FEATURE_FLAGS),
+    3,
+    -1,
+    -1,
+    10,
+    trialFlags,
   )
 
   return Number(result.lastInsertRowid)
@@ -672,12 +688,18 @@ export class AuthController {
       return { success: false, message: validation.message }
     }
 
+    const planId = ensureTrialPlan()
+    const expiresAt = new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString()
+
     await PenggunaModel.create({
       nama_pengguna: username,
       nama_lengkap: namaLengkap,
       kata_sandi: password,
-      hak_akses: 'developer',
-      access_expires_at: null,
+      hak_akses: 'admin',
+      access_expires_at: expiresAt,
+      subscription_plan_id: planId,
+      subscription_expires_at: expiresAt,
+      is_buyer: 1,
       must_change_password: 0,
     })
 
@@ -686,10 +708,10 @@ export class AuthController {
       aktivitas: 'INITIAL_ADMIN_CREATED',
       modul: 'AUTH',
       tgl_aktivitas: new Date().toISOString(),
-      detail: 'Akun developer pertama dibuat melalui setup awal',
+      detail: `Akun admin pertama dibuat dengan trial ${TRIAL_DAYS} hari akses penuh`,
     })
 
-    return { success: true, message: 'Akun developer pertama berhasil dibuat' }
+    return { success: true, message: `Akun admin pertama berhasil dibuat dengan trial ${TRIAL_DAYS} hari akses penuh` }
   }
 
   static async registerTrial(data: {
@@ -800,8 +822,8 @@ export class AuthController {
     return {
       success: true,
       message: remoteRegistration?.success
-        ? 'Trial 3 hari aktif. Beberapa fitur premium dikunci sampai upgrade.'
-        : `Trial lokal aktif. Supabase belum tersambung: ${remoteRegistration?.message || 'license server pusat tidak merespons'}`,
+        ? 'Trial 3 hari aktif dengan semua fitur terbuka penuh!'
+        : `Trial lokal 3 hari aktif dengan semua fitur terbuka penuh. Server lisensi: ${remoteRegistration?.message || 'mode offline'}`,
       data: toSession(user, {
         token: authSession.token,
         expires_at: authSession.expires_at,
@@ -1328,8 +1350,12 @@ export class AuthController {
     }
 
     const expiresAt = getEffectiveAccessExpiresAt(user)
-    if (!user.is_buyer && !hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
-      return { success: false, message: 'Masa akses akun sudah berakhir' }
+    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
+      return {
+        success: false,
+        error_code: 'EXPIRED',
+        message: 'Masa akses akun sudah berakhir. Silakan hubungi admin untuk perpanjangan atau upgrade paket.',
+      }
     }
 
     if (device.deviceId && DeviceController.isRevoked(username, device.deviceId)) {

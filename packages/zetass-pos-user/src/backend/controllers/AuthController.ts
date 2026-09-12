@@ -45,18 +45,18 @@ const PIN_PATTERN = /^\d{4,8}$/
 const TRIAL_PLAN_NAME = 'Trial 3 Hari'
 const TRIAL_DAYS = 3
 const TRIAL_FEATURE_FLAGS = {
-  reports: false,
-  export_excel: false,
-  export_pdf: false,
-  multi_user: false,
-  backup: false,
-  restore: false,
-  stock_opname: false,
-  debt_management: false,
-  shift_management: false,
-  api_access: false,
-  multi_branch: false,
-  return_refund: false,
+  reports: true,
+  export_excel: true,
+  export_pdf: true,
+  multi_user: true,
+  backup: true,
+  restore: true,
+  stock_opname: true,
+  debt_management: true,
+  shift_management: true,
+  api_access: true,
+  multi_branch: true,
+  return_refund: true,
 }
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

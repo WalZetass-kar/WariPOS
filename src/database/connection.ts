@@ -854,48 +854,63 @@ runMigrations()
   `).run(lifetimeFlags)
 
   const trialFlags = JSON.stringify({
-    reports: false,
-    export_excel: false,
-    export_pdf: false,
-    multi_user: false,
-    backup: false,
-    restore: false,
-    stock_opname: false,
-    debt_management: false,
-    shift_management: false,
-    api_access: false,
-    multi_branch: false,
-    return_refund: false,
+    reports: true,
+    export_excel: true,
+    export_pdf: true,
+    multi_user: true,
+    backup: true,
+    restore: true,
+    stock_opname: true,
+    debt_management: true,
+    shift_management: true,
+    api_access: true,
+    multi_branch: true,
+    return_refund: true,
   })
+  const trialFeatures = JSON.stringify([
+    'Trial akses penuh 3 hari',
+    'Semua modul & laporan aktif',
+    'Export Excel & PDF',
+    'Multi-user kasir & admin',
+    'Tanpa batasan transaksi & produk selama trial',
+  ])
   const trialPlan = sqlite.prepare(
-    `SELECT id FROM mediasoft_subscription_plans WHERE name = 'Trial 3 Hari' LIMIT 1`
+    `SELECT id FROM mediasoft_subscription_plans WHERE name = 'Trial 3 Hari' OR code = 'TRIAL_3_DAYS' LIMIT 1`
   ).get() as { id: number } | undefined
   if (!trialPlan) {
     sqlite.prepare(`
       INSERT INTO mediasoft_subscription_plans
         (name, price, duration_days, features, is_active, is_recommended, created_at,
-         max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         max_devices, max_transactions_per_day, max_products, max_users, feature_flags, code)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       'Trial 3 Hari',
       0,
       3,
-      JSON.stringify([
-        'Trial terbatas 3 hari',
-        '1 device',
-        '20 transaksi per hari',
-        '30 produk',
-        'Fitur premium terkunci',
-      ]),
+      trialFeatures,
       0,
       0,
       new Date().toISOString(),
-      1,
-      20,
-      30,
-      1,
+      3,
+      -1,
+      -1,
+      10,
       trialFlags,
+      'TRIAL_3_DAYS',
     )
+  } else {
+    sqlite.prepare(`
+      UPDATE mediasoft_subscription_plans
+      SET duration_days = 3,
+          features = ?,
+          max_devices = 3,
+          max_transactions_per_day = -1,
+          max_products = -1,
+          max_users = 10,
+          feature_flags = ?,
+          code = 'TRIAL_3_DAYS'
+      WHERE id = ?
+    `).run(trialFeatures, trialFlags, trialPlan.id)
   }
 
   // mediasoft_activity_log
