@@ -528,13 +528,11 @@ CREATE TABLE IF NOT EXISTS mediasoft_gift_cards (
 CREATE TABLE IF NOT EXISTS mediasoft_grup_pengguna (
     nama_grup VARCHAR(50) PRIMARY KEY NOT NULL
 );
-CREATE TABLE IF NOT EXISTS "mediasoft_grup_pengguna_hak_akses" (
-	"id_hak_akses"	INTEGER,
-	"nama_grup"	VARCHAR(50) NOT NULL,
-	"menu_code"	VARCHAR(50) NOT NULL,
-	"status"	VARCHAR(5) NOT NULL DEFAULT 'False',
-	PRIMARY KEY("id_hak_akses" AUTOINCREMENT),
-	UNIQUE("nama_grup","menu_code")
+CREATE TABLE IF NOT EXISTS mediasoft_grup_pengguna_hak_akses (
+  nama_grup VARCHAR(50) NOT NULL,
+  menu_code VARCHAR(50) NOT NULL,
+  status VARCHAR(5) NOT NULL DEFAULT 'True',
+  PRIMARY KEY (nama_grup, menu_code)
 );
 CREATE TABLE IF NOT EXISTS mediasoft_harga (kd_barang VARCHAR (25) PRIMARY KEY NOT NULL, harga_barang DOUBLE DEFAULT (0), potongan INTEGER DEFAULT (0), harga_modal DOUBLE DEFAULT (0), created_at TEXT DEFAULT NULL, updated_at TEXT DEFAULT NULL, synced_at TEXT DEFAULT NULL, device_id TEXT DEFAULT NULL);
 CREATE TABLE IF NOT EXISTS mediasoft_harga_temp (kd_harga_temp INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, kd_barang VARCHAR (25), harga_barang DOUBLE DEFAULT (0), harga_modal DOUBLE DEFAULT (0), potongan INTEGER DEFAULT (0), nama_pengguna VARCHAR (50));
@@ -1368,37 +1366,37 @@ INSERT OR IGNORE INTO mediasoft_payment_methods ("id", "name", "type", "account_
 INSERT OR IGNORE INTO mediasoft_payment_methods ("id", "name", "type", "account_number", "account_name", "is_active", "created_at", "updated_at", "synced_at", "device_id") VALUES (25, 'QRIS', 'QRIS', NULL, NULL, 1, '2026-05-06 23:23:42', '2026-05-06 23:23:42', NULL, NULL);
 INSERT OR IGNORE INTO mediasoft_grup_pengguna ("nama_grup") VALUES ('Developer');
 INSERT OR IGNORE INTO mediasoft_grup_pengguna ("nama_grup") VALUES ('ihwalmaulana2');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (124, 'Developer', 'nav_dashboard', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (125, 'Developer', 'nav_barang', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (126, 'Developer', 'nav_satuan', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (127, 'Developer', 'nav_supplier', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (128, 'Developer', 'nav_identitas', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (129, 'Developer', 'nav_pengguna', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (130, 'Developer', 'nav_hak_akses', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (131, 'Developer', 'nav_setting_harga', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (132, 'Developer', 'nav_penjualan', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (133, 'Developer', 'nav_pembelian', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (134, 'Developer', 'nav_export_db', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (255, 'ihwalmaulana2', 'nav_dashboard', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (256, 'ihwalmaulana2', 'nav_penjualan', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (257, 'ihwalmaulana2', 'nav_barang', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (258, 'ihwalmaulana2', 'nav_pembelian', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (259, 'ihwalmaulana2', 'nav_branch', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (260, 'ihwalmaulana2', 'nav_supplier', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (261, 'ihwalmaulana2', 'nav_loyalty', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (262, 'ihwalmaulana2', 'nav_promo', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (263, 'ihwalmaulana2', 'nav_tutorials', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (264, 'ihwalmaulana2', 'nav_hpp', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (265, 'ihwalmaulana2', 'nav_whatsapp', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (266, 'ihwalmaulana2', 'nav_print_queue', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (267, 'ihwalmaulana2', 'nav_pengguna', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (268, 'ihwalmaulana2', 'nav_plans', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (269, 'ihwalmaulana2', 'nav_activity_log', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (270, 'ihwalmaulana2', 'nav_export_db', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (271, 'ihwalmaulana2', 'nav_security', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (272, 'ihwalmaulana2', 'nav_ecommerce_api', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (273, 'ihwalmaulana2', 'nav_identitas', 'True');
-INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("id_hak_akses", "nama_grup", "menu_code", "status") VALUES (312, 'Developer', 'nav_license_admin', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_dashboard', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_barang', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_satuan', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_supplier', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_identitas', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_pengguna', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_hak_akses', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_setting_harga', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_penjualan', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_pembelian', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_export_db', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_dashboard', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_penjualan', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_barang', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_pembelian', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_branch', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_supplier', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_loyalty', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_promo', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_tutorials', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_hpp', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_whatsapp', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_print_queue', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_pengguna', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_plans', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_activity_log', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_export_db', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_security', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_ecommerce_api', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('ihwalmaulana2', 'nav_identitas', 'True');
+INSERT OR IGNORE INTO mediasoft_grup_pengguna_hak_akses ("nama_grup", "menu_code", "status") VALUES ('Developer', 'nav_license_admin', 'True');
 INSERT OR IGNORE INTO mediasoft_subscription_plans ("id", "name", "price", "duration_days", "features", "is_active", "is_recommended", "created_at", "updated_at", "max_devices", "max_transactions_per_day", "max_products", "max_users", "feature_flags", "synced_at", "device_id", "code", "description", "currency", "sort_order") VALUES (6, 'Trial 3 Hari', 0, 3, '[]', 0, 0, '2026-05-21T13:51:06.282Z', '2026-08-29T13:42:00.893Z', 1, -1, -1, 1, '{"reports":false,"export_excel":false,"export_pdf":false,"multi_user":false,"backup":false,"restore":false,"stock_opname":false,"debt_management":false,"shift_management":false,"api_access":false,"multi_branch":false,"return_refund":false}', NULL, NULL, NULL, NULL, 'IDR', 0);
 INSERT OR IGNORE INTO mediasoft_subscription_plans ("id", "name", "price", "duration_days", "features", "is_active", "is_recommended", "created_at", "updated_at", "max_devices", "max_transactions_per_day", "max_products", "max_users", "feature_flags", "synced_at", "device_id", "code", "description", "currency", "sort_order") VALUES (11, 'Basic Bulanan', 99000, 30, '[]', 1, 0, '2026-05-21T15:45:12.502Z', '2026-05-31T13:12:23.500Z', 1, -1, 500, 1, '{"backup":true,"reports":true,"restore":false,"api_access":false,"export_pdf":false,"multi_user":false,"export_excel":false,"multi_branch":false,"stock_opname":false,"return_refund":true,"debt_management":false,"shift_management":false}', NULL, NULL, NULL, NULL, 'IDR', 0);
 INSERT OR IGNORE INTO mediasoft_subscription_plans ("id", "name", "price", "duration_days", "features", "is_active", "is_recommended", "created_at", "updated_at", "max_devices", "max_transactions_per_day", "max_products", "max_users", "feature_flags", "synced_at", "device_id", "code", "description", "currency", "sort_order") VALUES (12, 'Pro Bulanan', 199000, 30, '[]', 1, 0, '2026-05-21T15:45:12.502Z', '2026-06-01T03:18:12.051Z', 3, -1, -1, 5, '{"backup":true,"reports":true,"restore":true,"api_access":true,"export_pdf":true,"multi_user":true,"export_excel":true,"multi_branch":false,"stock_opname":true,"return_refund":true,"debt_management":true,"shift_management":true}', NULL, NULL, NULL, NULL, 'IDR', 0);

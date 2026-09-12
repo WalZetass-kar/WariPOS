@@ -42,8 +42,16 @@ function runMigrations() {
     const hasCoreTables = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='mediasoft_penjualan'").get()
     if (!hasCoreTables) {
       console.log('[Database] Fresh database detected. Initializing all base tables...')
-      sqlite.exec(BASE_SCHEMA_SQL)
-      sqlite.exec(BASE_SEED_SQL)
+      try {
+        sqlite.exec(BASE_SCHEMA_SQL)
+      } catch (schemaErr: unknown) {
+        console.warn('[Database] Base schema initialization note:', schemaErr instanceof Error ? schemaErr.message : String(schemaErr))
+      }
+      try {
+        sqlite.exec(BASE_SEED_SQL)
+      } catch (seedErr: unknown) {
+        console.warn('[Database] Base seed initialization note:', seedErr instanceof Error ? seedErr.message : String(seedErr))
+      }
       console.log('[Database] Base tables and seed reference data initialized successfully.')
     }
 
