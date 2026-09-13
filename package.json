@@ -207,7 +207,6 @@
       "target": [
         "AppImage",
         "deb",
-        "rpm",
         "tar.gz"
       ],
       "category": "Office",
