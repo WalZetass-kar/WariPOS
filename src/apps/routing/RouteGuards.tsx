@@ -17,9 +17,9 @@ interface GuardProps {
 
 function RestoringScreen() {
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 gap-3">
-      <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-      <span className="text-xs font-semibold text-slate-500">Memuat sesi...</span>
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 gap-3 select-none">
+      <div className="w-10 h-10 border-3 border-slate-800 border-t-red-600 rounded-full animate-spin" />
+      <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">WariPOS Kasir Kita</span>
     </div>
   )
 }

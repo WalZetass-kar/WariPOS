@@ -16,11 +16,23 @@ import { useDemoGuard } from '../hooks/useDemoGuard'
 import { useAppStore } from '../stores'
 import { api } from '../utils/api'
 import appLogo from '../assets/app-logo.png'
+import wariAiAvatar from '../assets/wari-ai-avatar.png'
 import { canOpenDeveloperPanel, hasRole, type AppRole } from '../../shared/config/rbac'
+
+export function WariAiIcon({ size = 17, className = '' }: { size?: number; className?: string }) {
+  return (
+    <img
+      src={wariAiAvatar}
+      alt="WariAI"
+      className={`rounded-md object-cover shrink-0 ${className}`}
+      style={{ width: size, height: size }}
+    />
+  )
+}
 
 export interface MenuItem {
   to: string
-  icon: LucideIcon
+  icon: LucideIcon | React.ComponentType<{ size?: number; className?: string }>
   label: string
   code: string
   adminOnly?: boolean
@@ -40,7 +52,7 @@ export const MENU_GROUPS: MenuGroup[] = [
     label: 'Utama',
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', code: 'nav_dashboard' },
-      { to: '/assistant', icon: Bot, label: 'Asisten AI', code: 'nav_dashboard' },
+      { to: '/assistant', icon: WariAiIcon, label: 'WariAI', code: 'nav_dashboard' },
       { to: '/transaksi', icon: ShoppingCart, label: 'Kasir POS', code: 'nav_penjualan' },
       { to: '/shifts', icon: Clock, label: 'Shift Kasir', code: 'nav_penjualan' },
       { to: '/riwayat', icon: History, label: 'Riwayat Transaksi', code: 'nav_penjualan' },

@@ -21,7 +21,14 @@ export function useTransaksiState() {
   const [showClearCart, setShowClearCart] = useState(false)
   const [mobileCartDrawerOpen, setMobileCartDrawerOpen] = useState(false)
   const [mobileCheckoutTab, setMobileCheckoutTab] = useState<'cart' | 'payment'>('cart')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [viewMode, setViewModeState] = useState<'grid' | 'list'>(() => {
+    const saved = localStorage.getItem('waripos_transaksi_view_mode')
+    return saved === 'list' || saved === 'grid' ? saved : 'grid'
+  })
+  const setViewMode = (mode: 'grid' | 'list') => {
+    setViewModeState(mode)
+    localStorage.setItem('waripos_transaksi_view_mode', mode)
+  }
   
   const [showQris, setShowQris] = useState(false)
   const [qrisPayment, setQrisPayment] = useState<QrisPayment | null>(null)

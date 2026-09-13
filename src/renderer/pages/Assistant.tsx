@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
 import { AiActionEngine, type AiActionResult } from '../utils/aiActionEngine'
 import type { DashboardSummary } from '../../shared/types'
+import wariAiAvatar from '../assets/wari-ai-avatar.png'
 
 interface AiConfig {
   aiEnabled: boolean
@@ -458,13 +459,13 @@ export default function Assistant() {
       {/* ─── SPACIOUS HEADER BAR ─── */}
       <header className="h-14 px-4 sm:px-6 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-primary-600 flex items-center justify-center text-white shadow-sm shadow-primary-500/30 shrink-0">
-            <Bot size={17} />
+          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-sm shadow-primary-500/20 shrink-0 border border-slate-200/80 dark:border-slate-700">
+            <img src={wariAiAvatar} alt="WariAI" className="w-full h-full object-cover" />
           </div>
 
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
-              Wari AI
+              WariAI
             </h1>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
               Asisten Pintar Toko Anda
@@ -517,8 +518,8 @@ export default function Assistant() {
             {/* EMPTY STATE / WELCOME PROMPTS */}
             {isOnlyWelcomeMessage && (
               <div className="py-8 sm:py-14 text-center space-y-6 max-w-xl mx-auto">
-                <div className="w-12 h-12 rounded-2xl bg-red-600/10 text-red-600 border border-red-200 dark:border-red-900/50 flex items-center justify-center mx-auto shadow-sm">
-                  <Bot size={26} />
+                <div className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto shadow-md">
+                  <img src={wariAiAvatar} alt="WariAI" className="w-full h-full object-cover" />
                 </div>
 
                 <div className="space-y-1.5">
@@ -566,8 +567,8 @@ export default function Assistant() {
               >
                 {/* Assistant Avatar */}
                 {msg.sender === 'assistant' && (
-                  <div className="w-7 h-7 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-1">
-                    <Bot size={14} />
+                  <div className="w-7 h-7 rounded-xl overflow-hidden shrink-0 shadow-xs mt-1 border border-slate-200 dark:border-slate-800">
+                    <img src={wariAiAvatar} alt="WariAI" className="w-full h-full object-cover" />
                   </div>
                 )}
 
@@ -719,8 +720,8 @@ export default function Assistant() {
             {/* THINKING INDICATOR */}
             {isGenerating && (
               <div className="flex gap-3 items-start animate-fade-in">
-                <div className="w-7 h-7 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-1">
-                  <Bot size={14} className="animate-pulse" />
+                <div className="w-7 h-7 rounded-xl overflow-hidden shrink-0 shadow-xs mt-1 border border-slate-200 dark:border-slate-800">
+                  <img src={wariAiAvatar} alt="WariAI" className="w-full h-full object-cover animate-pulse" />
                 </div>
                 <div className="space-y-2 flex-1 max-w-[80%]">
                   {thinkingStep && (

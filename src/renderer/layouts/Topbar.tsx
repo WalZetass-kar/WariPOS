@@ -12,7 +12,7 @@ import type { Identitas, Notifikasi } from '../../shared/types'
 const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/': { label: 'Dashboard' },
   '/owner-dashboard': { label: 'Dashboard Owner', parent: 'Utama' },
-  '/assistant': { label: 'Asisten AI', parent: 'Utama' },
+  '/assistant': { label: 'WariAI', parent: 'Utama' },
   '/transaksi': { label: 'Kasir', parent: 'Transaksi' },
   '/riwayat': { label: 'Riwayat', parent: 'Transaksi' },
   '/produk': { label: 'Produk', parent: 'Inventaris' },

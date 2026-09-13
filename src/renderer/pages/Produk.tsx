@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image as ImageIcon, X, Upload, Camera, ScanLine, Copy, Package } from 'lucide-react'
+import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image as ImageIcon, X, Upload, Camera, ScanLine, Copy, Package, LayoutGrid, List } from 'lucide-react'
 import Barcode_ from 'react-barcode'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -13,6 +13,7 @@ import Select from '../components/Select'
 import Textarea from '../components/Textarea'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { SkeletonPage } from '../components/Skeleton'
+import ProductCardGrid from '../components/produk/ProductCardGrid'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -78,6 +79,14 @@ export default function Produk() {
   const [loadingData, setLoadingData] = useState(true)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [showImport, setShowImport] = useState(false)
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>(() => {
+    const saved = localStorage.getItem('waripos_produk_view_mode')
+    return saved === 'grid' || saved === 'table' ? saved : 'table'
+  })
+  const handleSetViewMode = (mode: 'table' | 'grid') => {
+    setViewMode(mode)
+    localStorage.setItem('waripos_produk_view_mode', mode)
+  }
   const [tableLoading, setTableLoading] = useState(false)
   const [productPageIndex, setProductPageIndex] = useState(0)
   const [productPageSize, setProductPageSize] = useState(25)
@@ -515,19 +524,49 @@ export default function Produk() {
               </p>
             </div>
 
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              {/* List / Grid Switcher */}
+              <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => handleSetViewMode('table')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'table'
+                      ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan Tabel / List"
+                >
+                  <List size={14} />
+                  <span className="hidden sm:inline">List</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetViewMode('grid')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan Grid Kartu"
+                >
+                  <LayoutGrid size={14} />
+                  <span className="hidden sm:inline">Grid</span>
+                </button>
+              </div>
+
               <Button
                 variant="secondary"
                 icon={<Upload size={16} />}
                 onClick={() => setShowImport(true)}
-                className="w-full sm:w-auto font-bold border-slate-200 dark:border-slate-800"
+                className="flex-1 sm:flex-initial font-bold border-slate-200 dark:border-slate-800"
               >
                 Import CSV
               </Button>
               <Button
                 icon={<Plus size={16} />}
                 onClick={openAdd}
-                className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20"
+                className="flex-1 sm:flex-initial bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20"
               >
                 Tambah Produk Baru
               </Button>
@@ -545,19 +584,41 @@ export default function Produk() {
             </div>
           )}
 
-          {/* DataTable Card */}
-          <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <DataTable
+          {/* Main Content: Table or Grid */}
+          {viewMode === 'table' ? (
+            <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <DataTable
+                data={data}
+                columns={columns}
+                searchPlaceholder="Cari produk berdasarkan nama, kode atau barcode..."
+                defaultPageSize={25}
+                manualPagination
+                totalRows={productPagination.total}
+                pageCount={productPagination.totalPages}
+                pageIndex={productPageIndex}
+                pageSize={productPageSize}
+                loading={tableLoading}
+                onPageChange={setProductPageIndex}
+                onPageSizeChange={setProductPageSize}
+                onSearchChange={search => {
+                  setProductSearch(search)
+                  setProductPageIndex(0)
+                }}
+                onSortChange={(sortBy, sortOrder) => {
+                  setProductSortBy(sortBy || 'nama_barang')
+                  setProductSortOrder(sortOrder)
+                  setProductPageIndex(0)
+                }}
+              />
+            </Card>
+          ) : (
+            <ProductCardGrid
               data={data}
-              columns={columns}
-              searchPlaceholder="Cari produk berdasarkan nama, kode atau barcode..."
-              defaultPageSize={25}
-              manualPagination
+              loading={tableLoading}
               totalRows={productPagination.total}
               pageCount={productPagination.totalPages}
               pageIndex={productPageIndex}
               pageSize={productPageSize}
-              loading={tableLoading}
               onPageChange={setProductPageIndex}
               onPageSizeChange={setProductPageSize}
               onSearchChange={search => {
@@ -569,8 +630,16 @@ export default function Produk() {
                 setProductSortOrder(sortOrder)
                 setProductPageIndex(0)
               }}
+              currentSearch={productSearch}
+              currentSortBy={productSortBy}
+              currentSortOrder={productSortOrder}
+              kategoriList={kategori}
+              onEdit={openEdit}
+              onBarcode={openBarcode}
+              onDuplicate={handleDuplicate}
+              onDelete={openDelete}
             />
-          </Card>
+          )}
         </>
       )}
 
