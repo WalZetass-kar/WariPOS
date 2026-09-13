@@ -1057,7 +1057,10 @@ Terima kasih atas kunjungan Anda!`
           </div>
 
           {/* Sticky Bottom Action */}
-          <div className="absolute bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md flex items-center justify-between gap-3 shadow-lg z-20">
+          <div
+            className="absolute bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md flex items-center justify-between gap-3 shadow-lg z-20"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+          >
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase">Total Tagihan</p>
               <p className="text-base font-black text-red-600 dark:text-red-400">{formatRupiah(totalBayar)}</p>
@@ -1195,7 +1198,10 @@ Terima kasih atas kunjungan Anda!`
           </div>
 
           {/* Sticky Bottom Action */}
-          <div className="absolute bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md flex items-center gap-2 shadow-lg z-20">
+          <div
+            className="absolute bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md flex items-center gap-2 shadow-lg z-20"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+          >
             <button
               type="button"
               onClick={() => state.setMobileCheckoutTab('cart')}
@@ -1463,22 +1469,25 @@ Terima kasih atas kunjungan Anda!`
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: 'spring', damping: 22, stiffness: 260 }}
-            className="fixed bottom-[4.75rem] left-3 right-3 z-40 lg:hidden"
+            className="fixed left-3 right-3 z-30 lg:hidden"
+            style={{
+              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 7.25rem)',
+            }}
           >
             <div
               onClick={() => { state.setMobileCheckoutTab('cart'); state.setMobileCartDrawerOpen(true) }}
               className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/95 dark:bg-slate-900/95 text-white shadow-2xl shadow-red-600/30 border border-red-500/40 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
             >
-              <div className="flex items-center gap-3">
-                <div className="relative p-2.5 rounded-xl bg-red-600 text-white font-bold shadow-sm">
+              <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className="relative p-2.5 rounded-xl bg-red-600 text-white font-bold shadow-sm shrink-0">
                   <ShoppingCart size={18} />
                   <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow">
                     {totalCartQty}
                   </span>
                 </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Tagihan ({totalCartQty} item)</p>
-                  <p className="text-base font-black text-white font-mono">{formatRupiah(totalBayar)}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">Total Tagihan ({totalCartQty} item)</p>
+                  <p className="text-base font-black text-white font-mono truncate">{formatRupiah(totalBayar)}</p>
                 </div>
               </div>
 
@@ -1489,7 +1498,7 @@ Terima kasih atas kunjungan Anda!`
                   state.setMobileCheckoutTab('cart')
                   state.setMobileCartDrawerOpen(true)
                 }}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform shrink-0"
               >
                 <span>Keranjang & Bayar</span>
                 <ArrowRight size={14} />

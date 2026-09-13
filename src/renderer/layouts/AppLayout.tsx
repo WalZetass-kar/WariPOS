@@ -124,7 +124,21 @@ export default function AppLayout() {
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-hidden">
         <Topbar onMenuClick={handleMenuClick} />
-        <main ref={mainRef} className={`flex-1 overflow-y-auto touch-pan-y ${location.pathname === '/transaksi' ? 'p-2.5 sm:p-4 pb-28 sm:pb-24 lg:p-4 lg:pb-4' : location.pathname === '/assistant' ? 'p-4 sm:p-5' : 'p-4 pb-24 sm:p-5 lg:pb-5'} scrollbar-thin`}>
+        <main
+          ref={mainRef}
+          className={`flex-1 overflow-y-auto touch-pan-y ${
+            location.pathname === '/transaksi'
+              ? 'p-2.5 sm:p-4 pb-48 sm:pb-40 lg:p-4 lg:pb-4'
+              : location.pathname === '/assistant'
+              ? 'p-4 sm:p-5'
+              : 'p-4 pb-24 sm:p-5 lg:pb-5'
+          } scrollbar-thin`}
+          style={
+            location.pathname === '/transaksi'
+              ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12rem)' }
+              : undefined
+          }
+        >
           <PullToRefresh onRefresh={handlePullRefresh} disabled={location.pathname === '/transaksi'}>
             <Suspense fallback={<PageLoadingFallback />}>
               <Outlet />
