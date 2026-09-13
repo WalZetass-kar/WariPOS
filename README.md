@@ -1,455 +1,265 @@
-# WariPOS
+# WariPOS - Modern Point of Sale & Retail Management System
 
-Aplikasi Point of Sale (POS) & Manajemen Kasir Multi-Platform (Desktop Windows & Linux, Mobile Android, dan Web Browser) dengan arsitektur offline-first berbasis SQLite lokal serta sinkronisasi opsional ke Cloud Database dan Google Sheets.
+WariPOS adalah aplikasi kasir (Point of Sale) dan manajemen retail multi-platform yang dibangun dengan arsitektur **offline-first**, dirancang untuk beroperasi secara mandiri di komputer desktop (Windows dan Linux) maupun perangkat mobile (Android dan Web Browser).
 
-Developer: WalZetass-Kar  
-Repositori: https://github.com/WalZetass-kar/WariPOS  
-Lisensi: MIT  
-Platform yang Didukung: Windows 10/11 (64-bit), Linux (Debian/Ubuntu, Arch, Fedora), Android (8.0 Oreo ke atas), Web Browser  
+- **Pengembang**: WalZetass-Kar
+- **Repositori Resmi**: https://github.com/WalZetass-kar/WariPOS
+- **Unduh Rilis Android (APK Siap Pakai)**: https://github.com/WalZetass-kar/WariPOS/releases/latest
+- **Lisensi**: MIT License
+- **Kategori**: Next-Gen Enterprise & Retail Point of Sale Application
 
 ---
 
 ## Daftar Isi
 
-1. Tech Stack & Arsitektur
-2. Opsi 1: Penggunaan Langsung Menggunakan Installer Siap Pakai
-3. Opsi 2: Panduan Lengkap Instalasi & Setup di Komputer Baru (Developer Mode)
-   - Prasyarat Sistem & Perangkat Lunak
-   - Clone Repositori & Persiapan Environment
-   - Instalasi Dependensi Proyek
+1. Ringkasan Eksekutif & Nilai Fungsional
+2. Presentasi Fungsional Fitur WariPOS
+   - A. Sistem Kasir & Penjualan POS (Point of Sale)
+   - B. Manajemen Struk Transaksi (Thermal ESC/POS & Digital Nota)
+   - C. Manajemen Kas & Rekonsiliasi Shift Kasir
+   - D. Manajemen Inventori & Kontrol Stok Real-Time
+   - E. Manajemen Pengguna, Otorisasi Bertingkat (RBAC) & PIN Kilat
+   - F. Sinkronisasi Data Google Sheets & Pencadangan Terenkripsi
+   - G. Analisis Bisnis, Laba Rugi & Pelaporan Keuangan
+   - H. Personalisasi Tema Toko & Antarmuka Multi-Device
+3. Demo Aplikasi Android (Pre-built Release APK)
+   - Spesifikasi Paket Rilis Android
+   - Panduan Pemasangan via ADB
+   - Panduan Pemasangan Manual via Berkas APK
+4. Bukti Rekayasa Sistem & Modifikasi Arsitektur (Engineering Highlights)
+   - Arsitektur Hybrid Berlapis (Separation of Concerns)
+   - Engine Database Lokal Offline-First (ACID Compliance)
+   - Algoritma Dynamic Stacking Struk Thermal & PDF
+   - Geometri Lekukan Konsentris Presisi (C1 Tangent Fillet)
+   - Manajemen State Global Terstruktur (Zustand Stores)
+   - Rangkaian Pengujian Otomatis (187 Unit & Integration Tests)
+   - Standar Keamanan & Perlindungan Data Perusahaan
+5. Panduan Instalasi Lingkungan Pengembang (Developer Setup)
+   - Prasyarat Perangkat Lunak
+   - Kloning Repositori & Konfigurasi Lingkungan
    - Menjalankan Aplikasi Desktop Electron
-   - Menjalankan & Membuka Aplikasi Android di Komputer Baru
-     - Metode A: Melalui Android Studio
-     - Metode B: Melalui Terminal & ADB ke HP Fisik / Emulator
-     - Metode C: Live Dev Mode di Browser (Mobile View)
-4. Panduan Alur Penggunaan Pertama Kali (First-Time User Guide)
-   - Setup Akun Super Admin / Pemilik Toko
-   - Konfigurasi Identitas Toko & Struk Belanja
-   - Manajemen Produk & Kategori
-   - Manajemen Kasir & Login Kilat Menggunakan PIN
-   - Pembukaan Shift Kasir & Transaksi POS
-   - Tutup Shift Kasir & Rekonsiliasi Uang Laci
-   - Integrasi & Ekspor Data Transaksi ke Google Sheets
-   - Kustomisasi Tema & Mode Tampilan Antarmuka
-5. Referensi Perintah Skrip (NPM / PNPM Scripts)
-6. Panduan Troubleshooting Masalah Umum
-7. Standar Keamanan & Perlindungan Data
-8. Lisensi & Pengembang
+   - Menjalankan & Membangun Aplikasi Android
+6. Referensi Perintah Skrip Proyek
+7. Lisensi & Hak Cipta
 
 ---
 
-## 1. Tech Stack & Arsitektur
+## 1. Ringkasan Eksekutif & Nilai Fungsional
 
-WariPOS dirancang dengan prinsip **offline-first**, memastikan operasional kasir tetap berjalan lancar 100% tanpa ketergantungan koneksi internet. Data transaksi disimpan langsung di database SQLite lokal perangkat.
+Sebagian besar pelaku usaha retail dan UMKM menghadapi kendala operasional yang kritis saat menggunakan aplikasi kasir berbasis komputasi awan murni (cloud-only POS): gangguan koneksi internet langsung melumpuhkan transaksi pelanggan, biaya sewa server bulanan yang membebani, risiko kehilangan data saat server pihak ketiga mengalami downtime, serta format cetak struk yang sering kali tidak kompatibel dengan printer kasir termal standar.
 
-| Komponen | Teknologi | Keterangan |
-|---|---|---|
-| Frontend UI | React 18, TypeScript, TailwindCSS, Lucide Icons | Antarmuka responsif untuk desktop dan layar sentuh tablet/ponsel |
-| State Management | Zustand | State management global untuk keranjang belanja dan preferensi |
-| Desktop Runtime | Electron 31, Vite 5 | Kemasan aplikasi desktop native Windows & Linux |
-| Mobile Engine | Capacitor 8 | Jembatan native Android & iOS untuk akses kamera scanner & storage |
-| Database Lokal | SQLite (better-sqlite3 / @capacitor-community/sqlite) | Penyimpanan transaksi lokal ACID tanpa konfigurasi server database |
-| ORM | Drizzle ORM | Query builder bertipe aman dan migrasi skema terstruktur |
-| Cloud & Ekspor | Supabase Edge Functions & Google Sheets API | Sinkronisasi cadangan awan dan pelaporan spreadsheet otomatis |
-| Testing & CI/CD | Vitest, GitHub Actions | Unit testing otomatis dan automated build pipeline |
+WariPOS hadir menyelesaikan seluruh permasalahan tersebut melalui pendekatan rekayasa modern:
+1. **Operasional Tanpa Ketergantungan Internet (100% Offline-First)**: Seluruh pencatatan transaksi, pemotongan stok, pembuatan invoice, dan cetak struk dieksekusi langsung pada database SQLite lokal perangkat. Toko tetap melayani pelanggan tanpa jeda waktu saat jaringan internet mati.
+2. **Kedaulatan & Keamanan Data Toko**: Data transaksi tersimpan aman di perangkat pemilik usaha, dilengkapi opsi sinkronisasi otomatis ke Google Sheets pribadi dan backup lokal/cloud terenkripsi.
+3. **Efisiensi Multi-Platform Nyata**: Satu basis kode TypeScript modular yang melayani ekosistem desktop kasir utama (PC/laptop) dan perangkat mobile kasir (ponsel pintar/tablet) dengan konsistensi data yang utuh.
 
 ---
 
-## 2. Opsi 1: Penggunaan Langsung Menggunakan Installer Siap Pakai
+## 2. Presentasi Fungsional Fitur WariPOS
 
-Jika Anda adalah pemilik toko, kasir, atau staf operasional yang ingin langsung menggunakan WariPOS tanpa perlu memasang Node.js, Git, atau tools pemrograman lainnya:
+WariPOS menyediakan solusi kasir end-to-end yang mencakup seluruh alur bisnis toko:
 
-### A. Perangkat Android (HP / Tablet POS)
-1. Unduh berkas installer `WariPOS.apk` dari menu [Releases GitHub](https://github.com/WalZetass-kar/WariPOS/releases/latest).
-2. Salin berkas ke HP Android Anda, lalu buka file manager dan klik `WariPOS.apk`.
-3. Jika muncul dialog peringatan keamanan, aktifkan izin "Instal aplikasi dari sumber tidak dikenal" untuk pengelola berkas Anda.
-4. Klik **Instal** dan buka aplikasi WariPOS.
+### A. Sistem Kasir & Penjualan POS (Point of Sale)
+- **Katalog Produk Cepat**: Navigasi produk visual berbasis kategori dengan pencarian instan berbasis teks dan pemindaian barcode.
+- **Dukungan Barcode Scanner Fleksibel**: Kompatibel dengan pemindai barcode perangkat keras (USB/Wireless HID scanner) maupun pemindai kamera bawaan ponsel/tablet Android.
+- **Kuantitas & Diskon Fleksibel**: Perhitungan diskon per item (persentase/nominal) serta diskon promo keseluruhan keranjang belanja.
+- **Manajemen Keranjang Tertahan (Held Cart / Hold Transaction)**: Kasir dapat menahan transaksi yang sedang berlangsung untuk melayani antrean pelanggan berikutnya, kemudian memulihkan transaksi tertahan tersebut kapan saja tanpa kehilangan data keranjang.
+- **Sistem Pembayaran Terpadu (Split Payment Support)**:
+  - **Tunai**: Kalkulasi otomatis nominal bayar, kalkulator uang pecahan kilat, dan penghitungan kembalian presisi.
+  - **QRIS Dinamis / Statis**: Penayangan kode QRIS toko dengan verifikasi transaksi.
+  - **Transfer Bank**: Pencatatan nomor rekening dan bank tujuan pembayaran toko.
+- **Integrasi Member / Pelanggan**: Pencatatan poin belanja loyalitas pelanggan secara otomatis berdasarkan kelipatan nilai transaksi.
+- **Fitur Retur Penjualan**: Pengembalian produk dengan audit pengembalian dana dan penyesuaian stok otomatis.
 
-### B. Komputer Windows (Windows 10 / 11 64-bit)
-1. Unduh berkas `WariPOS-win-x64.zip` dari [Releases GitHub](https://github.com/WalZetass-kar/WariPOS/releases/latest).
-2. Ekstrak arsip ZIP tersebut ke folder pilihan Anda (misalnya `C:\Program Files\WariPOS` atau `D:\WariPOS`).
-3. Buka folder hasil ekstrak dan jalankan `WariPOS.exe`.
-4. Anda dapat membuat shortcut ke Desktop dengan klik kanan pada `WariPOS.exe` lalu pilih **Send to -> Desktop (create shortcut)**.
+### B. Manajemen Struk Transaksi (Thermal ESC/POS & Digital Nota)
+- **Dynamic Vertical Stacking**: Algoritma layout struk cerdas yang memisahkan nama produk panjang, detail kuantitas, harga satuan, dan total subtotal pada baris independen sehingga teks tidak pernah saling bertumpuk (anti-overlap).
+- **Kompatibilitas Printer Luas**: Mendukung printer thermal standar industri ukuran kertas 58mm dan 80mm melalui koneksi USB, Bluetooth ESC/POS, maupun Network/LAN printer.
+- **Ekspor PDF Thermal Kontinu**: Penentuan tinggi halaman PDF dihitung dinamis mengikuti jumlah item belanja (`calculateReceiptPdfHeight`) menghasilkan satu dokumen PDF utuh tanpa pemotongan halaman artifisial.
+- **Nota Digital WhatsApp Satu Klik**: Pengiriman salinan struk belanja langsung ke nomor WhatsApp pelanggan dengan format nota bersih, profesional, dan siap baca.
 
-### C. Komputer Linux (Ubuntu, Debian, Linux Mint)
-1. Unduh berkas `.deb` atau `.AppImage` dari [Releases GitHub](https://github.com/WalZetass-kar/WariPOS/releases/latest).
-2. Untuk paket `.deb`:
-   ```bash
-   sudo dpkg -i WariPOS-linux-amd64.deb
-   sudo apt-get install -f
-   ```
-3. Untuk paket universal `.AppImage`:
-   ```bash
-   chmod +x WariPOS-linux-x86_64.AppImage
-   ./WariPOS-linux-x86_64.AppImage
-   ```
+### C. Manajemen Kas & Rekonsiliasi Shift Kasir
+- **Pembukaan Kas Harian (Open Shift)**: Pencatatan modal awal uang tunai di laci kasir saat kasir memulai jam operasional.
+- **Audit Penutupan Kas (Close Shift)**: Formulir rekonsiliasi fisik uang laci vs catatan sistem secara real-time untuk mendeteksi status seimbang (balance), kelebihan kas (surplus), atau selisih kurang (defisit).
+- **Laporan Ringkasan Shift Kasir**: Cetak laporan rekap penjualan tunai, non-tunai, modal awal, dan laba per kasir per shift kerja.
 
----
+### D. Manajemen Inventori & Kontrol Stok Real-Time
+- **Stok Otomatis Terhubung Transaksi**: Setiap penjualan langsung memotong stok di tingkat database lokal secara atomik.
+- **Peringatan Batas Minimum Stok (Low Stock Alert)**: Notifikasi dini saat stok barang menyentuh ambang batas minimum untuk mencegah kehabisan produk populer.
+- **Riwayat Mutasi Barang**: Pencatatan detail barang masuk, barang keluar, penyesuaian stok manual (stock opname), dan pencatatan alasan selisih.
+- **Impor & Ekspor Spreadsheet**: Fasilitas impor massal data produk dan ekspor katalog barang ke format CSV/Excel.
 
-## 3. Opsi 2: Panduan Lengkap Instalasi & Setup di Komputer Baru (Developer Mode)
+### E. Manajemen Pengguna, Otorisasi Bertingkat (RBAC) & PIN Kilat
+- **Hierarki Peran (Role-Based Access Control)**:
+  - **Owner / Super Admin**: Akses penuh ke seluruh konfigurasi toko, laporan laba rugi, manajemen pengguna, dan sinkronisasi.
+  - **Admin**: Akses operasional toko, master produk, supplier, dan laporan transaksi.
+  - **Supervisor**: Otorisasi pembatalan transaksi, diskon khusus, dan audit kas.
+  - **Kasir**: Akses fokus pada layar penjualan POS dan laporan shift pribadi.
+- **Login Kilat PIN Kasir**: Kasir dapat beralih akun atau masuk ke sistem kasir dalam 2 detik menggunakan PIN 4 hingga 8 digit angka terenkripsi tanpa perlu mengetikkan username dan password panjang di layar sentuh.
 
-Bagian ini memandu langkah demi langkah menyiapkan seluruh lingkungan pengembangan dari awal di komputer baru, baik di Windows, Linux, maupun macOS.
+### F. Sinkronisasi Data Google Sheets & Pencadangan Terenkripsi
+- **Sinkronisasi Multi-Tab Google Sheets**: Integrasi tanpa biaya server bulanan menggunakan Web App Google Apps Script toko pribadi. Sinkronisasi instan mencakup tab Penjualan, Laba Rugi, Katalog Barang, Mutasi Stok, dan Data Pelanggan.
+- **Pencadangan Data Lokal & Cloud**: Fitur backup database terstruktur dengan antarmuka kartu mandiri (*bounded cards*) yang rapi di layar ponsel, mendukung unduh berkas backup, pemulihan (restore) instan, dan penghapusan arsip usang.
 
-### Prasyarat Sistem & Perangkat Lunak
+### G. Analisis Bisnis, Laba Rugi & Pelaporan Keuangan
+- **Dashboard Ringkasan Eksekutif**: Visualisasi grafik tren omzet harian/mingguan/bulanan, total margin keuntungan, dan rata-rata nilai transaksi per pelanggan.
+- **Laporan Laba Kotor & Bersih**: Perhitungan harga pokok penjualan (HPP) vs harga jual untuk menyajikan keuntungan riil bisnis.
+- **Produk Terlaris (Top Selling Items)**: Peringkat produk dengan volume penjualan dan kontribusi omzet tertinggi.
+- **Perhitungan Komisi Sales**: Sistem komisi staf penjualan berdasarkan persentase target penjualan yang tercapai.
 
-Sebelum mengunduh kode proyek, pastikan perangkat lunak berikut telah terpasang di komputer Anda:
-
-#### 1. Git
-- **Windows**: Unduh installer Git dari situs resmi https://git-scm.com dan jalankan instalasi dengan opsi default.
-- **Linux (Debian/Ubuntu)**:
-  ```bash
-  sudo apt-get update && sudo apt-get install -y git
-  ```
-- **macOS**:
-  ```bash
-  xcode-select --install
-  ```
-
-#### 2. Node.js & npm (Wajib Menggunakan Versi LTS: v20.x atau v22.x)
-Penting: Gunakan versi LTS (Node.js v20 atau v22). Jangan gunakan Node.js v24 atau versi development non-LTS karena modul native SQLite (`better-sqlite3`) belum menyediakan binary siap pakai (prebuilt binary) untuk Node 24, yang akan menyebabkan error `gyp ERR! find VS` saat instalasi.
-- **Windows**: Unduh installer Node.js bertanda **LTS** dari https://nodejs.org.
-- **Linux (Debian/Ubuntu)**:
-  ```bash
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-  sudo apt-get install -y nodejs build-essential python3 libsqlite3-dev
-  ```
-- Verifikasi instalasi:
-  ```bash
-  node -v
-  npm -v
-  ```
-
-#### 3. pnpm (Package Manager Cepat)
-Pasang pnpm secara global melalui npm:
-- Jika menggunakan **Node.js v20**: gunakan pnpm versi 9
-  ```bash
-  npm install -g pnpm@9
-  ```
-- Jika menggunakan **Node.js v22 LTS**: gunakan pnpm versi terbaru
-  ```bash
-  npm install -g pnpm
-  ```
-- Verifikasi instalasi:
-  ```bash
-  pnpm -v
-  ```
-
-#### 4. Java Development Kit (JDK 17)
-Diperlukan untuk kompilasi modul Android dan menjalankan Gradle:
-- **Windows**: Unduh OpenJDK 17 atau Eclipse Temurin 17 dari https://adoptium.net.
-- **Linux (Debian/Ubuntu)**:
-  ```bash
-  sudo apt-get install -y openjdk-17-jdk
-  ```
-- Pastikan variabel environment `JAVA_HOME` telah mengarah ke direktori instalasi JDK 17 dan verifikasi via terminal:
-  ```bash
-  java -version
-  ```
-
-#### 5. Android Studio & Android SDK (Khusus Pengembangan Mobile)
-1. Unduh dan pasang **Android Studio** versi terbaru dari https://developer.android.com/studio.
-2. Buka Android Studio, masuk ke menu **Settings / Preferences -> Appearance & Behavior -> System Settings -> Android SDK**.
-3. Pada tab **SDK Platforms**, pastikan tercentang:
-   - Android 14.0 (API 34) atau Android 13.0 (API 33).
-4. Pada tab **SDK Tools**, pastikan tercentang:
-   - Android SDK Build-Tools (versi 34.0.0 atau 35.0.0)
-   - Android SDK Command-line Tools (latest)
-   - Android SDK Platform-Tools (adb)
-5. Atur variabel lingkungan `ANDROID_HOME`:
-   - **Linux / macOS** (di `~/.bashrc` atau `~/.zshrc`):
-     ```bash
-     export ANDROID_HOME=$HOME/Android/Sdk
-     export PATH=$PATH:$ANDROID_HOME/emulator
-     export PATH=$PATH:$ANDROID_HOME/platform-tools
-     export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-     ```
-   - **Windows**: Tambahkan variabel pengguna `ANDROID_HOME` mengarah ke `%LOCALAPPDATA%\Android\Sdk` dan tambahkan `%ANDROID_HOME%\platform-tools` ke dalam `PATH`.
+### H. Personalisasi Tema Toko & Antarmuka Multi-Device
+- **Palet Warna Aksen Dinamis**: Pilihan 10 tema warna toko (Emerald, Indigo, Blue, Amber, Rose, Violet, Slate, dll.) yang diterapkan konsisten pada elemen navigasi, tombol kasir, hingga badge notifikasi.
+- **Mode Tampilan Layar**: Dukungan Mode Terang (Light Mode), Mode Gelap (Dark Mode), dan Mode Hemat Daya Layar OLED.
+- **Responsif Mobile Adaptif**: Bilah navigasi bawah (*bottom bar*) dengan lekukan tombol kasir konsentris presisi, floating action button kasir proporsional, dan modal notifikasi terpusat.
 
 ---
 
-### Clone Repositori & Persiapan Environment
+## 3. Demo Aplikasi Android (Pre-built Release APK)
 
-1. Buka Terminal / Git Bash / Command Prompt, lalu klon repositori WariPOS:
-   ```bash
-   git clone https://github.com/WalZetass-kar/WariPOS.git
-   cd WariPOS
-   ```
+Bagi penguji, juri, maupun pemilik toko yang ingin langsung mencoba WariPOS di perangkat Android fisik tanpa perlu melakukan build manual:
 
-2. Siapkan berkas konfigurasi environment `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-   *(Pada Windows Command Prompt: gunakan `copy .env.example .env`)*
+### Spesifikasi Paket Rilis Android
+- **Berkas Unduhan**: [`WariPOS.apk`](https://github.com/WalZetass-kar/WariPOS/releases/latest)
+- **Versi Aplikasi**: `2.2.2` (`versionCode: 20202`)
+- **Ukuran File**: ~20 MB
+- **Application ID**: `com.wari.pos`
+- **Target SDK**: `36` (Kompatibel dengan Android 16 dan perangkat modern)
+- **Min SDK**: `26` (Mendukung Android 8.0 Oreo ke atas)
+- **Status Tanda Tangan**: *Signed Release* (APK Signature Scheme v2)
+- **Izin Native**: Kamera (Scanner Barcode), Biometrik/Fingerprint (Login Aman), Bluetooth (Thermal Printer), Jaringan Lokal/Internet.
 
-   Buka berkas `.env` dengan text editor pilihan Anda. Jika Anda ingin menggunakan sinkronisasi cloud atau Firebase, sesuaikan nilainya. Jika hanya digunakan secara offline lokal, konfigurasi bawaan sudah siap digunakan.
-
----
-
-### Instalasi Dependensi Proyek
-
-Jalankan perintah berikut di root folder `WariPOS`:
+### Panduan Pemasangan via ADB
+Jika ponsel Anda terhubung ke laptop/komputer via kabel USB dengan opsi **USB Debugging** aktif:
 ```bash
+adb install -r release/WariPOS.apk
+```
+Untuk langsung meluncurkan aplikasi di layar ponsel:
+```bash
+adb shell am start -n com.wari.pos/com.zetass.pos.MainActivity
+```
+
+### Panduan Pemasangan Manual via Berkas APK
+1. Unduh berkas `WariPOS.apk` dari tautan [GitHub Releases](https://github.com/WalZetass-kar/WariPOS/releases/latest).
+2. Salin berkas ke penyimpanan ponsel pintar atau tablet Android Anda.
+3. Buka file manager di perangkat Anda, klik `WariPOS.apk`, lalu konfirmasikan instalasi aplikasi.
+4. Buka WariPOS dan lakukan inisialisasi akun pemilik toko pertama kali.
+
+---
+
+## 4. Bukti Rekayasa Sistem & Modifikasi Arsitektur (Engineering Highlights)
+
+WariPOS dirancang dan dikembangkan dengan standar rekayasa perangkat lunak profesional. Kode sumber dibangun dengan arsitektur modular, teruji, dan bebas dari ketergantungan pada template siap saji:
+
+### A. Arsitektur Hybrid Berlapis (Separation of Concerns)
+Struktur kode sumber menerapkan pemisahan lapisan tugas yang tegas:
+- **Presentation Layer (`src/renderer`)**: Komponen antarmuka React modular berbasis fungsionalitas murni dengan pemisahan custom hooks (`useTransaksiState`, `useHoldCart`, `useUndo`, `useDebounce`).
+- **State Management Layer (`src/renderer/stores`)**: State terpusat Zustand memisahkan data keranjang belanja aktif (`cartStore.ts`) dari preferensi aplikasi yang dipersistensikan (`appStore.ts`).
+- **Hardware & Device Abstraction Layer (`src/renderer/utils`)**: Modul komunikasi driver perangkat keras independen untuk printer thermal ESC/POS Bluetooth, printer USB, pemindai barcode serial/kamera, dan sinkronisasi spreadsheet.
+- **Native Runtime Adapters**: Penanganan native ganda melalui Electron IPC Whitelist untuk desktop dan Capacitor Native Plugins untuk Android.
+
+### B. Engine Database Lokal Offline-First (ACID Compliance)
+- Implementasi SQLite native menggunakan `better-sqlite3` pada platform Desktop dengan konfigurasi **WAL Mode (Write-Ahead Logging)** yang menjamin operasi baca-tulis konkuren berkecepatan tinggi tanpa resiko database lock.
+- Penanganan skema database terkelola dengan modul migrasi otomatis (`migrations/`) yang memverifikasi integritas tabel saat startup aplikasi.
+
+### C. Algoritma Dynamic Stacking Struk Thermal & PDF
+- Masalah teks bertumpuk pada pencetakan thermal diatasi dengan sistem kalkulasi ketinggian vertikal dinamis:
+  - Nama produk dipecah otomatis per baris (`splitTextToSize`) dengan alokasi ruang vertikal mandiri.
+  - Baris kuantitas dan harga satuan ditempatkan pada baris baru di bawah nama barang, dipisahkan dari nominal subtotal di sisi kanan.
+  - Fungsi `calculateReceiptPdfHeight` menghitung akumulasi tinggi konten faktual seluruh item sebelum kanvas PDF dirender, menjamin dokumen thermal PDF selalu utuh dalam 1 halaman kontinu tanpa terpotong.
+
+### D. Geometri Lekukan Konsentris Presisi (C1 Tangent Fillet)
+- Tombol Kasir mobile berdiameter 66px dengan elevasi luar 4px menempatkan titik pusat fisik tombol pada koordinat vertikal $(cx, 5)$.
+- Jalur SVG *notch* dihitung secara analitis matematis menggunakan teorema Pythagoras:
+  $$D = R_1 + R_2 = 42.5 + 14 = 56.5\text{px}$$
+  $$x_{shoulder} = \sqrt{D^2 - (R_2 - cy)^2} = \sqrt{56.5^2 - 9^2} \approx 55.78\text{px}$$
+  $$x_{inflect} = x_{shoulder} \times \frac{R_1}{D} \approx 41.96\text{px}, \quad y_{inflect} = cy + 9 \times \frac{R_1}{D} \approx 11.77\text{px}$$
+- Menghasilkan celah udara seragam 5.5px konsentris sempurna di sekeliling tombol kasir dengan kontinuitas tangensial turunan pertama ($C^1$) yang mulus tanpa sudut patah.
+
+### E. Manajemen State Global Terstruktur (Zustand Stores)
+- State keranjang kasir (`useCartStore`) menangani penambahan item, kalkulasi kuantitas, penerapan promo, dan pemilihan pelanggan tanpa memicu re-render yang tidak perlu pada katalog barang.
+- Preferensi UI dan shift kasir aktif dikelola terpisah di `useAppStore` dengan mekanisme filter penyimpanan (*partialize storage*) untuk menjaga privasi sesi kerja.
+
+### F. Rangkaian Pengujian Otomatis (187 Unit & Integration Tests)
+Proyek dilengkapi dengan 22 test suites yang mencakup 187 skenario unit test otomatis menggunakan Vitest:
+- Kalkulasi keranjang, pajak, dan kembalian (`tests/cartCalculations.test.ts`).
+- Validasi keamanan PIN dan masa aktif lisensi (`tests/authLogic.test.ts`).
+- Layout rendering struk dinamis (`tests/receiptLayout.test.ts`).
+- Validasi data masukan dan sanitasi XSS (`tests/sanitize.test.ts`, `tests/validationUtils.test.ts`).
+- Kanal IPC whitelist dan proteksi peran pengguna (`tests/apiUtils.test.ts`, `tests/demoGuardV2.test.ts`).
+- Format ekspor multi-tab Google Sheets (`tests/googleSheetsReportExport.test.ts`).
+
+### G. Standar Keamanan & Perlindungan Data Perusahaan
+- **Isolasi Proses Antarmuka**: Arsitektur proses Electron menerapkan `contextIsolation: true` dan `nodeIntegration: false`. Semua interaksi backend diverifikasi melalui kanal IPC bertipe aman.
+- **Proteksi Kata Sandi & PIN**: Kredensial pengguna di-hash menggunakan algoritma `bcryptjs` dengan salt rounds terstandarisasi.
+- **Sanitasi Data Masukan**: Pencegahan terhadap celah SQL Injection dan Cross-Site Scripting (XSS) pada seluruh input transaksi dan master barang.
+
+---
+
+## 5. Panduan Instalasi Lingkungan Pengembang (Developer Setup)
+
+### Prasyarat Perangkat Lunak
+- **Node.js**: Versi LTS (v20.x atau v22.x). Hindari versi non-LTS.
+- **Package Manager**: `pnpm` (direkomendasikan versi 9 ke atas).
+- **Java Development Kit**: OpenJDK 17 (diperlukan untuk kompilasi modul Android).
+- **Android SDK**: Android Build-Tools versi 34.0.0 atau 35.0.0, Platform API 34/36.
+- **Git**: Versi 2.30 ke atas.
+
+### Kloning Repositori & Konfigurasi Lingkungan
+```bash
+# Klon repositori WariPOS
+git clone https://github.com/WalZetass-kar/WariPOS.git
+cd WariPOS
+
+# Salin konfigurasi environment
+cp .env.example .env
+
+# Pasang seluruh dependensi proyek
 pnpm install
 ```
 
-> **Catatan Teknis Kompilasi Modul Native SQLite:**  
-> Skrip `postinstall` akan otomatis mengompilasi modul native `better-sqlite3` agar cocok dengan versi Node/Electron yang berjalan. Jika Anda menjumpai pesan modul ABI mismatch saat pertama kali menjalankan aplikasi, jalankan:
-> ```bash
-> pnpm run rebuild:electron
-> ```
-
----
-
 ### Menjalankan Aplikasi Desktop Electron
-
-Untuk menjalankan aplikasi desktop dalam mode pengembangan (live-reload):
 ```bash
+# Menjalankan server Vite dan jendela Desktop Electron (live-reload)
 pnpm dev
 ```
 
-Proses yang terjadi di balik layar:
-1. Server pengembang Vite aktif di port `5173`.
-2. Electron mengompilasi skrip proses utama (`src/main`).
-3. Jendela aplikasi WariPOS Desktop otomatis terbuka dengan antarmuka kasir responsif.
-
----
-
-### Menjalankan & Membuka Aplikasi Android di Komputer Baru
-
-Proyek WariPOS menggunakan **Capacitor 8** untuk mengintegrasikan kode antarmuka web React dengan platform native Android. Anda dapat menjalankan versi Android melalui dua metode:
-
-#### Metode A: Melalui Android Studio
-
-1. Lakukan kompilasi bundle web dan sinkronisasi aset ke folder Android:
-   ```bash
-   pnpm mobile:sync:android
-   ```
-2. Buka folder proyek Android langsung ke Android Studio:
-   ```bash
-   pnpm android:open
-   ```
-   *(Atau buka aplikasi Android Studio secara manual, klik **Open**, lalu pilih folder `WariPOS/android`)*.
-3. Tunggu hingga proses **Gradle Sync** selesai mengunduh seluruh dependensi Android. Anda dapat melihat indikator progres di sudut kanan bawah Android Studio.
-4. Hubungkan HP fisik Android Anda melalui kabel USB (pastikan USB Debugging aktif) atau buat Android Virtual Device (AVD) di menu **Device Manager**.
-5. Pilih perangkat tujuan dari menu dropdown di bilah alat atas Android Studio.
-6. Klik tombol **Run 'app'** (ikon panah segitiga hijau atau tekan tombol pintas `Shift + F10`).
-7. Aplikasi WariPOS akan otomatis dikompilasi, dipasang, dan dibuka di perangkat Android Anda.
-
-#### Metode B: Melalui Terminal & ADB (Tanpa Membuka Android Studio)
-
-Metode ini sangat cepat jika Anda ingin menguji langsung ke HP fisik via kabel data:
-
-1. **Aktifkan Mode Pengembang di HP Android**:
-   - Buka menu **Pengaturan** -> **Tentang Ponsel**.
-   - Ketuk kolom **Nomor Versi / Build Number** sebanyak 7 kali berturut-turut hingga muncul pesan konfirmasi pengembang.
-   - Masuk ke **Pengaturan Tambahan / Sistem** -> **Opsi Pengembang**.
-   - Aktifkan toggle **USB Debugging** (dan **Install via USB** jika tersedia di perangkat Anda).
-2. Sambungkan HP ke laptop/komputer via kabel USB. Saat muncul dialog pop-up di layar ponsel, pilih **Izinkan USB Debugging**.
-3. Buka Terminal dan pastikan perangkat HP Anda terdeteksi:
-   ```bash
-   adb devices
-   ```
-   Terminal akan menampilkan ID serial perangkat dengan status `device`.
-4. Kompilasi bundle web dan sinkronisasi aset:
-   ```bash
-   pnpm mobile:sync:android
-   ```
-5. Kompilasi APK bertanda tangan (Signed Release):
-   ```bash
-   pnpm android:release
-   ```
-   *(Hasil kompilasi akan tersimpan di berkas `release/WariPOS.apk`)*
-6. Pasang berkas APK langsung ke perangkat yang terhubung:
-   ```bash
-   adb install -r release/WariPOS.apk
-   ```
-7. Luncurkan aplikasi di ponsel langsung dari terminal:
-   ```bash
-   adb shell am start -n com.zetasspos.app/com.zetasspos.app.MainActivity
-   ```
-
-#### Metode C: Mode Preview Mobile di Browser
-
-Jika Anda ingin melihat tata letak antarmuka mobile secara cepat tanpa perlu menyambungkan HP:
+### Menjalankan & Membangun Aplikasi Android
 ```bash
-pnpm dev:mobile
+# Sinkronisasi aset web ke proyek Android
+pnpm mobile:sync:android
+
+# Membangun berkas APK rilis bertanda tangan
+pnpm android:release
+
+# Hasil berkas APK tersimpan di: release/WariPOS.apk
 ```
-Buka browser di alamat `http://localhost:5173`, tekan tombol `F12` untuk membuka Developer Tools, lalu aktifkan mode **Toggle Device Toolbar** (Ctrl+Shift+M) dan pilih tipe perangkat seperti *Pixel 7* atau *iPhone 14*.
 
 ---
 
-## 4. Panduan Alur Penggunaan Pertama Kali (First-Time User Guide)
-
-### Langkah 1: Setup Akun Super Admin / Pemilik Toko
-Saat WariPOS dijalankan untuk pertama kali pada instalasi baru, database SQLite lokal masih dalam kondisi bersih. Aplikasi akan secara otomatis mendeteksi status ini dan menampilkan formulir **Setup Akun Pemilik**.
-- Masukkan **Username** (contoh: `owner` atau `admin`).
-- Masukkan **Nama Lengkap**.
-- Masukkan **Password** (minimal 8 karakter kombinasi aman).
-- Klik tombol **Buat Akun & Masuk**.
-
-### Langkah 2: Konfigurasi Identitas Toko & Struk
-1. Buka menu navigasi samping dan pilih menu **Pengaturan Toko**.
-2. Lengkapi formulir informasi toko:
-   - Nama Toko / Usaha.
-   - Alamat Lengkap Toko.
-   - Nomor Telepon / WhatsApp Toko.
-   - Catatan Header Struk (misalnya: "Selamat Berbelanja").
-   - Catatan Footer Struk (misalnya: "Barang yang sudah dibeli tidak dapat ditukar").
-3. Klik **Simpan Pengaturan**. Informasi ini akan otomatis tercetak pada struk thermal dan struk WhatsApp pelanggan.
-
-### Langkah 3: Manajemen Produk & Kategori
-1. Masuk ke menu **Kategori Barang**: Tambahkan kelompok produk Anda (misalnya: *Makanan*, *Minuman*, *Sembako*, *Pakaian*).
-2. Masuk ke menu **Data Barang / Produk**:
-   - Klik **Tambah Produk Baru**.
-   - Masukkan Kode Produk / Barcode (dapat diketik manual atau dipindai dengan barcode scanner).
-   - Masukkan Nama Produk, Satuan (pcs, kg, porsi), dan Kategori.
-   - Masukkan Harga Beli (modal) dan Harga Jual.
-   - Masukkan Jumlah Stok Awal dan Batas Minimum Stok untuk peringatan stok menipis.
-   - Klik **Simpan**.
-
-### Langkah 4: Manajemen Kasir & Login Kilat Menggunakan PIN
-Untuk mempercepat proses pergantian kasir tanpa harus mengetik password panjang:
-1. Masuk ke menu **Pengguna** (hanya dapat diakses oleh peran Admin/Owner).
-2. Klik **Tambah Pengguna Baru**:
-   - Tentukan Username kasir (misal: `kasir1`).
-   - Pilih peran (Role): **Kasir**.
-   - Tentukan izin akses menu yang diperbolehkan.
-3. Atur **PIN Kasir** (4 hingga 8 digit angka).
-4. Simpan akun kasir.
-5. Pada saat kasir akan melayani transaksi di perangkat mobile Android maupun desktop, kasir cukup memilih tab **Login PIN Kasir**, memasukkan PIN angka, dan langsung diarahkan ke layar kasir.
-
-### Langkah 5: Pembukaan Shift Kasir & Transaksi Penjualan (POS)
-1. **Buka Shift Kasir**:
-   - Saat pertama kali masuk menu kasir di hari kerja baru, masukkan nominal modal awal kas laci (misal: Rp 100.000).
-   - Klik **Buka Kas**.
-2. **Melakukan Transaksi**:
-   - Klik pada produk di katalog visual, atau pindai barcode produk menggunakan pemindai barcode / kamera HP.
-   - Atur jumlah kuantitas (Qty), diskon per item jika ada.
-   - Pilih Member / Pelanggan jika ingin mencatat poin belanja loyalitas.
-   - Tentukan metode pembayaran:
-     - **TUNAI**: Masukkan uang yang diterima pembeli; sistem otomatis menghitung nominal kembalian secara presisi.
-     - **QRIS**: Tampilkan QRIS resmi; pembeli dapat memindai dari ponsel mereka.
-     - **TRANSFER**: Pilih bank tujuan transfer toko.
-   - Klik tombol **Bayar / Selesaikan Transaksi**.
-3. **Cetak & Bagikan Struk**:
-   - Cetak langsung ke printer thermal (USB / Bluetooth 58mm & 80mm).
-   - Bagikan struk digital langsung ke nomor WhatsApp pelanggan dalam format nota rapi dengan sekali klik.
-
-### Langkah 6: Tutup Shift Kasir & Rekonsiliasi Uang
-1. Di akhir jam kerja kasir, masuk ke menu **Tutup Kas / Shift**.
-2. Hitung jumlah uang fisik tunai yang ada di dalam laci kasir.
-3. Masukkan nominal uang fisik tersebut ke dalam formulir tutup kas.
-4. Sistem akan menampilkan rincian total transaksi tunai, non-tunai, modal awal, serta menghitung selisih kas (apakah seimbang, surplus, atau defisit).
-5. Klik **Tutup Kas & Cetak Laporan Shift**.
-
-### Langkah 7: Integrasi & Ekspor Data ke Google Sheets
-WariPOS menyediakan integrasi langsung ke Google Sheets secara berkala atau satu kali klik:
-1. Buka menu **Pengaturan Sinkronisasi / Integrasi**.
-2. Masukkan URL Web App Google Apps Script toko Anda.
-3. Klik **Uji Koneksi** untuk memastikan spreadsheet terhubung.
-4. Data master barang, riwayat transaksi penjualan, dan rekap keuangan harian dapat disinkronkan langsung ke Google Sheets pemilik toko untuk dipantau secara langsung dari mana saja.
-
-### Langkah 8: Kustomisasi Tema & Mode Tampilan Antarmuka
-1. Masuk ke menu **Pengaturan Tema**.
-2. Pilih palet warna aksen toko: Biru, Emerald, Indigo, Amber, Rose, atau Violet.
-3. Pilih mode tampilan antarmuka: Mode Terang (Light), Mode Gelap (Dark), atau Mengikuti Pengaturan Sistem.
-4. Tentukan tingkat kebulatan sudut elemen antarmuka (Rounded Radius).
-5. Pengaturan tema disimpan secara permanen di preferensi perangkat Anda.
-
----
-
-## 5. Referensi Perintah Skrip (NPM / PNPM Scripts)
-
-Berikut adalah daftar lengkap perintah otomatis yang tersedia pada berkas `package.json`:
+## 6. Referensi Perintah Skrip Proyek
 
 | Perintah | Deskripsi Fungsi |
 |---|---|
-| `pnpm dev` | Menjalankan server dev Vite dan membuka aplikasi Desktop Electron secara bersamaan |
-| `pnpm dev:mobile` | Menjalankan server pengembang Vite untuk preview mobile di jaringan lokal |
-| `pnpm build:desktop` | Melakukan kompilasi seluruh aset web frontend dan skrip proses utama Electron |
-| `pnpm desktop:win` | Membangun paket portabel arsip ZIP untuk sistem operasi Windows 64-bit |
-| `pnpm desktop:win:installer` | Membangun installer NSIS `.exe` resmi untuk Windows 64-bit |
+| `pnpm dev` | Menjalankan Vite dev server dan Electron desktop app secara bersamaan |
+| `pnpm dev:mobile` | Menjalankan Vite dev server untuk pratinjau mobile di browser / jaringan lokal |
+| `pnpm test` | Menjalankan seluruh 22 test suite (187 unit tests) via Vitest |
+| `pnpm typecheck` | Menjalankan validasi tipe data TypeScript di frontend dan backend |
+| `pnpm mobile:sync:android` | Mengompilasi bundel web dan menyinkronkan aset native Capacitor Android |
+| `pnpm android:release` | Membangun paket rilis Android APK bertanda tangan (`release/WariPOS.apk`) |
+| `pnpm android:aab` | Membangun Android App Bundle (.aab) untuk publikasi Google Play Store |
+| `pnpm android:open` | Membuka proyek native Android langsung di Android Studio |
+| `pnpm build:desktop` | Mengompilasi seluruh aset web dan skrip proses utama Electron |
+| `pnpm desktop:win:installer` | Membangun installer desktop NSIS `.exe` untuk Windows 64-bit |
 | `pnpm desktop:linux` | Membangun paket distribusi Linux (.deb dan .AppImage) |
-| `pnpm mobile:sync:android` | Mengompilasi kode React dan menyinkronkan aset web ke modul Android native |
-| `pnpm android:open` | Membuka folder proyek Android native langsung di Android Studio |
-| `pnpm android:debug` | Membangun berkas instalasi Android APK versi debug |
-| `pnpm android:release` | Membangun berkas instalasi Android APK versi release bertanda tangan |
-| `pnpm android:aab` | Membangun format Android App Bundle (.aab) untuk publikasi Google Play Store |
-| `pnpm typecheck` | Menjalankan pemeriksaan validitas tipe data TypeScript di frontend dan backend |
-| `pnpm test` | Menjalankan seluruh rangkaian unit testing menggunakan Vitest |
-| `pnpm rebuild:electron` | Mengompilasi ulang modul native C++ better-sqlite3 khusus binary Electron |
-| `pnpm rebuild:node` | Mengompilasi ulang modul native C++ better-sqlite3 untuk Node.js CLI runtime |
+| `pnpm rebuild:electron` | Kompilasi ulang binary native C++ better-sqlite3 untuk Electron |
 
 ---
 
-## 6. Panduan Troubleshooting Masalah Umum
+## 7. Lisensi & Hak Cipta
 
-### 1. Pesan Galat: `gyp ERR! find VS You need to install the latest version of Visual Studio` / `No prebuilt binaries found (target=24.x)` saat `pnpm install`
-Penyebab: Anda menggunakan Node.js versi non-LTS (misalnya Node.js v24). Library SQLite native (`better-sqlite3`) belum menyediakan prebuilt binary untuk versi Node tersebut, sehingga sistem mencoba mengompilasinya dari kode sumber C++ dan menuntut Visual Studio C++ Build Tools.  
-Solusi:
-- **Solusi Utama (Sangat Disarankan)**: Pasang Node.js versi **LTS (v20.x atau v22.x)** dari https://nodejs.org. Pada versi LTS, binary prebuilt `better-sqlite3` akan langsung terunduh secara otomatis dalam hitungan detik tanpa perlu menginstal Visual Studio C++ sama sekali. Setelah mengganti versi Node.js, hapus folder `node_modules` lalu jalankan kembali `pnpm install`.
-- **Solusi Alternatif**: Jika tetap harus di Node.js saat ini, jalankan instalasi tanpa mengeksekusi skrip kompilasi:
-  ```bash
-  pnpm install --ignore-scripts
-  ```
-  Kemudian lakukan rebuild khusus binary Electron:
-  ```bash
-  pnpm run rebuild:electron
-  ```
+Proyek ini dirilis di bawah lisensi terbuka **MIT License**. Kode sumber terbuka untuk dipelajari, dikembangkan, dan dimanfaatkan untuk kebutuhan operasional bisnis retail.
 
-### 2. Pesan Galat: `The module 'better-sqlite3.node' was compiled against a different Node.js version`
-Penyebab: Versi binary Node.js sistem berbeda dengan internal runtime Electron.  
-Solusi: Jalankan perintah kompilasi ulang modul:
-```bash
-pnpm run rebuild:electron
-```
+- **Pengembang**: WalZetass-Kar
+- **Repositori Kode**: https://github.com/WalZetass-kar/WariPOS
+- **Unduh Rilis APK**: https://github.com/WalZetass-kar/WariPOS/releases/latest
 
-### 2. Pesan Galat: `Gradle sync failed` di Android Studio
-Penyebab: Jalur JDK tidak sesuai atau versi Gradle belum terunduh sempurna.  
-Solusi:
-- Buka menu **File -> Settings -> Build, Execution, Deployment -> Build Tools -> Gradle**.
-- Pada bagian **Gradle JDK**, pastikan memilih versi **JDK 17** (Embedded JDK atau JDK 17 yang terpasang).
-- Klik tombol **Sync Project with Gradle Files** di pojok kanan atas Android Studio.
-
-### 3. HP Tidak Terdeteksi saat Menjalankan `adb devices`
-Penyebab: Driver USB vendor belum terpasang atau izin USB debugging belum diaktifkan.  
-Solusi:
-- Cabut kabel USB dan pasang kembali ke port USB lain di komputer Anda.
-- Ganti mode sambungan USB di HP menjadi **Transfer File (MTP)**.
-- Buka Opsi Pengembang di HP dan matikan lalu aktifkan kembali opsi **USB Debugging**.
-- Jalankan perintah `adb kill-server && adb start-server`, lalu jalankan kembali `adb devices`.
-
-### 4. Port 5173 Sudah Digunakan (`EADDRINUSE: address already in use :::5173`)
-Penyebab: Ada proses Vite atau aplikasi web lain yang masih berjalan di latar belakang.  
-Solusi:
-- Cari dan hentikan proses yang menempati port 5173:
-  - Linux/macOS: `npx kill-port 5173`
-  - Windows: `netstat -ano | findstr :5173` lalu matikan PID terkait dengan `taskkill /PID <PID> /F`.
-
-### 5. Ingin Mengulang Setup Akun Toko dari Awal (Reset Database Bersih)
-Jika Anda ingin mengosongkan seluruh database lokal untuk memulai konfigurasi toko baru:
-- Tutup aplikasi WariPOS.
-- Hapus berkas `sistem_pos.db` dan `sistem_pos.db-wal` di folder root proyek (atau di folder AppData perangkat jika menggunakan versi installer).
-- Jalankan kembali aplikasi; sistem akan otomatis memandu Anda ke formulir Setup Pemilik Toko baru.
-
----
-
-## 7. Standar Keamanan & Perlindungan Data
-
-- **Offline-First & Kedaulatan Data**: Basis data transaksi tersimpan sepenuhnya secara lokal di SQLite perangkat Anda. Tidak ada data penjualan yang dikirim keluar tanpa konfigurasi eksplisit pemilik toko.
-- **Isolasi Proses Antarmuka (Context Isolation)**: Seluruh komunikasi antara antarmuka React dan sistem operasi dibatasi melalui IPC Whitelist yang diverifikasi ketat pada berkas preload Electron.
-- **Keamanan Akun & Otorisasi Bertingkat**: Kata sandi dienkripsi dengan algoritma hash aman. Izin akses menu dibatasi berdasarkan peran (Owner, Admin, Supervisor, Kasir).
-- **Proteksi Fitur Pengembang**: Menu teknis dan fitur eksperimental dinonaktifkan secara otomatis pada rilis produksi untuk mencegah akses tidak sah.
-
----
-
-## 8. Lisensi & Pengembang
-
-Proyek ini dirilis di bawah lisensi terbuka **MIT License**. Anda bebas menggunakan, memodifikasi, dan mendistribusikan aplikasi ini untuk kebutuhan usaha retail dan komersial Anda.
-
-Pengembang: **WalZetass-Kar**  
-- Profil GitHub: https://github.com/WalZetass-kar  
-- Repositori Kode: https://github.com/WalZetass-kar/WariPOS  
-- Rilis Resmi: https://github.com/WalZetass-kar/WariPOS/releases  
-
-Hak Cipta (c) 2026 WalZetass-Kar. Hak cipta dilindungi undang-undang.
+Hak Cipta (c) 2026 WalZetass-Kar. Seluruh hak cipta dilindungi undang-undang.
