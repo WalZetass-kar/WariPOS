@@ -47,7 +47,7 @@ const requiredDirs = [
 
 const requiredDesktopTargets = {
   win: ['nsis', 'portable', 'zip'],
-  linux: ['AppImage', 'deb', 'rpm', 'tar.gz'],
+  linux: ['AppImage', 'deb', 'tar.gz'],
   mac: ['dmg'],
 }
 
