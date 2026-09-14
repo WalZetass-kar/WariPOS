@@ -215,22 +215,8 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
           {settings.footer_text}
         </p>
 
-        {/* QRIS */}
-        {settings.qris_enabled && settings.qris_image && (
-          <div className="mt-3 text-center border-t border-slate-100 pt-3 pb-2 break-inside-avoid">
-            <p className="text-[8px] text-slate-400 mb-1 font-sans">Scan QRIS untuk pembayaran digital:</p>
-            <div className="inline-block p-1 bg-white border border-slate-200 rounded mx-auto">
-              <img 
-                src={settings.qris_image} 
-                alt="QRIS" 
-                className="w-24 h-24 mx-auto object-contain bg-white block"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Extra Bottom Paper Feed Space to ensure paper cutter / tear bar never clips QRIS or footer */}
-        <div className="h-6 print:h-14 w-full shrink-0 block" aria-hidden="true" />
+        {/* Extra Bottom Paper Feed Space to ensure paper cutter / tear bar never clips footer */}
+        <div className="h-6 print:h-12 w-full shrink-0 block" aria-hidden="true" />
       </div>
     )
   }

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Clock, DollarSign, TrendingUp, Eye, Trash2, Plus, AlertCircle, ShieldAlert, CheckCircle2, ArrowUpRight, Wallet } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Clock, DollarSign, TrendingUp, Eye, Trash2, Plus, AlertCircle, ShieldAlert, CheckCircle2, ArrowUpRight, Wallet, LayoutGrid, List, Table, Search } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -24,6 +24,8 @@ export default function Shifts() {
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'table'>('list')
+  const [search, setSearch] = useState('')
 
   const loadShifts = async () => {
     try {
@@ -162,64 +164,316 @@ export default function Shifts() {
             </div>
           )}
 
-          {/* Shift Table */}
-          <Card title="Riwayat Shift Kasir Toko" subtitle="Catatan historis pembukaan dan penutupan shift kasir" className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="overflow-x-auto -mx-6">
-              <table className="w-full text-xs min-w-[800px]">
-                <thead className="bg-slate-50 dark:bg-slate-950 font-extrabold text-slate-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-4 py-3 text-left">No Shift</th>
-                    <th className="px-4 py-3 text-left">Kasir</th>
-                    <th className="px-4 py-3 text-left">Waktu Mulai</th>
-                    <th className="px-4 py-3 text-left">Waktu Selesai</th>
-                    <th className="px-4 py-3 text-right">Modal Awal</th>
-                    <th className="px-4 py-3 text-right">Penjualan</th>
-                    <th className="px-4 py-3 text-right">Selisih Kas</th>
-                    <th className="px-4 py-3 text-center">Status</th>
-                    <th className="px-4 py-3 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {shifts.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-10 text-center text-slate-400 font-bold">
-                        Belum ada riwayat data shift kasir
-                      </td>
-                    </tr>
-                  ) : (
-                    shifts.map(shift => (
-                      <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">{shift.shift_number}</td>
-                        <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{shift.nama_lengkap}</td>
-                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDateTime(shift.start_time)}</td>
-                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{shift.end_time ? formatDateTime(shift.end_time) : '-'}</td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-300">{formatRupiah(shift.opening_balance)}</td>
-                        <td className="px-4 py-3 text-right font-extrabold text-primary-600 dark:text-primary-400">{formatRupiah(shift.total_sales || 0)}</td>
-                        <td className={`px-4 py-3 text-right font-black ${(shift.difference || 0) > 0 ? 'text-emerald-600' : (shift.difference || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                          {shift.difference ? formatRupiah(shift.difference) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
+          {/* Shift Header & View Switcher */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+            <div>
+              <h3 className="font-bold text-slate-800 dark:text-white text-base">Riwayat Shift Kasir Toko</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{shifts.length} catatan shift kasir tercatat</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 sm:w-56">
+                <Input
+                  placeholder="Cari shift atau kasir..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  icon={<Search size={14} />}
+                />
+              </div>
+
+              <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan List"
+                >
+                  <List size={16} />
+                  <span className="hidden md:inline">List</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan Grid"
+                >
+                  <LayoutGrid size={16} />
+                  <span className="hidden md:inline">Grid</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    viewMode === 'table'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan Tabel"
+                >
+                  <Table size={16} />
+                  <span className="hidden md:inline">Tabel</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <div className="space-y-2">
+              {shifts.filter(s => {
+                if (!search.trim()) return true
+                const q = search.toLowerCase()
+                return (
+                  String(s.shift_number || '').toLowerCase().includes(q) ||
+                  String(s.nama_lengkap || '').toLowerCase().includes(q) ||
+                  String(s.status || '').toLowerCase().includes(q)
+                )
+              }).length === 0 ? (
+                <div className="py-14 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <Clock size={36} className="mx-auto mb-2 opacity-30 text-slate-400" />
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Belum ada riwayat shift kasir</p>
+                </div>
+              ) : (
+                shifts.filter(s => {
+                  if (!search.trim()) return true
+                  const q = search.toLowerCase()
+                  return (
+                    String(s.shift_number || '').toLowerCase().includes(q) ||
+                    String(s.nama_lengkap || '').toLowerCase().includes(q) ||
+                    String(s.status || '').toLowerCase().includes(q)
+                  )
+                }).map(shift => (
+                  <div
+                    key={shift.id}
+                    onClick={() => { setSelectedShift(shift); setModal('detail') }}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all flex items-center justify-between gap-3 cursor-pointer select-none active:scale-[0.99]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 flex items-center justify-center font-mono font-bold text-xs shrink-0 border border-primary-200/50 dark:border-primary-800/40">
+                        <Clock size={20} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                            {shift.shift_number}
+                          </p>
                           <Badge label={shift.status} variant={shift.status === 'OPEN' ? 'green' : 'blue'} />
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex gap-1 justify-center">
-                            <button onClick={() => { setSelectedShift(shift); setModal('detail') }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors" title="Lihat Detail Shift">
-                              <Eye size={15} />
-                            </button>
-                            {shift.status === 'CLOSED' && (
-                              <button onClick={() => setDeleteShift(shift)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 transition-colors" title="Hapus Data Shift">
-                                <Trash2 size={15} />
-                              </button>
-                            )}
-                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                          <span>Kasir: <strong className="text-slate-700 dark:text-slate-300">{shift.nama_lengkap || 'Kasir'}</strong></span>
+                          <span>·</span>
+                          <span>Mulai: {formatDateTime(shift.start_time)}</span>
+                          {shift.end_time && (
+                            <>
+                              <span>·</span>
+                              <span>Selesai: {formatDateTime(shift.end_time)}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          <span>Modal: {formatRupiah(shift.opening_balance)}</span>
+                          {shift.difference ? (
+                            <span className={`ml-2 font-bold ${(shift.difference || 0) > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              · Selisih: {formatRupiah(shift.difference)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right flex items-center gap-3">
+                      <div>
+                        <p className="text-[11px] text-slate-400 font-medium">Penjualan</p>
+                        <p className="font-extrabold text-sm sm:text-base text-primary-600 dark:text-primary-400">
+                          {formatRupiah(shift.total_sales || 0)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            setSelectedShift(shift)
+                            setModal('detail')
+                          }}
+                          className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-950/40 text-slate-400 hover:text-primary-600 transition-colors"
+                          title="Lihat Detail Shift"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        {shift.status === 'CLOSED' && (
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation()
+                              setDeleteShift(shift)
+                            }}
+                            className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-400 hover:text-red-600 transition-colors"
+                            title="Hapus Data Shift"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Grid View */}
+          {viewMode === 'grid' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {shifts.filter(s => {
+                if (!search.trim()) return true
+                const q = search.toLowerCase()
+                return (
+                  String(s.shift_number || '').toLowerCase().includes(q) ||
+                  String(s.nama_lengkap || '').toLowerCase().includes(q) ||
+                  String(s.status || '').toLowerCase().includes(q)
+                )
+              }).length === 0 ? (
+                <div className="col-span-full py-14 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <Clock size={36} className="mx-auto mb-2 opacity-30 text-slate-400" />
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Belum ada riwayat shift kasir</p>
+                </div>
+              ) : (
+                shifts.filter(s => {
+                  if (!search.trim()) return true
+                  const q = search.toLowerCase()
+                  return (
+                    String(s.shift_number || '').toLowerCase().includes(q) ||
+                    String(s.nama_lengkap || '').toLowerCase().includes(q) ||
+                    String(s.status || '').toLowerCase().includes(q)
+                  )
+                }).map(shift => (
+                  <div
+                    key={shift.id}
+                    onClick={() => { setSelectedShift(shift); setModal('detail') }}
+                    className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer flex flex-col justify-between gap-3 active:scale-[0.99]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-mono font-bold text-sm text-slate-900 dark:text-white">
+                          {shift.shift_number}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">Kasir: <strong className="text-slate-700 dark:text-slate-300">{shift.nama_lengkap || 'Kasir'}</strong></p>
+                      </div>
+                      <Badge label={shift.status} variant={shift.status === 'OPEN' ? 'green' : 'blue'} />
+                    </div>
+
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p>Mulai: {formatDateTime(shift.start_time)}</p>
+                      {shift.end_time && <p>Selesai: {formatDateTime(shift.end_time)}</p>}
+                      <p>Modal Awal: {formatRupiah(shift.opening_balance)}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 text-xs">
+                      <div>
+                        <span className="text-slate-400 block text-[11px]">Penjualan</span>
+                        <span className="font-extrabold text-base text-primary-600 dark:text-primary-400">{formatRupiah(shift.total_sales || 0)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            setSelectedShift(shift)
+                            setModal('detail')
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary-600"
+                        >
+                          <Eye size={15} />
+                        </button>
+                        {shift.status === 'CLOSED' && (
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation()
+                              setDeleteShift(shift)
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-400 hover:text-red-600"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Table View */}
+          {viewMode === 'table' && (
+            <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="overflow-x-auto -mx-6">
+                <table className="w-full text-xs min-w-[800px]">
+                  <thead className="bg-slate-50 dark:bg-slate-950 font-extrabold text-slate-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3 text-left">No Shift</th>
+                      <th className="px-4 py-3 text-left">Kasir</th>
+                      <th className="px-4 py-3 text-left">Waktu Mulai</th>
+                      <th className="px-4 py-3 text-left">Waktu Selesai</th>
+                      <th className="px-4 py-3 text-right">Modal Awal</th>
+                      <th className="px-4 py-3 text-right">Penjualan</th>
+                      <th className="px-4 py-3 text-right">Selisih Kas</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                      <th className="px-4 py-3 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {shifts.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-10 text-center text-slate-400 font-bold">
+                          Belum ada riwayat data shift kasir
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                    ) : (
+                      shifts.map(shift => (
+                        <tr key={shift.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">{shift.shift_number}</td>
+                          <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{shift.nama_lengkap}</td>
+                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDateTime(shift.start_time)}</td>
+                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{shift.end_time ? formatDateTime(shift.end_time) : '-'}</td>
+                          <td className="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-300">{formatRupiah(shift.opening_balance)}</td>
+                          <td className="px-4 py-3 text-right font-extrabold text-primary-600 dark:text-primary-400">{formatRupiah(shift.total_sales || 0)}</td>
+                          <td className={`px-4 py-3 text-right font-black ${(shift.difference || 0) > 0 ? 'text-emerald-600' : (shift.difference || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {shift.difference ? formatRupiah(shift.difference) : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge label={shift.status} variant={shift.status === 'OPEN' ? 'green' : 'blue'} />
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex gap-1 justify-center">
+                              <button onClick={() => { setSelectedShift(shift); setModal('detail') }} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors" title="Lihat Detail Shift">
+                                <Eye size={15} />
+                              </button>
+                              {shift.status === 'CLOSED' && (
+                                <button onClick={() => setDeleteShift(shift)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 transition-colors" title="Hapus Data Shift">
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
           {/* Modal Buka Shift */}
           <Modal

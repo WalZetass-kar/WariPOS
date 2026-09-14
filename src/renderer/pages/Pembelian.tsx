@@ -367,7 +367,7 @@ export default function PembelianPage() {
             <select value={form.kd_suplier} onChange={e => setForm(prev => ({ ...prev, kd_suplier: e.target.value }))}
               className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
               <option value="">-- Pilih Supplier --</option>
-              {suppliers.filter(s => s.status === 'Aktif').map(s => (
+              {suppliers.filter(s => !s.status || s.status.toLowerCase() === 'aktif' || s.status.toLowerCase() === 'active').map(s => (
                 <option key={s.kd_suplier} value={s.kd_suplier}>{s.nama_suplier}</option>
               ))}
             </select>

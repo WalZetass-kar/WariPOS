@@ -88,7 +88,7 @@ export function useTransaksiState() {
   const barcodeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   const handleBayarRef = useRef<() => Promise<void>>(async () => {})
-  const addToCartRef = useRef<(p: Barang) => void>(() => {})
+  const addToCartRef = useRef<(p: Barang, playClickSound?: boolean) => boolean | void>(() => {})
   const holdCartRef = useRef<(cart: CartItem[], customer: Customer | null) => boolean>(() => false)
   const selectedCustomerRef = useRef<Customer | null>(null)
 

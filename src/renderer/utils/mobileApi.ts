@@ -126,6 +126,7 @@ interface MobileStore {
   counters: Record<string, number>
   accounts?: AnyRecord[]
   journalEntries?: AnyRecord[]
+  dailyNotes?: AnyRecord[]
 }
 
 const STORAGE_KEY = 'zetass-pos-android-store-v3'
@@ -2331,8 +2332,8 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
       // 5. Suppliers
       store.suppliers = [
-        { kd_suplier: 'SUP-001', nama_suplier: 'PT Kopi Nusantara Mandiri', no_telp_hp: '021-5551234', alamat_suplier: 'Jakarta', email: 'sales@kopinusantara.id', status: 'AKTIF', tgl_wkt_simpan: now(), tgl_wkt_edit: null },
-        { kd_suplier: 'SUP-002', nama_suplier: 'CV Dairy Fresh Sejahtera', no_telp_hp: '022-7778899', alamat_suplier: 'Bandung', email: 'order@dairyfresh.id', status: 'AKTIF', tgl_wkt_simpan: now(), tgl_wkt_edit: null },
+        { kd_suplier: 'SUP-001', nama_suplier: 'PT Kopi Nusantara Mandiri', no_telp_hp: '021-5551234', alamat_suplier: 'Jakarta', email: 'sales@kopinusantara.id', status: 'Aktif', tgl_wkt_simpan: now(), tgl_wkt_edit: null },
+        { kd_suplier: 'SUP-002', nama_suplier: 'CV Dairy Fresh Sejahtera', no_telp_hp: '022-7778899', alamat_suplier: 'Bandung', email: 'order@dairyfresh.id', status: 'Aktif', tgl_wkt_simpan: now(), tgl_wkt_edit: null },
       ]
 
       saveStore(store)
@@ -4380,6 +4381,75 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'notification:showBanner':
       return ok({ success: true } as T)
+
+    case 'dailyNotes:getAll': {
+      const filterDate = args[0] ? String(args[0]).trim() : ''
+      const search = args[1] ? String(args[1]).trim().toLowerCase() : ''
+      let list = [...(store.dailyNotes ?? [])]
+      if (filterDate) {
+        list = list.filter(item => String(item.tanggal ?? '').startsWith(filterDate))
+      }
+      if (search) {
+        list = list.filter(item =>
+          String(item.judul ?? '').toLowerCase().includes(search) ||
+          String(item.isi ?? '').toLowerCase().includes(search) ||
+          String(item.username ?? '').toLowerCase().includes(search) ||
+          String(item.jenis ?? '').toLowerCase().includes(search)
+        )
+      }
+      list.sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')) || Number(b.id || 0) - Number(a.id || 0))
+      return ok(list as T)
+    }
+
+    case 'dailyNotes:create': {
+      const data = (args[0] ?? {}) as AnyRecord
+      const judul = String(data.judul ?? '').trim()
+      const isi = String(data.isi ?? '').trim()
+      if (!judul) return fail('Judul catatan wajib diisi')
+      if (!isi) return fail('Isi catatan wajib diisi')
+
+      if (!store.dailyNotes) store.dailyNotes = []
+      const nextId = store.dailyNotes.length > 0 ? Math.max(...store.dailyNotes.map(n => Number(n.id || 0))) + 1 : 1
+      const newNote = {
+        id: nextId,
+        tanggal: String(data.tanggal || new Date().toISOString().split('T')[0]),
+        judul,
+        isi,
+        jenis: String(data.jenis || 'info'),
+        username: String(data.username || 'Kasir'),
+        created_at: now(),
+      }
+      store.dailyNotes.unshift(newNote)
+      saveStore(store)
+      return ok(newNote as T, 'Catatan berhasil disimpan')
+    }
+
+    case 'dailyNotes:update': {
+      const id = Number(args[0])
+      const data = (args[1] ?? {}) as AnyRecord
+      if (!store.dailyNotes) store.dailyNotes = []
+      const idx = store.dailyNotes.findIndex(n => Number(n.id) === id)
+      if (idx === -1) return fail('Catatan tidak ditemukan')
+
+      store.dailyNotes[idx] = {
+        ...store.dailyNotes[idx],
+        judul: data.judul !== undefined ? String(data.judul).trim() : store.dailyNotes[idx].judul,
+        isi: data.isi !== undefined ? String(data.isi).trim() : store.dailyNotes[idx].isi,
+        jenis: data.jenis !== undefined ? String(data.jenis) : store.dailyNotes[idx].jenis,
+        tanggal: data.tanggal !== undefined ? String(data.tanggal) : store.dailyNotes[idx].tanggal,
+        tgl_wkt_edit: now(),
+      }
+      saveStore(store)
+      return ok(store.dailyNotes[idx] as T, 'Catatan berhasil diperbarui')
+    }
+
+    case 'dailyNotes:delete': {
+      const id = Number(args[0])
+      if (!store.dailyNotes) store.dailyNotes = []
+      store.dailyNotes = store.dailyNotes.filter(n => Number(n.id) !== id)
+      saveStore(store)
+      return ok({ success: true } as T, 'Catatan berhasil dihapus')
+    }
 
     case 'user:getAll':
       return ok(store.users.map(publicUser) as T)

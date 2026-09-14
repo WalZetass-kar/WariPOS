@@ -1,6 +1,8 @@
 import kachingSoundUrl from '../assets/sounds/cashier-ka-ching.mp3'
 import productClickSoundUrl from '../assets/sounds/product-click.mp3'
 import dangerWarningSoundUrl from '../assets/sounds/danger-warning.mp3'
+import scanSuccessSoundUrl from '../assets/sounds/scan-success.mp3'
+import scanErrorSoundUrl from '../assets/sounds/scan-error.mp3'
 
 /**
  * Cashier sound player with support for authentic MP3 sound effects:
@@ -14,6 +16,8 @@ class CashierSoundPlayer {
   private kachingAudio: HTMLAudioElement | null = null
   private productClickAudio: HTMLAudioElement | null = null
   private dangerAudio: HTMLAudioElement | null = null
+  private scanSuccessAudio: HTMLAudioElement | null = null
+  private scanErrorAudio: HTMLAudioElement | null = null
 
   private getContext(): AudioContext | null {
     if (typeof window === 'undefined') return null
@@ -89,6 +93,46 @@ class CashierSoundPlayer {
     return this.dangerAudio
   }
 
+  private getScanSuccessAudio(): HTMLAudioElement | null {
+    if (typeof window === 'undefined' || typeof Audio === 'undefined') return null
+    if (!this.scanSuccessAudio) {
+      try {
+        const audio = new Audio(scanSuccessSoundUrl)
+        audio.preload = 'auto'
+        audio.onerror = () => {
+          if (audio.src !== window.location.origin + '/sounds/scan-success.mp3') {
+            audio.src = './sounds/scan-success.mp3'
+            audio.load()
+          }
+        }
+        this.scanSuccessAudio = audio
+      } catch {
+        return null
+      }
+    }
+    return this.scanSuccessAudio
+  }
+
+  private getScanErrorAudio(): HTMLAudioElement | null {
+    if (typeof window === 'undefined' || typeof Audio === 'undefined') return null
+    if (!this.scanErrorAudio) {
+      try {
+        const audio = new Audio(scanErrorSoundUrl)
+        audio.preload = 'auto'
+        audio.onerror = () => {
+          if (audio.src !== window.location.origin + '/sounds/scan-error.mp3') {
+            audio.src = './sounds/scan-error.mp3'
+            audio.load()
+          }
+        }
+        this.scanErrorAudio = audio
+      } catch {
+        return null
+      }
+    }
+    return this.scanErrorAudio
+  }
+
   /**
    * Tactile pen click sound on product click / add to cart in cashier.
    * Plays the custom pen-click MP3 sound effect with fallback to scan beep.
@@ -112,6 +156,56 @@ class CashierSoundPlayer {
       }
     }
     this.playScanBeep()
+  }
+
+  /**
+   * Sound for successful barcode / QR scan (authentic store scanner beep).
+   * Plays the custom store-scanner-beep MP3 sound effect with fallback to Web Audio scan beep.
+   */
+  playScanSuccess() {
+    if (typeof window !== 'undefined' && typeof Audio !== 'undefined') {
+      try {
+        const audio = this.getScanSuccessAudio()
+        if (audio) {
+          audio.currentTime = 0
+          const playPromise = audio.play()
+          if (playPromise !== undefined) {
+            playPromise.catch(() => {
+              this.playScanBeep()
+            })
+          }
+          return
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    this.playScanBeep()
+  }
+
+  /**
+   * Sound for failed barcode scan or serial number / product not found.
+   * Plays the custom short-beep-tone MP3 sound effect with fallback to error buzz.
+   */
+  playScanError() {
+    if (typeof window !== 'undefined' && typeof Audio !== 'undefined') {
+      try {
+        const audio = this.getScanErrorAudio()
+        if (audio) {
+          audio.currentTime = 0
+          const playPromise = audio.play()
+          if (playPromise !== undefined) {
+            playPromise.catch(() => {
+              this.playErrorBuzz()
+            })
+          }
+          return
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    this.playErrorBuzz()
   }
 
   /** Short crisp barcode beep (1400Hz) */
@@ -374,5 +468,13 @@ export function playTetTetAlarm() {
 
 export function playSuccessSound() {
   cashierSound.playSuccessChime()
+}
+
+export function playScanSuccessSound() {
+  cashierSound.playScanSuccess()
+}
+
+export function playScanErrorSound() {
+  cashierSound.playScanError()
 }
 

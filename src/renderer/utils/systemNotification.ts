@@ -50,6 +50,28 @@ export async function initNotificationChannels(): Promise<void> {
       lightColor: '#ef4444',
     })
 
+    await LocalNotifications.createChannel({
+      id: 'waripos_sale',
+      name: 'Transaksi Kasir POS',
+      description: 'Notifikasi saat transaksi kasir berhasil diproses',
+      importance: 4,
+      visibility: 1,
+      vibration: true,
+      lights: true,
+      lightColor: '#10b981',
+    })
+
+    await LocalNotifications.createChannel({
+      id: 'waripos_broadcast',
+      name: 'Pengumuman Developer',
+      description: 'Notifikasi pesan dan pengumuman dari developer sistem',
+      importance: 4,
+      visibility: 1,
+      vibration: true,
+      lights: true,
+      lightColor: '#3b82f6',
+    })
+
     channelsCreated = true
   } catch (error) {
     console.warn('[Notification] Failed to create notification channels:', error)
@@ -238,5 +260,80 @@ export async function setupNotificationClickListeners(
     listenersRegistered = true
   } catch (error) {
     console.warn('[Notification] Failed to setup notification click listener:', error)
+  }
+}
+
+/**
+ * Notifikasi banner saat transaksi kasir berhasil diselesaikan
+ */
+export async function showSaleSuccessNotification(
+  kdTransaksi: string,
+  total: number,
+  jenisBayar: string = 'TUNAI'
+): Promise<void> {
+  try {
+    const res = await api<{ notif_banner_system?: boolean; notif_transaksi_berhasil?: boolean }>('notifSettings:get')
+    if (res.success && res.data) {
+      if (res.data.notif_banner_system === false) return
+      if (res.data.notif_transaksi_berhasil === false) return
+    }
+
+    const { formatRupiah } = await import('./format')
+    await showSystemNotification({
+      id: Math.floor(Math.random() * 90000) + 1000,
+      title: 'Transaksi Kasir Berhasil',
+      body: `Nota: ${kdTransaksi} • Total: ${formatRupiah(total)} (${jenisBayar})`,
+      actionRoute: '/riwayat',
+    })
+  } catch (error) {
+    console.warn('[Notification] showSaleSuccessNotification failed:', error)
+  }
+}
+
+function hashString(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+/**
+ * Memeriksa pengumuman / pesan baru dari developer dan menampilkan banner notifikasi OS jika belum pernah dilihat
+ */
+export async function checkAndShowDeveloperAnnouncements(): Promise<void> {
+  try {
+    const res = await api<Array<{ id: string | number; title: string; message: string; type?: string; severity?: string; is_active?: boolean }>>('license:getAnnouncements')
+    if (!res.success || !Array.isArray(res.data) || res.data.length === 0) return
+
+    const seenKey = 'waripos_seen_announcements'
+    const seenRaw = localStorage.getItem(seenKey)
+    let seenIds: string[] = []
+    try {
+      seenIds = seenRaw ? JSON.parse(seenRaw) : []
+    } catch {}
+
+    const unseen = res.data.filter(item => {
+      const idStr = String(item.id)
+      return item.is_active !== false && !seenIds.includes(idStr)
+    })
+
+    for (const ann of unseen) {
+      const idStr = String(ann.id)
+      seenIds.push(idStr)
+      localStorage.setItem(seenKey, JSON.stringify(seenIds))
+
+      // Trigger OS banner notification
+      const numericId = 9000 + (hashString(idStr) % 900)
+      await showSystemNotification({
+        id: numericId,
+        title: ann.title || 'Pengumuman Developer',
+        body: ann.message,
+        actionRoute: '/lisensi',
+      })
+    }
+  } catch (error) {
+    console.warn('[Notification] Failed to check developer announcements:', error)
   }
 }

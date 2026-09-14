@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Eye, Printer, Bluetooth, FileImage, FileText } from 'lucide-react'
+import { Eye, Printer, Bluetooth, FileImage, FileText, LayoutGrid, List, Table, Search, Receipt } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
+import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
 import Struk from '../components/Struk'
@@ -21,6 +22,8 @@ export default function Riwayat() {
   const [data, setData] = useState<Penjualan[]>([])
   const [detail, setDetail] = useState<{ header: Penjualan; details: PenjualanDetailItem[] } | null>(null)
   const [loadingData, setLoadingData] = useState(true)
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'table'>('list')
+  const [search, setSearch] = useState('')
   const strukRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -168,16 +171,198 @@ export default function Riwayat() {
     },
   ]
 
+  const filteredData = useMemo(() => {
+    if (!search.trim()) return data
+    const query = search.toLowerCase()
+    return data.filter(item =>
+      String(item.kd_tansaksi_jual || '').toLowerCase().includes(query) ||
+      String(item.username_transaksi || '').toLowerCase().includes(query) ||
+      String(item.jenis_pembayaran || '').toLowerCase().includes(query)
+    )
+  }, [data, search])
+
   return (
     <div className="space-y-4">
       {loadingData ? (
         <SkeletonPage rows={6} />
       ) : (
         <>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} transaksi tercatat</p>
-          <Card>
-            <DataTable data={data} columns={columns} searchPlaceholder="Cari transaksi..." />
-          </Card>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white">Riwayat Transaksi</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{data.length} transaksi tercatat di sistem</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 sm:w-64">
+                <Input
+                  placeholder="Cari nota, kasir, atau metode..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  icon={<Search size={14} />}
+                />
+              </div>
+
+              {/* View Switcher: List, Grid, Table */}
+              <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan List"
+                >
+                  <List size={16} />
+                  <span className="hidden md:inline">List</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan Grid"
+                >
+                  <LayoutGrid size={16} />
+                  <span className="hidden md:inline">Grid</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    viewMode === 'table'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title="Tampilan Tabel"
+                >
+                  <Table size={16} />
+                  <span className="hidden md:inline">Tabel</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <div className="space-y-2">
+              {filteredData.length === 0 ? (
+                <div className="py-14 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <Receipt size={36} className="mx-auto mb-2 opacity-30 text-slate-400" />
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Tidak ada transaksi ditemukan</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Coba sesuaikan kata kunci pencarian Anda</p>
+                </div>
+              ) : (
+                filteredData.map(item => (
+                  <div
+                    key={item.kd_tansaksi_jual}
+                    onClick={() => openDetail(item.kd_tansaksi_jual)}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all flex items-center justify-between gap-3 cursor-pointer select-none active:scale-[0.99]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0 border border-primary-200/50 dark:border-primary-800/40">
+                        <Receipt size={20} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                            {item.kd_tansaksi_jual}
+                          </p>
+                          <Badge
+                            label={item.jenis_pembayaran || 'TUNAI'}
+                            variant={item.jenis_pembayaran === 'TUNAI' ? 'green' : item.jenis_pembayaran === 'QRIS' ? 'blue' : 'yellow'}
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                          <span>{formatDateTime(item.tgl_wkt_transaksi)}</span>
+                          <span>·</span>
+                          <span>Kasir: <strong className="text-slate-700 dark:text-slate-300">{item.username_transaksi || 'Kasir'}</strong></span>
+                          <span>·</span>
+                          <span>{item.total_qty || 1} Item</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right flex items-center gap-3">
+                      <div>
+                        <p className="text-[11px] text-slate-400 font-medium">Total</p>
+                        <p className="font-extrabold text-sm sm:text-base text-primary-600 dark:text-primary-400">
+                          {formatRupiah(item.sub_total)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation()
+                          openDetail(item.kd_tansaksi_jual)
+                        }}
+                        className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-950/40 text-slate-400 hover:text-primary-600 transition-colors"
+                        title="Lihat Detail Transaksi"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Grid View */}
+          {viewMode === 'grid' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredData.length === 0 ? (
+                <div className="col-span-full py-14 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <Receipt size={36} className="mx-auto mb-2 opacity-30 text-slate-400" />
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Tidak ada transaksi ditemukan</p>
+                </div>
+              ) : (
+                filteredData.map(item => (
+                  <div
+                    key={item.kd_tansaksi_jual}
+                    onClick={() => openDetail(item.kd_tansaksi_jual)}
+                    className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer flex flex-col justify-between gap-3 active:scale-[0.99]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-mono font-bold text-sm text-slate-900 dark:text-white">
+                          {item.kd_tansaksi_jual}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">{formatDateTime(item.tgl_wkt_transaksi)}</p>
+                      </div>
+                      <Badge
+                        label={item.jenis_pembayaran || 'TUNAI'}
+                        variant={item.jenis_pembayaran === 'TUNAI' ? 'green' : item.jenis_pembayaran === 'QRIS' ? 'blue' : 'yellow'}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 text-xs">
+                      <div>
+                        <span className="text-slate-400 block text-[11px]">Kasir</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">{item.username_transaksi || 'Kasir'}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400 block text-[11px]">Total ({item.total_qty || 1} Item)</span>
+                        <span className="font-extrabold text-base text-primary-600 dark:text-primary-400">{formatRupiah(item.sub_total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Table View */}
+          {viewMode === 'table' && (
+            <Card>
+              <DataTable data={filteredData} columns={columns} searchPlaceholder="Cari transaksi..." />
+            </Card>
+          )}
         </>
       )}
 

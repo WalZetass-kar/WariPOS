@@ -18,6 +18,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { useAppStore } from '../stores'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import {
+  showSystemNotification,
+  scheduleDailyMorningReminder,
+  requestNotificationPermission,
+} from '../utils/systemNotification'
 import { secureStorage } from '../utils/secureStorage'
 import { playDangerSound, playWarningSound } from '../utils/sound'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
@@ -1566,20 +1571,175 @@ function PerangkatSettings({ identitas, f, loading, saveIdentitas }: any) {
 }
 
 function NotifikasiSettings({ identitas, f, loading, saveIdentitas }: any) {
+  const toast = useToast()
+  const [notifConfig, setNotifConfig] = useState({
+    notif_banner_system: true,
+    notif_pagi: true,
+    jam_notif_pagi: '07:00',
+    stok_menipis: true,
+    stok_habis: true,
+    min_stok: 5,
+    notif_transaksi_berhasil: true,
+  })
+  const [savingNotif, setSavingNotif] = useState(false)
+  const [testingNotif, setTestingNotif] = useState(false)
+
+  useEffect(() => {
+    api<any>('notifSettings:get').then(r => {
+      if (r.success && r.data) {
+        setNotifConfig(prev => ({
+          ...prev,
+          ...r.data,
+          min_stok: identitas.min_stok ?? r.data.min_stok ?? 5,
+          stok_menipis: identitas.notif_stok === 1,
+        }))
+      }
+    })
+  }, [identitas.min_stok, identitas.notif_stok])
+
+  const handleTestBanner = async () => {
+    setTestingNotif(true)
+    try {
+      await requestNotificationPermission()
+      await showSystemNotification({
+        id: 9991,
+        title: 'WariPOS - Notifikasi Berhasil',
+        body: 'Notifikasi banner sistem OS telah aktif dan siap digunakan!',
+        actionRoute: '/pengaturan',
+      })
+      toast('Notifikasi banner uji coba berhasil dikirim', 'success')
+    } catch (err: any) {
+      toast('Gagal memicu notifikasi banner: ' + (err.message || ''), 'error')
+    } finally {
+      setTestingNotif(false)
+    }
+  }
+
+  const handleSaveAll = async () => {
+    setSavingNotif(true)
+    try {
+      // 1. Save to notifSettings table
+      await api('notifSettings:save', notifConfig)
+
+      // 2. Schedule or cancel daily morning reminder
+      await scheduleDailyMorningReminder(
+        notifConfig.jam_notif_pagi,
+        Boolean(notifConfig.notif_banner_system && notifConfig.notif_pagi)
+      )
+
+      // 3. Save to identitas as well (sync min_stok & notif_stok)
+      f('notif_stok', notifConfig.stok_menipis ? 1 : 0)
+      f('min_stok', notifConfig.min_stok)
+      await saveIdentitas()
+
+      toast('Pengaturan notifikasi berhasil disimpan', 'success')
+    } catch (err: any) {
+      toast('Gagal menyimpan notifikasi: ' + (err.message || ''), 'error')
+    } finally {
+      setSavingNotif(false)
+    }
+  }
+
   return (
-    <div className="space-y-3">
-      <SectionTitle>Notifikasi Stok</SectionTitle>
+    <div className="space-y-4">
+      {/* Banner Sistem OS */}
+      <SectionTitle>Notifikasi Banner Sistem OS</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Notifikasi Banner Sistem (Android & Desktop)</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Tampilkan banner notifikasi resmi di bilah status HP atau notification center Desktop</p>
+        </div>
+        <Toggle
+          checked={Boolean(notifConfig.notif_banner_system)}
+          onChange={v => setNotifConfig(prev => ({ ...prev, notif_banner_system: v }))}
+        />
+      </SettingRow>
+
+      {/* Pengingat Pagi */}
+      <SectionTitle>Pengingat Harian Pagi</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Pengingat Buka Kasir Setiap Pagi</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Alarm notifikasi harian untuk persiapan toko & buka kasir</p>
+        </div>
+        <Toggle
+          checked={Boolean(notifConfig.notif_pagi)}
+          onChange={v => setNotifConfig(prev => ({ ...prev, notif_pagi: v }))}
+        />
+      </SettingRow>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+        <div>
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+            Jam Notifikasi Pagi (Alarm)
+          </label>
+          <input
+            type="time"
+            value={notifConfig.jam_notif_pagi || '07:00'}
+            onChange={e => setNotifConfig(prev => ({ ...prev, jam_notif_pagi: e.target.value }))}
+            disabled={!notifConfig.notif_pagi}
+            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+          />
+          <p className="text-[11px] text-slate-400 mt-1">Notifikasi akan muncul otomatis setiap hari pada jam ini.</p>
+        </div>
+
+        <div className="pt-2">
+          <Button
+            type="button"
+            variant="secondary"
+            loading={testingNotif}
+            onClick={handleTestBanner}
+            className="w-full text-xs font-bold"
+          >
+            Tes Banner Notifikasi Sekarang
+          </Button>
+        </div>
+      </div>
+
+      {/* Transaksi Selesai */}
+      <SectionTitle>Notifikasi Transaksi Penjualan</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Banner Transaksi Berhasil</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Tampilkan notifikasi banner ringkasan saat kasir berhasil menyelesaikan penjualan</p>
+        </div>
+        <Toggle
+          checked={Boolean(notifConfig.notif_transaksi_berhasil)}
+          onChange={v => setNotifConfig(prev => ({ ...prev, notif_transaksi_berhasil: v }))}
+        />
+      </SettingRow>
+
+      {/* Notifikasi Stok */}
+      <SectionTitle>Notifikasi Stok Produk</SectionTitle>
       <SettingRow>
         <div>
           <p className="text-sm font-semibold text-slate-900 dark:text-white">Notifikasi Stok Menipis</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Tampilkan notifikasi saat stok produk menipis</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Tampilkan notifikasi saat stok produk berada di batas minimum</p>
         </div>
-        <Toggle checked={identitas.notif_stok === 1} onChange={v => f('notif_stok', v ? 1 : 0)} />
+        <Toggle
+          checked={Boolean(notifConfig.stok_menipis)}
+          onChange={v => {
+            setNotifConfig(prev => ({ ...prev, stok_menipis: v }))
+            f('notif_stok', v ? 1 : 0)
+          }}
+        />
       </SettingRow>
-      <Input label="Batas Stok Minimum" type="number" value={identitas.min_stok ?? 5} onChange={e => f('min_stok', parseInt(e.target.value, 10) || 5)} placeholder="5" />
+      <Input
+        label="Batas Stok Minimum"
+        type="number"
+        value={notifConfig.min_stok}
+        onChange={e => {
+          const val = parseInt(e.target.value, 10) || 5
+          setNotifConfig(prev => ({ ...prev, min_stok: val }))
+          f('min_stok', val)
+        }}
+        placeholder="5"
+      />
       <p className="text-xs text-slate-400">Notifikasi muncul jika stok produk kurang dari atau sama dengan nilai ini.</p>
 
-      <Button loading={loading} onClick={saveIdentitas} className="w-full">Simpan Pengaturan Notifikasi</Button>
+      <Button loading={savingNotif || loading} onClick={handleSaveAll} className="w-full font-bold">
+        Simpan Pengaturan Notifikasi
+      </Button>
     </div>
   )
 }

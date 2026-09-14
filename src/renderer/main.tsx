@@ -12,7 +12,13 @@ import SplashScreen from './components/SplashScreen'
 import { validateProductionConfig } from './utils/productionConfig'
 import { registerDeepLinkHandlers } from './utils/deepLinks'
 import { registerMobileBackButton } from './utils/mobileBackButton'
-import { setupNotificationClickListeners, initNotificationChannels, scheduleDailyMorningReminder } from './utils/systemNotification'
+import {
+  setupNotificationClickListeners,
+  initNotificationChannels,
+  scheduleDailyMorningReminder,
+  checkAndShowDeveloperAnnouncements,
+  showSystemNotification,
+} from './utils/systemNotification'
 import { api } from './utils/api'
 import { useLocation } from 'react-router-dom'
 import AppRoutes from './routes'
@@ -55,6 +61,35 @@ function MobileBridge() {
         }
       }
     }).catch(() => {})
+
+    // Check for developer push announcements on startup
+    void checkAndShowDeveloperAnnouncements()
+
+    // Periodic check for new developer push messages every 5 minutes
+    const devAnnounceTimer = setInterval(() => {
+      void checkAndShowDeveloperAnnouncements()
+    }, 5 * 60 * 1000)
+
+    // Listen for realtime push broadcast messages across active windows/tabs
+    let devBc: BroadcastChannel | null = null
+    try {
+      devBc = new BroadcastChannel('waripos_developer_broadcast')
+      devBc.onmessage = (evt) => {
+        if (evt.data?.title && evt.data?.message) {
+          void showSystemNotification({
+            id: 9555,
+            title: evt.data.title,
+            body: evt.data.message,
+            actionRoute: '/lisensi',
+          })
+        }
+      }
+    } catch {}
+
+    return () => {
+      clearInterval(devAnnounceTimer)
+      if (devBc) devBc.close()
+    }
   }, [navigate])
 
   useEffect(() => registerDeepLinkHandlers(route => navigate(route)), [navigate])

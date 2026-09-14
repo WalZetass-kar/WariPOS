@@ -375,51 +375,51 @@ export default function PaymentInvoice() {
       </div>
 
       {/* ─── Current Active Subscription Card (Flat Solid Elegance) ─── */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-6 text-white shadow-md sm:p-7 dark:bg-slate-950 dark:border-slate-800">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-6 text-slate-900 dark:text-white shadow-sm sm:p-7">
         <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
           {/* Plan Info */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Paket Aktif Saat Ini
               </span>
               {isLifetime ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-black text-amber-300 border border-amber-500/40">
-                  <Star className="h-3 w-3 fill-amber-300" /> SEUMUR HIDUP
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-black text-amber-600 dark:text-amber-300 border border-amber-500/40">
+                  <Star className="h-3 w-3 fill-amber-500 dark:fill-amber-300" /> SEUMUR HIDUP
                 </span>
               ) : isPaidActive ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-bold text-emerald-300 border border-emerald-500/30">
-                  <Zap className="h-3 w-3 fill-emerald-300" /> AKTIF
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-bold text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                  <Zap className="h-3 w-3 fill-emerald-600 dark:fill-emerald-300" /> AKTIF
                 </span>
               ) : isDemo ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-0.5 text-xs font-bold text-orange-300 border border-orange-500/30">
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-0.5 text-xs font-bold text-orange-600 dark:text-orange-300 border border-orange-500/30">
                   <AlertTriangle className="h-3 w-3" /> DEMO
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-3 py-0.5 text-xs font-bold text-rose-300 border border-rose-500/30">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-3 py-0.5 text-xs font-bold text-rose-600 dark:text-rose-300 border border-rose-500/30">
                   <XCircle className="h-3 w-3" /> EXPIRED
                 </span>
               )}
             </div>
 
-            <h2 className="text-2xl font-black text-white sm:text-3xl tracking-tight">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl tracking-tight">
               {userPlanName}
             </h2>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
               <div className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-red-400" />
-                <span>Masa Berlaku: <strong className="text-white">{expiryDisplay}</strong></span>
+                <Clock className="h-4 w-4 text-primary-500" />
+                <span>Masa Berlaku: <strong className="text-slate-900 dark:text-white">{expiryDisplay}</strong></span>
               </div>
               {user?.access_days_remaining !== null && user?.access_days_remaining !== undefined && !isLifetime && (
                 <div className="flex items-center gap-1.5">
-                  <Award className="h-4 w-4 text-amber-400" />
-                  <span>Sisa: <strong className="text-amber-300">{Math.max(0, user.access_days_remaining)} Hari</strong></span>
+                  <Award className="h-4 w-4 text-amber-500" />
+                  <span>Sisa: <strong className="text-amber-600 dark:text-amber-300">{Math.max(0, user.access_days_remaining)} Hari</strong></span>
                 </div>
               )}
               {user?.email && (
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <span>Akun: <strong className="text-slate-200">{user.email}</strong></span>
+                <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                  <span>Akun: <strong className="text-slate-800 dark:text-slate-200">{user.email}</strong></span>
                 </div>
               )}
             </div>
@@ -428,18 +428,18 @@ export default function PaymentInvoice() {
           {/* Demo usage bar or quick upgrade button */}
           <div className="flex flex-col items-start gap-3 lg:items-end">
             {isDemo && (
-              <div className="w-full rounded-2xl bg-slate-800/80 p-4 border border-slate-700/60 sm:w-72">
+              <div className="w-full rounded-2xl bg-slate-50 dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800 sm:w-72">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-300">Transaksi Demo</span>
-                  <span className="text-amber-400 font-bold">{demoState.usage_count} / {demoState.usage_limit}</span>
+                  <span className="text-slate-600 dark:text-slate-300">Transaksi Demo</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-bold">{demoState.usage_count} / {demoState.usage_limit}</span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-900">
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                   <div
-                    className="h-full rounded-full bg-red-600"
+                    className="h-full rounded-full bg-primary-600"
                     style={{ width: `${Math.min(100, Math.round((demoState.usage_count / Math.max(1, demoState.usage_limit)) * 100))}%` }}
                   />
                 </div>
-                <p className="mt-1.5 text-[11px] text-slate-400">
+                <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                   Sisa {remainingUsage} transaksi sebelum terkunci.
                 </p>
               </div>
@@ -451,7 +451,7 @@ export default function PaymentInvoice() {
                 const el = document.getElementById('available-plans-section')
                 if (el) el.scrollIntoView({ behavior: 'smooth' })
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-red-600/20 transition hover:bg-red-700"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-primary-600/20 transition hover:bg-primary-700"
             >
               <Rocket className="h-4 w-4" />
               {isPaidActive ? 'Perpanjang / Ganti Paket' : 'Beli & Upgrade Paket'}
@@ -460,23 +460,23 @@ export default function PaymentInvoice() {
         </div>
 
         {/* ─── Plan Limits & Quotas Grid ────────────────────────────── */}
-        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-800 pt-5 sm:grid-cols-4">
-          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-              <Laptop className="h-4 w-4 text-slate-300" />
+        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-200 dark:border-slate-800 pt-5 sm:grid-cols-4">
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/60 p-3.5 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <Laptop className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               Batas Perangkat
             </div>
-            <p className="mt-1.5 text-base font-extrabold text-white">
+            <p className="mt-1.5 text-base font-extrabold text-slate-900 dark:text-white">
               {!user?.max_devices || user.max_devices === -1 ? 'Unlimited' : `${user.max_devices} Device`}
             </p>
           </div>
 
-          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-              <CreditCard className="h-4 w-4 text-emerald-400" />
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/60 p-3.5 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <CreditCard className="h-4 w-4 text-emerald-500" />
               Transaksi / Hari
             </div>
-            <p className="mt-1.5 text-base font-extrabold text-white">
+            <p className="mt-1.5 text-base font-extrabold text-slate-900 dark:text-white">
               {!user?.max_transactions_per_day || user.max_transactions_per_day === -1
                 ? 'Tanpa Batas'
                 : isDemo
@@ -485,30 +485,30 @@ export default function PaymentInvoice() {
             </p>
           </div>
 
-          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-              <Package className="h-4 w-4 text-blue-400" />
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/60 p-3.5 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <Package className="h-4 w-4 text-blue-500" />
               Batas Produk
             </div>
-            <p className="mt-1.5 text-base font-extrabold text-white">
+            <p className="mt-1.5 text-base font-extrabold text-slate-900 dark:text-white">
               {!user?.max_products || user.max_products === -1 ? 'Tanpa Batas' : `${user.max_products} Produk`}
             </p>
           </div>
 
-          <div className="rounded-2xl bg-slate-800/60 p-3.5 border border-slate-750">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-              <Users className="h-4 w-4 text-amber-400" />
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/60 p-3.5 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <Users className="h-4 w-4 text-amber-500" />
               Multi-User
             </div>
-            <p className="mt-1.5 text-base font-extrabold text-white">
+            <p className="mt-1.5 text-base font-extrabold text-slate-900 dark:text-white">
               {!user?.max_users || user.max_users === -1 ? 'Unlimited' : `${user.max_users} Akun`}
             </p>
           </div>
         </div>
 
         {/* ─── Unlocked Features Grid ───────────────────────────────── */}
-        <div className="mt-6 border-t border-slate-800 pt-5">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+        <div className="mt-6 border-t border-slate-200 dark:border-slate-800 pt-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Daftar Fitur Operasional Paket Anda
           </p>
           <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -519,8 +519,8 @@ export default function PaymentInvoice() {
                   key={feat.key}
                   className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs transition ${
                     isUnlocked
-                      ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50'
-                      : 'bg-slate-800/30 text-slate-500 border border-slate-800/40 opacity-60'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50'
+                      : 'bg-slate-100/60 text-slate-400 border border-slate-200 dark:bg-slate-800/30 dark:text-slate-500 dark:border-slate-800/40 opacity-60'
                   }`}
                 >
                   {isUnlocked ? (

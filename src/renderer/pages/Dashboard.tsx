@@ -424,7 +424,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => navigate('/transaksi')}
-              className="px-3 sm:px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              className="px-3 sm:px-3.5 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-primary-500/20 active:scale-95 transition-all"
             >
               <ShoppingCart size={14} />
               <span>Kasir POS</span>

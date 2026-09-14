@@ -49,7 +49,7 @@ import {
 import { useTransaksiState } from '../components/transaksi/useTransaksiState'
 import { SalePayload, QrisStatus, QrisPayment } from '../components/transaksi/types'
 import { generateReceiptPdf, generateReceiptXlsx, saveFileToDevice } from '../utils/receiptExporter'
-import { showStockBannerAlert } from '../utils/systemNotification'
+import { showStockBannerAlert, showSaleSuccessNotification } from '../utils/systemNotification'
 import { useAppStore } from '../stores'
 import { getSmartCashAmounts } from '../components/QuickAmountButtons'
 
@@ -173,12 +173,17 @@ export default function Transaksi() {
           state.barcodeBuffer.current = ''
           if (state.barcodeTimeoutRef.current) clearTimeout(state.barcodeTimeoutRef.current)
 
-          const product = state.products.find(p => p.barcode === barcode)
+          const product = state.products.find(p => p.barcode === barcode || p.kd_barang === barcode)
           if (product) {
-            state.addToCartRef.current(product)
+            const added = state.addToCartRef.current(product)
+            if (added !== false) {
+              cashierSound.playScanSuccess()
+            } else {
+              cashierSound.playScanError()
+            }
           } else {
-            cashierSound.playErrorBuzz()
-            toast(`Barcode "${barcode}" tidak ditemukan`, 'error')
+            cashierSound.playScanError()
+            toast(`Barcode / No Seri "${barcode}" tidak ditemukan`, 'error')
           }
         }
         return
@@ -245,48 +250,52 @@ export default function Transaksi() {
     return true
   }), [state.products, state.search, state.selectedCategory])
 
-  const addToCart = (p: Barang) => {
+  const addToCart = (p: Barang, playClickSound = true): boolean => {
     const maxStok = p.stok ?? 0
     if (maxStok <= 0) {
-      cashierSound.playErrorBuzz()
+      cashierSound.playScanError()
       toast('Stok produk habis', 'error')
-      return
+      return false
     }
+    let canAdd = true
     state.setCart(prev => {
       const existing = prev.find(c => c.kd_barang === p.kd_barang)
       if (existing) {
         if (existing.qty >= maxStok) {
-          cashierSound.playErrorBuzz()
+          canAdd = false
+          cashierSound.playScanError()
           toast(`Stok ${p.nama_barang} tidak mencukupi (tersisa ${maxStok})`, 'error')
           return prev
         }
-        cashierSound.playProductClick()
+        if (playClickSound) cashierSound.playProductClick()
         return prev.map(c => c.kd_barang === p.kd_barang ? { ...c, qty: c.qty + 1 } : c)
       }
-      cashierSound.playProductClick()
+      if (playClickSound) cashierSound.playProductClick()
       return [...prev, { kd_barang: p.kd_barang, nama_barang: p.nama_barang ?? '', harga_jual: p.harga_barang ?? 0, harga_modal: p.harga_modal ?? 0, qty: 1, disc: p.potongan ?? 0 }]
     })
+    if (!canAdd) return false
     toast(`${p.nama_barang} ditambahkan ke keranjang`, 'success')
     state.setSearch('')
     if (!Capacitor.isNativePlatform()) {
       state.searchRef.current?.focus()
     }
+    return true
   }
 
-  const handleCameraBarcode = useCallback((barcode: string) => {
+  const handleCameraBarcode = useCallback((barcode: string): boolean => {
     const now = Date.now()
-    if (now - lastScanTimestampRef.current < 600) return
+    if (now - lastScanTimestampRef.current < 600) return false
     lastScanTimestampRef.current = now
 
     const trimmed = barcode.trim()
     const product = state.products.find(p => p.barcode === trimmed || p.kd_barang === trimmed)
     if (!product) {
-      cashierSound.playErrorBuzz()
-      toast(`Barcode "${trimmed}" tidak ditemukan`, 'error')
-      return
+      toast(`Barcode / No Seri "${trimmed}" tidak ditemukan`, 'error')
+      return false
     }
 
-    addToCart(product)
+    const added = addToCart(product, false)
+    return added !== false
   }, [state.products, toast, addToCart])
 
   const openCameraScanner = () => {
@@ -356,7 +365,19 @@ export default function Transaksi() {
   }
 
   const handleSearchKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && filtered.length > 0) addToCart(filtered[0])
+    if (e.key === 'Enter') {
+      if (filtered.length > 0) {
+        const added = addToCart(filtered[0], false)
+        if (added !== false) {
+          cashierSound.playScanSuccess()
+        } else {
+          cashierSound.playScanError()
+        }
+      } else if (state.search.trim()) {
+        cashierSound.playScanError()
+        toast(`Barang / No Seri "${state.search}" tidak ditemukan`, 'error')
+      }
+    }
   }
 
   const printReceipt = useReactToPrint({
@@ -554,6 +575,13 @@ Terima kasih atas kunjungan Anda!`
       if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
         toast(`Sisa ${remainingUsage - 1} transaksi demo`, 'error')
       }
+
+      // Notifikasi banner transaksi kasir berhasil
+      void showSaleSuccessNotification(
+        r.data?.kd_transaksi || state.lastKd || 'TRX',
+        totalBayar,
+        state.jenisBayar
+      )
 
       // Notifikasi banner jika ada produk yang stoknya habis atau menipis
       try {

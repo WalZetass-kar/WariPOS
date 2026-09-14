@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Megaphone, Plus, Trash2 } from 'lucide-react'
+import { Megaphone, Plus, Trash2, Send, Bell } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
 import { SkeletonPage } from '../../components/Skeleton'
+import { showSystemNotification } from '../../utils/systemNotification'
 
 interface Announcement {
   id: string
@@ -51,7 +52,21 @@ export default function LicenseAnnouncementsPage() {
     const r = await api('license:createAnnouncement', form)
     setSaving(false)
     if (r.success) {
-      toast('Pengumuman dikirim', 'success')
+      toast('Push notifikasi banner berhasil dikirim ke seluruh user!', 'success')
+      // Realtime cross-window broadcast
+      try {
+        const bc = new BroadcastChannel('waripos_developer_broadcast')
+        bc.postMessage({ title: form.title, message: form.message, severity: form.severity })
+      } catch {}
+
+      // Trigger preview notification locally
+      void showSystemNotification({
+        id: 9555,
+        title: form.title,
+        body: form.message,
+        actionRoute: '/lisensi',
+      })
+
       setForm(empty)
       await load()
     } else toast(r.message || 'Gagal mengirim pengumuman', 'error')
@@ -71,12 +86,15 @@ export default function LicenseAnnouncementsPage() {
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
       <form onSubmit={submit} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center gap-2">
-          <Megaphone className="h-4 w-4 text-primary-600" />
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Broadcast Center</h3>
+          <Megaphone className="h-5 w-5 text-primary-600" />
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Push Notifikasi Banner Developer</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Kirim notifikasi banner kustom langsung ke seluruh perangkat pengguna</p>
+          </div>
         </div>
         <div className="mt-4 space-y-3">
-          <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className={input} placeholder="Judul" />
-          <textarea required value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} className={`${input} min-h-28`} placeholder="Pesan" />
+          <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className={input} placeholder="Judul Notifikasi Banner" />
+          <textarea required value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} className={`${input} min-h-28`} placeholder="Isi Pesan Notifikasi Banner..." />
           <div className="grid grid-cols-2 gap-3">
             <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className={input}>
               {['announcement', 'maintenance', 'promo', 'warning', 'update'].map(v => <option key={v} value={v}>{v}</option>)}
@@ -98,8 +116,8 @@ export default function LicenseAnnouncementsPage() {
               </select>
             )}
           </div>
-          <button disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50">
-            <Plus className="h-4 w-4" />{saving ? 'Mengirim...' : 'Kirim Pengumuman'}
+          <button disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors">
+            <Send className="h-4 w-4" />{saving ? 'Mengirim Push Banner...' : 'Kirim Push Notifikasi Banner Sekarang'}
           </button>
         </div>
       </form>
