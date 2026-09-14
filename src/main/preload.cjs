@@ -345,6 +345,7 @@ const ALLOWED_CHANNELS = new Set([
   'pettyCash:delete',
   'notifSettings:get',
   'notifSettings:save',
+  'notification:showBanner',
   'priceList:get',
   'cashFlow:getAll',
   'taxReport:getSummary',

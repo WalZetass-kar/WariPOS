@@ -96,6 +96,7 @@ interface MobileStore {
   kasDrawers: KasDrawer[]
   kasTransactions: KasTransaksi[]
   notifications: AnyRecord[]
+  notifSettings?: AnyRecord
   activityLogs: AnyRecord[]
   backups: AnyRecord[]
   paymentMethods: AnyRecord[]
@@ -4350,6 +4351,35 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       store.notifications = []
       saveStore(store)
       return ok(undefined as T)
+
+    case 'notifSettings:get': {
+      const defaultNotif = {
+        stok_menipis: true,
+        stok_habis: true,
+        hutang_jatuh_tempo: true,
+        lisensi_expire: true,
+        target_penjualan: false,
+        min_stok: 5,
+        notif_wa: false,
+        wa_number: '',
+        notif_in_app: true,
+        notif_banner_system: true,
+        notif_pagi: true,
+        jam_notif_pagi: '07:00',
+        quiet_start: '22:00',
+        quiet_end: '06:00',
+      }
+      return ok({ ...defaultNotif, ...(store.notifSettings ?? {}) } as T)
+    }
+
+    case 'notifSettings:save': {
+      store.notifSettings = { ...(store.notifSettings ?? {}), ...(args[0] as AnyRecord) }
+      saveStore(store)
+      return ok(store.notifSettings as T, 'Pengaturan notifikasi disimpan')
+    }
+
+    case 'notification:showBanner':
+      return ok({ success: true } as T)
 
     case 'user:getAll':
       return ok(store.users.map(publicUser) as T)

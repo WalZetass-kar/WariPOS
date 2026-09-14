@@ -1,5 +1,5 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
-import { app, dialog, BrowserWindow } from 'electron'
+import { app, dialog, BrowserWindow, Notification } from 'electron'
 import path from 'path'
 import { BarangController } from '../backend/controllers/BarangController.js'
 import { KategoriController } from '../backend/controllers/KategoriController.js'
@@ -855,6 +855,35 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   handle(ipcMain, 'notifSettings:get', () => FeatureHubController.getNotificationSettings())
   handle(ipcMain, 'notifSettings:save', (data: any) => FeatureHubController.saveNotificationSettings(data))
+  handle(ipcMain, 'notification:showBanner', (_event, payload: { title: string; body: string; silent?: boolean }) => {
+    try {
+      if (!Notification.isSupported()) {
+        return { success: false, message: 'Notifikasi tidak didukung pada sistem operasi ini' }
+      }
+      const isDevMode = process.env.NODE_ENV === 'development' || !app.isPackaged
+      const iconPath = isDevMode
+        ? path.join(process.cwd(), 'build', 'icon.png')
+        : path.join(process.resourcesPath, 'app-icon.png')
+      const notification = new Notification({
+        title: payload?.title || 'WariPOS',
+        body: payload?.body || '',
+        icon: path.resolve(iconPath),
+        silent: !!payload?.silent,
+      })
+      notification.on('click', () => {
+        const windows = BrowserWindow.getAllWindows()
+        if (windows.length > 0) {
+          const win = windows[0]
+          if (win.isMinimized()) win.restore()
+          win.focus()
+        }
+      })
+      notification.show()
+      return { success: true }
+    } catch (error) {
+      return { success: false, message: (error as Error).message }
+    }
+  })
 
   handle(ipcMain, 'priceList:get', (kdKategori?: number, search?: string) => FeatureHubController.getPriceList(kdKategori, search))
   handle(ipcMain, 'cashFlow:getAll', (startDate?: string, endDate?: string) => FeatureHubController.getCashFlow(startDate, endDate))

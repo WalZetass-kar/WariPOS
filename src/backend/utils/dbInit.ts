@@ -214,12 +214,32 @@ export function initDatabase() {
         notif_wa INTEGER DEFAULT 0,
         wa_number TEXT DEFAULT '',
         notif_in_app INTEGER DEFAULT 1,
+        notif_banner_system INTEGER DEFAULT 1,
+        notif_pagi INTEGER DEFAULT 1,
+        jam_notif_pagi TEXT DEFAULT '07:00',
         quiet_start TEXT DEFAULT '22:00',
         quiet_end TEXT DEFAULT '06:00',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `).run()
+
+    // Auto-migration kolom notifikasi untuk database yang sudah ada
+    try {
+      sqlite.prepare('ALTER TABLE mediasoft_notification_settings ADD COLUMN notif_banner_system INTEGER DEFAULT 1').run()
+    } catch {
+      // Kolom sudah ada
+    }
+    try {
+      sqlite.prepare('ALTER TABLE mediasoft_notification_settings ADD COLUMN notif_pagi INTEGER DEFAULT 1').run()
+    } catch {
+      // Kolom sudah ada
+    }
+    try {
+      sqlite.prepare("ALTER TABLE mediasoft_notification_settings ADD COLUMN jam_notif_pagi TEXT DEFAULT '07:00'").run()
+    } catch {
+      // Kolom sudah ada
+    }
 
     sqlite.prepare(`
       CREATE TABLE IF NOT EXISTS mediasoft_stock_history (
@@ -264,8 +284,9 @@ export function initDatabase() {
         INSERT INTO mediasoft_notification_settings (
           id, stok_menipis, stok_habis, hutang_jatuh_tempo, lisensi_expire,
           target_penjualan, min_stok, notif_wa, wa_number, notif_in_app,
+          notif_banner_system, notif_pagi, jam_notif_pagi,
           quiet_start, quiet_end
-        ) VALUES (1, 1, 1, 1, 1, 0, 5, 0, '', 1, '22:00', '06:00')
+        ) VALUES (1, 1, 1, 1, 1, 0, 5, 0, '', 1, 1, 1, '07:00', '22:00', '06:00')
       `).run()
       console.log(' Default notification settings created')
     }

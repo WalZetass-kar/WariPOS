@@ -24,8 +24,11 @@
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
 
-    <!-- Notifikasi untuk Android 13+ -->
+    <!-- Notifikasi untuk Android 13+ dan Alarm Terjadwal Pagi -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Backup, restore, dan export -->
     <!-- Android 13+ media permissions -->

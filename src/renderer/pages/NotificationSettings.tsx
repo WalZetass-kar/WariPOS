@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react'
-import { Bell, Database, AlertTriangle, Clock, CreditCard, Package, Shield, MessageCircle, Save } from 'lucide-react'
+import { Bell, Database, AlertTriangle, Clock, CreditCard, Package, Shield, MessageCircle, Save, Smartphone, Send } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import { Skeleton, SettingsCardSkeleton } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import {
+  showSystemNotification,
+  scheduleDailyMorningReminder,
+  requestNotificationPermission,
+} from '../utils/systemNotification'
 
 interface NotifSettings {
   stok_menipis: boolean
@@ -17,6 +22,9 @@ interface NotifSettings {
   notif_wa: boolean
   wa_number: string
   notif_in_app: boolean
+  notif_banner_system: boolean
+  notif_pagi: boolean
+  jam_notif_pagi: string
   quiet_start: string
   quiet_end: string
 }
@@ -31,6 +39,9 @@ const DEFAULT: NotifSettings = {
   notif_wa: false,
   wa_number: '',
   notif_in_app: true,
+  notif_banner_system: true,
+  notif_pagi: true,
+  jam_notif_pagi: '07:00',
   quiet_start: '22:00',
   quiet_end: '06:00',
 }
@@ -49,6 +60,8 @@ export default function NotificationSettingsPage() {
     })
   }, [])
 
+  const [testingBanner, setTestingBanner] = useState(false)
+
   const update = <K extends keyof NotifSettings>(key: K, value: NotifSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }))
   }
@@ -57,8 +70,38 @@ export default function NotificationSettingsPage() {
     setSaving(true)
     const r = await api('notifSettings:save', settings)
     setSaving(false)
-    if (r.success) toast('Pengaturan notifikasi disimpan', 'success')
-    else toast(r.message as string ?? 'Gagal menyimpan', 'error')
+    if (r.success) {
+      toast('Pengaturan notifikasi disimpan', 'success')
+      void scheduleDailyMorningReminder(
+        settings.jam_notif_pagi || '07:00',
+        settings.notif_banner_system && settings.notif_pagi
+      )
+    } else {
+      toast(r.message as string ?? 'Gagal menyimpan', 'error')
+    }
+  }
+
+  const handleTestBanner = async () => {
+    setTestingBanner(true)
+    try {
+      const granted = await requestNotificationPermission()
+      if (!granted) {
+        toast('Izin notifikasi belum diberikan pada perangkat ini', 'info')
+        setTestingBanner(false)
+        return
+      }
+
+      await showSystemNotification({
+        title: 'WariPOS - Notifikasi Berhasil',
+        body: 'Notifikasi banner sistem telah aktif dan berfungsi normal di perangkat Anda.',
+        actionRoute: '/dashboard',
+      })
+      toast('Notifikasi banner uji coba berhasil dikirim', 'success')
+    } catch (err) {
+      toast('Gagal mengirim banner: ' + (err as Error).message, 'error')
+    } finally {
+      setTestingBanner(false)
+    }
   }
 
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
@@ -152,12 +195,58 @@ export default function NotificationSettingsPage() {
         </div>
       </Card>
 
+      <Card title="Pengingat Pagi & Banner Sistem" action={<Smartphone size={16} className="text-slate-400" />}>
+        <div className="space-y-4 mt-1">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Notifikasi Banner Sistem (OS)</p>
+              <p className="text-xs text-slate-400">Tampilkan pop-up banner di status bar HP atau desktop ketika ada peringatan stok atau jadwal</p>
+            </div>
+            <Toggle checked={settings.notif_banner_system} onChange={v => update('notif_banner_system', v)} />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Pengingat Buka Kasir Setiap Pagi</p>
+              <p className="text-xs text-slate-400">Alarm otomatis setiap pagi untuk mulai transaksi kasir (tetap berbunyi meski aplikasi ditutup)</p>
+            </div>
+            <Toggle checked={settings.notif_pagi} onChange={v => update('notif_pagi', v)} />
+          </div>
+
+          {settings.notif_pagi && (
+            <Input
+              label="Jam Pengingat Pagi"
+              type="time"
+              value={settings.jam_notif_pagi}
+              onChange={e => update('jam_notif_pagi', e.target.value)}
+              helperText="Alarm notifikasi harian akan dijadwalkan pada jam ini"
+            />
+          )}
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl bg-primary-50/50 dark:bg-primary-950/20 border border-primary-100 dark:border-primary-900/30">
+            <div>
+              <p className="text-xs font-semibold text-primary-900 dark:text-primary-200">Uji Coba Banner Sistem</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Klik untuk memunculkan notifikasi banner langsung di perangkat Anda saat ini</p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Send size={14} />}
+              onClick={handleTestBanner}
+              loading={testingBanner}
+            >
+              Tes Banner
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       <Card title="Channel Pengiriman" action={<MessageCircle size={16} className="text-slate-400" />}>
         <div className="space-y-4 mt-1">
           <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
             <div>
               <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Notifikasi In-App</p>
-              <p className="text-xs text-slate-400">Tampilkan di bell icon atas kanan</p>
+              <p className="text-xs text-slate-400">Tampilkan di icon lonceng atas kanan</p>
             </div>
             <Toggle checked={settings.notif_in_app} onChange={v => update('notif_in_app', v)} />
           </div>

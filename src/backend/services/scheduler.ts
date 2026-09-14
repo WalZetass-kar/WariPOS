@@ -3,6 +3,7 @@ import { NotifikasiController } from '../controllers/NotifikasiController.js'
 import { BackupController } from '../controllers/BackupController.js'
 import { ActivityLogController } from '../controllers/ActivityLogController.js'
 import { IndustrySettingsController } from '../controllers/IndustrySettingsController.js'
+import { sqlite } from '../../database/connection.js'
 
 export class SchedulerService {
   private static tasks: cron.ScheduledTask[] = []
@@ -10,10 +11,44 @@ export class SchedulerService {
   static start() {
     console.log(' Starting scheduler service...')
 
+    // Pengingat kasir pagi hari setiap jam 07:00
+    const morningTask = cron.schedule('0 7 * * *', () => {
+      console.log(' Running daily morning reminder...')
+      try {
+        const notifSettings = sqlite.prepare('SELECT * FROM mediasoft_notification_settings WHERE id = 1').get() as any
+        if (notifSettings?.notif_banner_system && notifSettings?.notif_pagi) {
+          import('electron').then(({ Notification }) => {
+            if (Notification.isSupported()) {
+              new Notification({
+                title: 'WariPOS - Pengingat Kasir Pagi',
+                body: 'Selamat pagi! Buka kasir dan mulai pencatatan transaksi hari ini.',
+              }).show()
+            }
+          }).catch(() => {})
+        }
+      } catch (err) {
+        console.warn('Daily morning reminder task error:', err)
+      }
+    })
+    this.tasks.push(morningTask)
+
     // Check stok minimum every day at 8 AM
     const stokTask = cron.schedule('0 8 * * *', () => {
       console.log(' Running stok minimum check...')
-      NotifikasiController.checkStokMinimum()
+      const res = NotifikasiController.checkStokMinimum()
+      try {
+        const notifSettings = sqlite.prepare('SELECT * FROM mediasoft_notification_settings WHERE id = 1').get() as any
+        if (notifSettings?.notif_banner_system && notifSettings?.stok_menipis) {
+          import('electron').then(({ Notification }) => {
+            if (Notification.isSupported()) {
+              new Notification({
+                title: 'WariPOS - Peringatan Stok Harian',
+                body: 'Pengecekan stok harian selesai. Cek daftar produk yang memerlukan restock.',
+              }).show()
+            }
+          }).catch(() => {})
+        }
+      } catch {}
     })
     this.tasks.push(stokTask)
 

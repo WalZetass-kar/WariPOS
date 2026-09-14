@@ -49,6 +49,7 @@ import {
 import { useTransaksiState } from '../components/transaksi/useTransaksiState'
 import { SalePayload, QrisStatus, QrisPayment } from '../components/transaksi/types'
 import { generateReceiptPdf, generateReceiptXlsx, saveFileToDevice } from '../utils/receiptExporter'
+import { showStockBannerAlert } from '../utils/systemNotification'
 import { useAppStore } from '../stores'
 import { getSmartCashAmounts } from '../components/QuickAmountButtons'
 
@@ -553,6 +554,29 @@ Terima kasih atas kunjungan Anda!`
       if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
         toast(`Sisa ${remainingUsage - 1} transaksi demo`, 'error')
       }
+
+      // Notifikasi banner jika ada produk yang stoknya habis atau menipis
+      try {
+        const soldItems = payload.items || []
+        const currentProducts = state.products || []
+        api<{ notif_banner_system?: boolean; stok_habis?: boolean; stok_menipis?: boolean; min_stok?: number }>('notifSettings:get').then(notifRes => {
+          if (notifRes.success && notifRes.data?.notif_banner_system) {
+            const minStok = notifRes.data.min_stok ?? 5
+            for (const item of soldItems) {
+              const matched = currentProducts.find(p => p.kd_barang === item.kd_barang)
+              if (matched) {
+                const remaining = (matched.stok ?? 0) - (item.qty ?? 1)
+                const isOutOfStock = remaining <= 0
+                const isLowStock = !isOutOfStock && remaining <= minStok
+                if ((isOutOfStock && notifRes.data.stok_habis) || (isLowStock && notifRes.data.stok_menipis)) {
+                  void showStockBannerAlert(matched.nama_barang || item.kd_barang || 'Produk', Math.max(0, remaining), isOutOfStock)
+                }
+              }
+            }
+          }
+        }).catch(() => {})
+      } catch {}
+
       return true
     } else {
       cashierSound.playErrorBuzz()

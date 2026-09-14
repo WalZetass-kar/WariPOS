@@ -27,6 +27,10 @@ let mainWindow: BrowserWindow | null = null
 
 registerDesktopDeepLinks(isDev)
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.wari.pos')
+}
+
 function getAppIconPath() {
   return isDev
     ? path.join(process.cwd(), 'build', 'icon.png')

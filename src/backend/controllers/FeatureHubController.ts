@@ -40,6 +40,9 @@ const DEFAULT_NOTIF_SETTINGS = {
   notif_wa: 0,
   wa_number: '',
   notif_in_app: 1,
+  notif_banner_system: 1,
+  notif_pagi: 1,
+  jam_notif_pagi: '07:00',
   quiet_start: '22:00',
   quiet_end: '06:00',
 }
@@ -89,9 +92,10 @@ function upsertNotifSettings(data: AnyRow) {
     INSERT INTO mediasoft_notification_settings (
       id, stok_menipis, stok_habis, hutang_jatuh_tempo, lisensi_expire,
       target_penjualan, min_stok, notif_wa, wa_number, notif_in_app,
+      notif_banner_system, notif_pagi, jam_notif_pagi,
       quiet_start, quiet_end, created_at, updated_at
     ) VALUES (
-      1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM mediasoft_notification_settings WHERE id = 1), ?), ?
+      1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM mediasoft_notification_settings WHERE id = 1), ?), ?
     )
     ON CONFLICT(id) DO UPDATE SET
       stok_menipis = excluded.stok_menipis,
@@ -103,6 +107,9 @@ function upsertNotifSettings(data: AnyRow) {
       notif_wa = excluded.notif_wa,
       wa_number = excluded.wa_number,
       notif_in_app = excluded.notif_in_app,
+      notif_banner_system = excluded.notif_banner_system,
+      notif_pagi = excluded.notif_pagi,
+      jam_notif_pagi = excluded.jam_notif_pagi,
       quiet_start = excluded.quiet_start,
       quiet_end = excluded.quiet_end,
       updated_at = excluded.updated_at
@@ -116,6 +123,9 @@ function upsertNotifSettings(data: AnyRow) {
     data.notif_wa ? 1 : 0,
     String(data.wa_number ?? ''),
     data.notif_in_app ? 1 : 0,
+    data.notif_banner_system !== undefined ? (data.notif_banner_system ? 1 : 0) : DEFAULT_NOTIF_SETTINGS.notif_banner_system,
+    data.notif_pagi !== undefined ? (data.notif_pagi ? 1 : 0) : DEFAULT_NOTIF_SETTINGS.notif_pagi,
+    String(data.jam_notif_pagi ?? DEFAULT_NOTIF_SETTINGS.jam_notif_pagi),
     String(data.quiet_start ?? DEFAULT_NOTIF_SETTINGS.quiet_start),
     String(data.quiet_end ?? DEFAULT_NOTIF_SETTINGS.quiet_end),
     nowIso(),
@@ -686,6 +696,9 @@ export class FeatureHubController {
           notif_wa: !!row.notif_wa,
           wa_number: String(row.wa_number ?? ''),
           notif_in_app: !!row.notif_in_app,
+          notif_banner_system: row.notif_banner_system !== undefined ? !!row.notif_banner_system : true,
+          notif_pagi: row.notif_pagi !== undefined ? !!row.notif_pagi : true,
+          jam_notif_pagi: String(row.jam_notif_pagi ?? DEFAULT_NOTIF_SETTINGS.jam_notif_pagi),
           quiet_start: String(row.quiet_start ?? DEFAULT_NOTIF_SETTINGS.quiet_start),
           quiet_end: String(row.quiet_end ?? DEFAULT_NOTIF_SETTINGS.quiet_end),
         } : { ...DEFAULT_NOTIF_SETTINGS },

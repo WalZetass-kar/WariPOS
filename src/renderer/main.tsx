@@ -12,6 +12,8 @@ import SplashScreen from './components/SplashScreen'
 import { validateProductionConfig } from './utils/productionConfig'
 import { registerDeepLinkHandlers } from './utils/deepLinks'
 import { registerMobileBackButton } from './utils/mobileBackButton'
+import { setupNotificationClickListeners, initNotificationChannels, scheduleDailyMorningReminder } from './utils/systemNotification'
+import { api } from './utils/api'
 import { useLocation } from 'react-router-dom'
 import AppRoutes from './routes'
 import './styles/globals.css'
@@ -40,6 +42,20 @@ function MobileBridge() {
   const navigate = useNavigate()
   const location = useLocation()
   const toast = useToast()
+
+  useEffect(() => {
+    void setupNotificationClickListeners(route => navigate(route))
+    void initNotificationChannels()
+
+    api<{ notif_banner_system?: boolean; notif_pagi?: boolean; jam_notif_pagi?: string }>('notifSettings:get').then(res => {
+      if (res.success && res.data) {
+        const { notif_banner_system, notif_pagi, jam_notif_pagi } = res.data
+        if (notif_banner_system && notif_pagi) {
+          void scheduleDailyMorningReminder(jam_notif_pagi || '07:00', true)
+        }
+      }
+    }).catch(() => {})
+  }, [navigate])
 
   useEffect(() => registerDeepLinkHandlers(route => navigate(route)), [navigate])
 
