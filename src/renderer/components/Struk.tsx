@@ -104,7 +104,7 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
     return (
       <div 
         ref={ref} 
-        className={`font-mono text-[10px] leading-tight text-slate-800 p-2 bg-white print:p-0 print:text-black ${
+        className={`font-mono text-[10px] leading-tight text-slate-800 p-3 pt-2 pb-6 print:px-2 print:pt-1 print:pb-12 print:text-black print:overflow-visible ${
           settings.layout_type === 'modern' ? 'rounded-lg border border-slate-100 shadow-sm' : ''
         }`} 
         style={{ width: printerWidth }}
@@ -217,15 +217,20 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
 
         {/* QRIS */}
         {settings.qris_enabled && settings.qris_image && (
-          <div className="mt-3 text-center border-t border-slate-100 pt-3">
-            <p className="text-[8px] text-slate-400 mb-1">Scan QRIS untuk pembayaran digital:</p>
-            <img 
-              src={settings.qris_image} 
-              alt="QRIS" 
-              className="w-24 h-24 mx-auto object-contain bg-white p-1 border border-slate-100 rounded"
-            />
+          <div className="mt-3 text-center border-t border-slate-100 pt-3 pb-2 break-inside-avoid">
+            <p className="text-[8px] text-slate-400 mb-1 font-sans">Scan QRIS untuk pembayaran digital:</p>
+            <div className="inline-block p-1 bg-white border border-slate-200 rounded mx-auto">
+              <img 
+                src={settings.qris_image} 
+                alt="QRIS" 
+                className="w-24 h-24 mx-auto object-contain bg-white block"
+              />
+            </div>
           </div>
         )}
+
+        {/* Extra Bottom Paper Feed Space to ensure paper cutter / tear bar never clips QRIS or footer */}
+        <div className="h-6 print:h-14 w-full shrink-0 block" aria-hidden="true" />
       </div>
     )
   }

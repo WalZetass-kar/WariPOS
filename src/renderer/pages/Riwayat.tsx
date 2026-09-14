@@ -47,7 +47,27 @@ export default function Riwayat() {
   const [btPrinting, setBtPrinting] = useState(false)
   const [softLoading, setSoftLoading] = useState<'png' | 'pdf' | null>(null)
 
-  const handlePrint = useReactToPrint({ content: () => strukRef.current })
+  const handlePrint = useReactToPrint({
+    content: () => strukRef.current,
+    pageStyle: `
+      @page {
+        size: auto;
+        margin: 0mm;
+      }
+      @media print {
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #fff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        * {
+          overflow: visible !important;
+        }
+      }
+    `,
+  })
 
   const handleExportSoftFile = async (format: 'png' | 'pdf') => {
     if (!strukRef.current || !detail) return toast('Preview struk belum siap', 'error')

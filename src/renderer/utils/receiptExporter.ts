@@ -28,6 +28,8 @@ export interface ReceiptData {
   poinEarned?: number
   tableNumber?: string
   orderType?: string
+  qrisImage?: string | null
+  qrisEnabled?: boolean
 }
 
 /**
@@ -155,10 +157,15 @@ export function calculateReceiptPdfHeight(data: ReceiptData): number {
     estimatedY += 4
   }
 
-  // Bottom padding
-  estimatedY += 10
+  // QRIS Section (if enabled and image present)
+  if (data.qrisEnabled && data.qrisImage) {
+    estimatedY += 38 // Spacing + label + 25mm QR code
+  }
 
-  return Math.max(75, Math.ceil(estimatedY))
+  // Safe bottom paper feed padding
+  estimatedY += 16
+
+  return Math.max(85, Math.ceil(estimatedY))
 }
 
 /**
@@ -298,6 +305,24 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Blob> {
     printableWidth
   )
   doc.text(footerLines, center, y, { align: 'center' })
+  y += (footerLines.length * 3.4) + 2
+
+  // QRIS Section
+  if (data.qrisEnabled && data.qrisImage) {
+    try {
+      doc.setLineDashPattern([1, 1], 0)
+      doc.line(left, y, right, y)
+      y += 3.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.text('Scan QRIS untuk pembayaran digital:', center, y, { align: 'center' })
+      y += 2.5
+      doc.addImage(data.qrisImage, 'PNG', center - 12.5, y, 25, 25)
+      y += 28
+    } catch (qrErr) {
+      console.warn('[generateReceiptPdf] Error rendering QRIS image:', qrErr)
+    }
+  }
 
   return doc.output('blob')
 }
@@ -412,8 +437,13 @@ export async function exportReceiptSoftFile(
     const canvas = await html2canvas(element, {
       scale: 2, // Kualitas tinggi retina
       useCORS: true,
+      allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
+      scrollY: 0,
+      scrollX: 0,
+      windowHeight: element.scrollHeight + 150,
+      height: element.scrollHeight,
     })
 
     const cleanInvoice = (invoiceNumber || `TRX-${Date.now()}`).replace(/[^\w-]/g, '_')
@@ -428,15 +458,16 @@ export async function exportReceiptSoftFile(
       const imgData = canvas.toDataURL('image/png')
       // Konversi pixel ke mm (1 px ≈ 0.264583 mm) dikompensasi scale: 2
       const mmWidth = (canvas.width * 0.264583) / 2
-      const mmHeight = (canvas.height * 0.264583) / 2
+      const imgHeight = (canvas.height * 0.264583) / 2
+      const mmHeight = imgHeight + 4 // Tambahan 4mm safety padding di bagian bawah
 
       const pdf = new jsPDF({
-        orientation: mmHeight > mmWidth ? 'portrait' : 'landscape',
+        orientation: 'portrait',
         unit: 'mm',
-        format: [Math.max(58, mmWidth), Math.max(80, mmHeight)],
+        format: [Math.max(58, mmWidth), mmHeight],
       })
 
-      pdf.addImage(imgData, 'PNG', 0, 0, mmWidth, mmHeight)
+      pdf.addImage(imgData, 'PNG', 0, 0, mmWidth, imgHeight)
       const pdfBlob = pdf.output('blob')
       const fileName = `Struk-${cleanInvoice}.pdf`
       const saved = await saveFileToDevice(fileName, pdfBlob, 'application/pdf')

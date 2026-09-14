@@ -346,8 +346,8 @@ class BluetoothPrinterService {
       rawText += `${data.pesanFooter || 'Terima Kasih Atas Kunjungan Anda'}\n`
       rawText += `Simpan struk sebagai bukti pembayaran.\n`
 
-      // 7. Feed & Cut
-      rawText += ESC_COMMANDS.FEED_LINES(3)
+      // 7. Feed & Cut - Beri 7 baris feed agar cutter / tear-bar thermal printer tidak memotong footer
+      rawText += ESC_COMMANDS.FEED_LINES(7)
       rawText += ESC_COMMANDS.CUT_PAPER
 
       const bytes = encoder.encode(rawText)
@@ -376,7 +376,7 @@ class BluetoothPrinterService {
       testData += `Waktu: ${new Date().toLocaleString('id-ID')}\n`
       testData += `Status: OK - Siap Digunakan\n`
       testData += `--------------------------------\n`
-      testData += ESC_COMMANDS.FEED_LINES(3)
+      testData += ESC_COMMANDS.FEED_LINES(7)
       testData += ESC_COMMANDS.CUT_PAPER
 
       await this.sendRaw(encoder.encode(testData))

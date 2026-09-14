@@ -169,22 +169,24 @@ export default function StrukModal({
 
         {/* Struk Paper Preview Container with realistic paper shadow */}
         <div className="max-h-[50vh] overflow-y-auto flex justify-center bg-slate-200/80 dark:bg-slate-950 p-4 rounded-3xl border border-slate-300 dark:border-slate-800 shadow-inner scrollbar-thin">
-          <div ref={strukRef} className="shadow-2xl rounded-2xl overflow-hidden border border-slate-200/80 bg-white">
-            <Struk
-              cart={cart}
-              subTotal={subTotal}
-              pajak={pajakAmount}
-              pajakPersen={pajakPersen}
-              totalBayar={totalBayar}
-              promoDiskon={promoDiskon}
-              bayar={paidAmount}
-              kembalian={kembalian}
-              kdTransaksi={lastKd ?? ''}
-              jenisBayar={jenisBayar}
-              customerName={selectedCustomer?.nama_customer}
-              poinEarned={poinEarned}
-              kasirName={user?.nama_pengguna}
-            />
+          <div className="shadow-2xl rounded-2xl border border-slate-200/80 bg-white print:border-none print:shadow-none">
+            <div ref={strukRef} className="bg-white print:m-0 print:p-0 overflow-visible">
+              <Struk
+                cart={cart}
+                subTotal={subTotal}
+                pajak={pajakAmount}
+                pajakPersen={pajakPersen}
+                totalBayar={totalBayar}
+                promoDiskon={promoDiskon}
+                bayar={paidAmount}
+                kembalian={kembalian}
+                kdTransaksi={lastKd ?? ''}
+                jenisBayar={jenisBayar}
+                customerName={selectedCustomer?.nama_customer}
+                poinEarned={poinEarned}
+                kasirName={user?.nama_pengguna}
+              />
+            </div>
           </div>
         </div>
       </div>

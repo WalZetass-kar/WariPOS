@@ -358,7 +358,27 @@ export default function Transaksi() {
     if (e.key === 'Enter' && filtered.length > 0) addToCart(filtered[0])
   }
 
-  const printReceipt = useReactToPrint({ content: () => state.strukRef.current })
+  const printReceipt = useReactToPrint({
+    content: () => state.strukRef.current,
+    pageStyle: `
+      @page {
+        size: auto;
+        margin: 0mm;
+      }
+      @media print {
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #fff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        * {
+          overflow: visible !important;
+        }
+      }
+    `,
+  })
 
   const handlePrint = async () => {
     // 1. Try Bluetooth printer if connected
@@ -373,6 +393,10 @@ export default function Transaksi() {
 
     // 2. If printer is not connected or error, automatically generate and save PDF soft file
     try {
+      const strukSettingsRes = await api<any>('strukSettings:get').catch(() => null)
+      const qrisEnabled = Boolean(strukSettingsRes?.data?.qris_enabled)
+      const qrisImage = strukSettingsRes?.data?.qris_image || null
+
       const receiptData = {
         storeName: 'WARIPOS',
         invoiceNumber: state.lastKd || `TRX-${Date.now()}`,
@@ -391,6 +415,8 @@ export default function Transaksi() {
         poinEarned,
         tableNumber: posMode === 'restaurant' && state.tipePesanan === 'DINE_IN' ? state.nomorMeja : undefined,
         orderType: posMode === 'restaurant' ? state.tipePesanan : undefined,
+        qrisEnabled,
+        qrisImage,
       }
 
       const pdfBlob = await generateReceiptPdf(receiptData)

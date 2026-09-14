@@ -16,6 +16,24 @@ export default function PrintPreview({ isOpen, onClose, children, title = 'Previ
 
   const handlePrint = useReactToPrint({
     content: () => contentRef.current,
+    pageStyle: `
+      @page {
+        size: auto;
+        margin: 0mm;
+      }
+      @media print {
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #fff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        * {
+          overflow: visible !important;
+        }
+      }
+    `,
   })
 
   return (
