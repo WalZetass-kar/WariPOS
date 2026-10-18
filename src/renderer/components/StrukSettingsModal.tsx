@@ -1,7 +1,9 @@
 import { useState, useEffect, type ChangeEvent, type DragEvent } from 'react'
-import { X, Save, Upload, Trash2, Bluetooth } from 'lucide-react'
+import { Save, Upload, Trash2, Bluetooth, Printer } from 'lucide-react'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import Modal from './Modal'
+import Button from './Button'
 import ConfirmDialog from './ConfirmDialog'
 import BluetoothPrinterModal from './BluetoothPrinterModal'
 import { bluetoothPrinter } from '../utils/bluetoothPrinter'
@@ -222,47 +224,63 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-h-[92vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="border-b border-slate-200 dark:border-slate-700 px-5 sm:px-6 py-4 flex items-start justify-between gap-4 shrink-0">
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Pengaturan Struk</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Atur tampilan struk transaksi</p>
+      <Modal
+        open={isOpen}
+        onClose={onClose}
+        title="Pengaturan Struk"
+        subtitle="Atur format nota transaksi, tipe printer, dan QRIS"
+        icon={<Printer size={20} />}
+        size="lg"
+        footer={
+          <div className="flex flex-col sm:flex-row justify-end gap-2.5 w-full sm:w-auto">
+            <Button
+              variant="secondary"
+              onClick={onClose}
+              disabled={saving || uploading}
+              className="w-full sm:w-auto"
+            >
+              Batal
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              loading={saving}
+              disabled={uploading}
+              icon={<Save size={15} />}
+              className="w-full sm:w-auto font-bold"
+            >
+              Simpan Pengaturan
+            </Button>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 shrink-0">
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Body */}
+        }
+      >
         {loading ? (
-          <div className="p-6 text-center flex-1">
-            <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">Memuat pengaturan...</p>
+          <div className="py-12 text-center">
+            <div className="w-8 h-8 border-3 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Memuat pengaturan...</p>
           </div>
         ) : (
-          <div className="p-5 sm:p-6 space-y-6 overflow-y-auto flex-1">
+          <div className="space-y-6">
             {/* Tipe Printer */}
             <div>
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Tipe Printer</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
-                  { value: 'thermal', label: 'Thermal', desc: 'Roll' },
-                  { value: 'a4', label: 'A4', desc: 'Standard' },
-                  { value: 'dot_matrix', label: 'Dot Matrix', desc: 'Pita' },
+                  { value: 'thermal', label: 'Thermal', desc: 'Roll Struk Kasir' },
+                  { value: 'a4', label: 'A4', desc: 'Standard Invoice' },
+                  { value: 'dot_matrix', label: 'Dot Matrix', desc: 'Pita Rangkap' },
                 ].map(({ value, label, desc }) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => setSettings({ ...settings, printer_type: value as any })}
-                    className={`p-4 rounded-xl border-2 transition-all text-left min-w-0 ${
+                    className={`p-4 rounded-2xl border-2 transition-all text-left min-w-0 ${
                       settings.printer_type === value
-                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
+                        ? 'border-red-500 bg-red-50/70 dark:bg-red-950/30 ring-1 ring-red-500/20'
+                        : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/40'
                     }`}
                   >
-                    <div className="font-semibold text-sm text-slate-800 dark:text-white break-words">{label}</div>
+                    <div className="font-bold text-sm text-slate-800 dark:text-white break-words">{label}</div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{desc}</div>
                   </button>
                 ))}
@@ -275,27 +293,27 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Ukuran Kertas Thermal</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { value: '58mm', label: '58mm', desc: 'Lebar Kecil' },
-                    { value: '80mm', label: '80mm', desc: 'Lebar Standar' },
+                    { value: '58mm', label: '58mm', desc: 'Lebar Standar Mini POS' },
+                    { value: '80mm', label: '80mm', desc: 'Lebar Kasir Supermarket' },
                   ].map(({ value, label, desc }) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setSettings({ ...settings, paper_size: value as any })}
-                      className={`p-4 rounded-xl border-2 transition-all text-left min-w-0 ${
+                      className={`p-4 rounded-2xl border-2 transition-all text-left min-w-0 ${
                         settings.paper_size === value
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
+                          ? 'border-red-500 bg-red-50/70 dark:bg-red-950/30 ring-1 ring-red-500/20'
+                          : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/40'
                       }`}
                     >
-                      <div className="font-semibold text-sm text-slate-800 dark:text-white break-words">{label}</div>
+                      <div className="font-bold text-sm text-slate-800 dark:text-white break-words">{label}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{desc}</div>
                     </button>
                   ))}
                 </div>
 
                 {/* Bluetooth Thermal Printer Quick Connect */}
-                <div className="mt-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
+                <div className="mt-3 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
                       <Bluetooth size={18} />
@@ -310,7 +328,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                   <button
                     type="button"
                     onClick={() => setShowBtModal(true)}
-                    className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-red-500 transition shadow-sm"
+                    className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-red-500 transition shadow-xs"
                   >
                     {bluetoothPrinter.isConnected() ? 'Kelola' : 'Sambungkan'}
                   </button>
@@ -323,21 +341,21 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Template Layout</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
-                  { value: 'classic', label: 'Klasik', desc: 'Standar' },
-                  { value: 'modern', label: 'Modern', desc: 'Rapi' },
-                  { value: 'minimal', label: 'Minimal', desc: 'Simple' },
+                  { value: 'classic', label: 'Klasik', desc: 'Struk POS Standar' },
+                  { value: 'modern', label: 'Modern', desc: 'Rapi & Terstruktur' },
+                  { value: 'minimal', label: 'Minimal', desc: 'Hemat Kertas' },
                 ].map(({ value, label, desc }) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => setSettings({ ...settings, layout_type: value as any })}
-                    className={`p-4 rounded-xl border-2 transition-all text-left min-w-0 ${
+                    className={`p-4 rounded-2xl border-2 transition-all text-left min-w-0 ${
                       settings.layout_type === value
-                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
+                        ? 'border-red-500 bg-red-50/70 dark:bg-red-950/30 ring-1 ring-red-500/20'
+                        : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/40'
                     }`}
                   >
-                    <div className="font-semibold text-sm text-slate-800 dark:text-white break-words">{label}</div>
+                    <div className="font-bold text-sm text-slate-800 dark:text-white break-words">{label}</div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{desc}</div>
                   </button>
                 ))}
@@ -347,7 +365,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
             {/* Tampilan Struk */}
             <div>
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Tampilan Struk</h3>
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {[
                   { key: 'show_logo', label: 'Tampilkan Logo Toko' },
                   { key: 'show_alamat', label: 'Tampilkan Alamat' },
@@ -356,7 +374,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                   { key: 'show_kasir', label: 'Tampilkan Nama Kasir' },
                   { key: 'show_customer', label: 'Tampilkan Nama Customer' },
                 ].map(({ key, label }) => (
-                  <div key={key} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                  <div key={key} className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-100/70 dark:hover:bg-slate-800 transition-colors">
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words min-w-0">{label}</span>
                     <button
                       type="button"
@@ -364,7 +382,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                       onClick={() => setSettings({ ...settings, [key]: !settings[key as keyof StrukSettings] })}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
                         settings[key as keyof StrukSettings] 
-                          ? 'bg-primary-500' 
+                          ? 'bg-red-600' 
                           : 'bg-slate-300 dark:bg-slate-600'
                       }`}
                     >
@@ -389,7 +407,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                 onChange={(e) => setSettings({ ...settings, footer_text: e.target.value })}
                 rows={3}
                 placeholder="Terima kasih atas kunjungan Anda"
-                className="w-full min-h-[90px] px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-primary-400 focus:border-transparent outline-none transition-all resize-none"
+                className="w-full min-h-[90px] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all resize-none text-sm"
               />
             </div>
 
@@ -406,7 +424,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                   onClick={() => setSettings({ ...settings, qris_enabled: !settings.qris_enabled })}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
                     settings.qris_enabled 
-                      ? 'bg-primary-500' 
+                      ? 'bg-red-600' 
                       : 'bg-slate-300 dark:bg-slate-600'
                   }`}
                 >
@@ -419,11 +437,11 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
               </div>
 
               {settings.qris_image ? (
-                <div className="rounded-xl border-2 border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800">
+                <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/80">
                   <img
                     src={settings.qris_image}
                     alt="QRIS"
-                    className="w-48 h-48 object-contain mx-auto rounded-lg"
+                    className="w-48 h-48 object-contain mx-auto rounded-xl"
                   />
                   <div className="mt-4 flex flex-col sm:flex-row justify-center gap-2">
                     <label
@@ -433,8 +451,8 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                       onDrop={handleQrisDrop}
                       className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border transition-colors ${
                         dragActive
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-300'
-                          : 'border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-primary-300 dark:hover:border-primary-700'
+                          ? 'border-red-500 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-300'
+                          : 'border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-red-400 dark:hover:border-red-500'
                       } ${uploading ? 'opacity-60 pointer-events-none' : ''}`}
                     >
                       <Upload size={16} />
@@ -451,7 +469,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                       type="button"
                       onClick={() => setConfirmRemoveQris(true)}
                       disabled={uploading}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-60 transition-colors"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors shadow-xs"
                     >
                       <Trash2 size={16} />
                       Hapus
@@ -466,21 +484,21 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                   onDrop={handleQrisDrop}
                   className={`block cursor-pointer ${uploading ? 'pointer-events-none' : ''}`}
                 >
-                  <div className={`border-2 border-dashed rounded-xl p-6 sm:p-8 text-center transition-all bg-white dark:bg-slate-800 ${
+                  <div className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all bg-white dark:bg-slate-800/80 ${
                     dragActive
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                      : 'border-slate-300 dark:border-slate-600 hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/10'
+                      ? 'border-red-500 bg-red-50/70 dark:bg-red-950/20'
+                      : 'border-slate-300 dark:border-slate-700 hover:border-red-400 hover:bg-red-50/30 dark:hover:bg-red-950/10'
                   } ${uploading ? 'opacity-70' : ''}`}>
-                    <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                      <Upload className="w-8 h-8 text-primary-500" />
+                    <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center shadow-xs">
+                      <Upload className="w-7 h-7" />
                     </div>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">
                       {uploading ? 'Mengupload QRIS...' : 'Upload Gambar QRIS'}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       Klik untuk pilih file atau drag & drop
                     </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PNG, JPG, WEBP maksimal 5MB</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">PNG, JPG, WEBP maksimal 5MB</p>
                   </div>
                   <input
                     type="file"
@@ -494,36 +512,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
             </div>
           </div>
         )}
-
-        {/* Footer */}
-        <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-5 sm:px-6 py-4 flex flex-col sm:flex-row justify-end gap-3 shrink-0">
-          <button
-            onClick={onClose}
-            disabled={saving || uploading}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-60 transition-colors"
-          >
-            Batal
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || uploading}
-            className="px-5 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary-600 to-primary-500 text-white hover:from-primary-700 hover:to-primary-600 transition-all shadow-md disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {saving ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Menyimpan...
-              </>
-            ) : (
-              <>
-                <Save size={14} />
-                Simpan
-              </>
-            )}
-          </button>
-        </div>
-        </div>
-      </div>
+      </Modal>
       <ConfirmDialog
         open={confirmRemoveQris}
         onClose={() => setConfirmRemoveQris(false)}

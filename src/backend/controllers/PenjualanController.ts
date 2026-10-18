@@ -335,6 +335,31 @@ export class PenjualanController {
         WHERE id = ?
       `).run(total_bayar, payload.shift_id)
 
+      // Update kas drawer jika ada drawer kas kasir yang berstatus OPEN
+      try {
+        sqlite.prepare(`
+          UPDATE mediasoft_kas_drawer
+          SET total_penjualan = COALESCE(total_penjualan, 0) + ?
+          WHERE status = 'OPEN' AND (username = ? OR username = 'admin' OR username IS NULL)
+        `).run(total_bayar, username)
+      } catch (kasErr) {
+        console.warn('[PenjualanController] Failed to update kas drawer:', kasErr)
+      }
+
+      // Update saldo rekening bank jika metode non-tunai (Transfer, QRIS, dsb)
+      try {
+        const jenis = String(payload.jenis_pembayaran || '').toUpperCase()
+        if (jenis.includes('TRANSFER') || jenis.includes('QRIS') || jenis.includes('BANK') || jenis.includes('KARTU') || jenis.includes('DEBIT') || jenis.includes('EWALLET')) {
+          sqlite.prepare(`
+            UPDATE mediasoft_bank_accounts
+            SET saldo_saat_ini = COALESCE(saldo_saat_ini, 0) + ?
+            WHERE status = 'AKTIF'
+          `).run(total_bayar)
+        }
+      } catch (bankErr) {
+        console.warn('[PenjualanController] Failed to update bank account:', bankErr)
+      }
+
       if (kode_promo) {
         const promoApply = PromoService.applyPromo(kode_promo)
         if (!promoApply.success) throw new Error(promoApply.message || 'Gagal menerapkan promo')

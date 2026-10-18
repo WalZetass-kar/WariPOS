@@ -182,36 +182,35 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
     .split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
 
   return (
-    <header className="h-14 glass border-b border-white/30 dark:border-slate-700/30 flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-30">
-      <div className="flex items-center gap-3 min-w-0">
-        <button onClick={onMenuClick} aria-label="Buka menu navigasi" className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors shrink-0" title="Buka menu">
-          <Menu size={20} />
+    <header className="h-14 glass border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-3 sm:px-6 shrink-0 relative z-30">
+      {/* Kiri: Hamburger Menu + Page Title */}
+      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+        <button
+          onClick={onMenuClick}
+          aria-label="Buka menu navigasi"
+          className="lg:hidden w-11 h-11 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors shrink-0 flex items-center justify-center"
+          title="Buka menu"
+        >
+          <Menu size={22} />
         </button>
-        <nav className="flex items-center gap-1 text-sm min-w-0">
-          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-primary-500 transition-colors shrink-0" title="Dashboard">
-            <Home size={14} />
-          </button>
-          {parentLabel && (
-            <>
-              <ChevronRight size={12} className="text-slate-300 dark:text-slate-600 shrink-0" />
-              <span className="text-slate-400 dark:text-slate-500 text-xs hidden sm:inline truncate">{parentLabel}</span>
-            </>
-          )}
-          <ChevronRight size={12} className="text-slate-300 dark:text-slate-600 shrink-0" />
-          <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm truncate">{pageLabel}</span>
-        </nav>
+        <div className="flex items-center min-w-0">
+          <span className="font-bold text-slate-900 dark:text-white text-base sm:text-lg tracking-tight truncate">
+            {pageLabel}
+          </span>
+        </div>
       </div>
 
+      {/* Kanan: Desktop Full Icons, Mobile Clean Avatar [MI] */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         <div className="hidden sm:flex items-center gap-2 mr-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{storeName}</span>
         </div>
 
-        {/* Plan & Subscription Badge */}
+        {/* Plan & Subscription Badge (Desktop) */}
         {isDemoMode() ? (
           <button
             onClick={() => navigate('/payment')}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-md shadow-orange-500/20 animate-pulse hover:opacity-90 transition"
+            className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-md shadow-orange-500/20 animate-pulse hover:opacity-90 transition"
             title="Klik untuk lihat status langganan & upgrade"
           >
             DEMO
@@ -227,11 +226,11 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           </button>
         ) : null}
 
-        {/* Mode Operasional Bisnis Quick Switcher */}
+        {/* Mode Operasional Bisnis Quick Switcher (Desktop) */}
         <button
           type="button"
           onClick={() => setPosMode(posMode === 'retail' ? 'restaurant' : 'retail')}
-          className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border ${
             posMode === 'restaurant'
               ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 shadow-xs'
               : 'bg-primary-500/10 border-primary-500/30 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 shadow-xs'
@@ -239,22 +238,23 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           title={posMode === 'retail' ? 'Mode Toko Retail aktif. Klik untuk beralih ke Mode Restoran F&B.' : 'Mode Restoran F&B aktif. Klik untuk beralih ke Mode Toko Retail.'}
         >
           {posMode === 'restaurant' ? <UtensilsCrossed size={14} className="text-amber-500" /> : <Store size={14} className="text-primary-500" />}
-          <span className="hidden sm:inline">{posMode === 'restaurant' ? 'Resto F&B' : 'Mode Toko'}</span>
+          <span>{posMode === 'restaurant' ? 'Resto F&B' : 'Mode Toko'}</span>
         </button>
 
-        {/* Shift Kasir Shortcut */}
+        {/* Shift Kasir Shortcut (Desktop) */}
         <button
           type="button"
           onClick={() => navigate('/shifts')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100/90 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100/90 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors"
           title="Buka / Tutup Shift Kasir"
         >
           <Clock size={15} className="text-primary-600 dark:text-primary-400" />
-          <span className="hidden sm:inline">Shift</span>
+          <span>Shift</span>
         </button>
 
+        {/* Status Jaringan (Desktop) */}
         <span
-          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold ${
+          className={`hidden sm:flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold ${
             isOnline
               ? 'text-emerald-600 dark:text-emerald-400'
               : 'text-amber-600 dark:text-amber-400 bg-amber-500/10'
@@ -262,15 +262,16 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           title={isOnline ? 'Online — tersinkron dengan lisensi & developer' : 'Offline — data tersimpan di perangkat, akan disinkronkan saat online'}
         >
           {isOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
-          <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
+          <span>{isOnline ? 'Online' : 'Offline'}</span>
         </span>
 
-        <button onClick={toggleMode} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}>
+        {/* Dark Mode Toggle (Desktop) */}
+        <button onClick={toggleMode} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} className="hidden sm:flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}>
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        {/* Notification Bell */}
-        <div ref={notifRef} className="relative">
+        {/* Notification Bell (Desktop) */}
+        <div ref={notifRef} className="relative hidden sm:block">
           <button
             onClick={() => setShowNotif(v => !v)}
             aria-label={`Notifikasi${unreadCount > 0 ? `, ${unreadCount} belum dibaca` : ''}`}
@@ -414,54 +415,130 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             type="button"
             onClick={() => setShowProfileMenu(v => !v)}
             aria-label="Menu profil dan akun"
-            className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center text-white text-xs font-bold ml-1 cursor-pointer select-none shadow-md shadow-primary-500/20 overflow-hidden hover:ring-2 hover:ring-primary-500/50 transition-all active:scale-95"
+            className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer select-none active:scale-95"
             title={`Profil: ${user?.nama_lengkap ?? user?.nama_pengguna ?? ''}`}
           >
-            {user?.foto ? (
-              <img src={user.foto} alt="" className="w-full h-full object-cover" />
-            ) : (
-              initials
-            )}
+            <div className="relative w-9 h-9 rounded-full bg-primary-600 text-white flex items-center justify-center text-xs font-bold shadow-xs overflow-hidden">
+              {user?.foto ? (
+                <img src={user.foto} alt="" className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
+              {unreadCount > 0 && (
+                <span className="sm:hidden absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-900" />
+              )}
+            </div>
           </button>
 
           {showProfileMenu && (
-            <div className="fixed right-3 top-16 sm:absolute sm:right-0 sm:top-11 z-50 w-60 glass-card shadow-2xl rounded-2xl overflow-hidden border border-white/40 dark:border-slate-700/40 p-2 dropdown-popover-animate">
+            <div className="fixed right-3 top-16 sm:absolute sm:right-0 sm:top-12 z-50 w-64 bg-white dark:bg-slate-900 shadow-xl rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 p-2.5 dropdown-popover-animate">
+              {/* Header Profil */}
               <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
                 <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
                   {user?.nama_lengkap || user?.nama_pengguna || 'Pengguna'}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="text-[10px] font-mono text-slate-400 truncate">@{user?.nama_pengguna}</span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 uppercase">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary-50 dark:bg-primary-950/50 text-primary-700 dark:text-primary-300 uppercase">
                     {user?.hak_akses ?? 'kasir'}
                   </span>
                 </div>
+                {/* Store Name on Mobile */}
+                <p className="sm:hidden text-[10px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                  {storeName}
+                </p>
               </div>
 
-              <div className="py-1 space-y-0.5">
+              {/* Mobile Quick Action Strip */}
+              <div className="sm:hidden grid grid-cols-3 gap-1.5 py-2 border-b border-slate-100 dark:border-slate-800">
+                {/* 1. Status Jaringan */}
+                <div
+                  className={`flex flex-col items-center justify-center p-1.5 rounded-xl border text-[10px] font-bold ${
+                    isOnline
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200/70 dark:border-emerald-900/40'
+                      : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200/70 dark:border-amber-900/40'
+                  }`}
+                  title={isOnline ? 'Perangkat Online' : 'Perangkat Offline'}
+                >
+                  {isOnline ? <Wifi size={14} className="mb-0.5 text-emerald-600" /> : <WifiOff size={14} className="mb-0.5 text-amber-600" />}
+                  <span>{isOnline ? 'Online' : 'Offline'}</span>
+                </div>
+
+                {/* 2. Toggle Mode Gelap / Terang */}
+                <button
+                  type="button"
+                  onClick={toggleMode}
+                  className="flex flex-col items-center justify-center p-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-[10px] font-bold transition-colors"
+                  title="Ganti Tema"
+                >
+                  {isDark ? <Sun size={14} className="mb-0.5 text-amber-500" /> : <Moon size={14} className="mb-0.5 text-slate-600" />}
+                  <span>{isDark ? 'Terang' : 'Gelap'}</span>
+                </button>
+
+                {/* 3. Notifikasi Mobile */}
                 <button
                   type="button"
                   onClick={() => {
                     setShowProfileMenu(false)
-                    navigate('/settings?category=akun')
+                    setShowNotif(true)
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                  className="relative flex flex-col items-center justify-center p-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-[10px] font-bold transition-colors"
+                  title="Lihat Notifikasi"
                 >
-                  <SettingsIcon size={15} className="text-slate-400" />
-                  <span>Pengaturan Akun</span>
+                  <Bell size={14} className="mb-0.5 text-slate-600 dark:text-slate-300" />
+                  <span>Notif</span>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1.5 min-w-[14px] h-3.5 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center px-0.5 leading-none">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </button>
+              </div>
+
+              {/* Menu Links */}
+              <div className="py-1 space-y-0.5">
+                {/* Mobile: Mode Toko/Resto switcher */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPosMode(posMode === 'retail' ? 'restaurant' : 'retail')
+                  }}
+                  className="sm:hidden w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    {posMode === 'restaurant' ? <UtensilsCrossed size={15} className="text-amber-500" /> : <Store size={15} className="text-primary-600" />}
+                    <span>Mode Operasional</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    {posMode === 'restaurant' ? 'Resto F&B' : 'Retail'}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
                     setShowProfileMenu(false)
                     navigate('/shifts')
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
                 >
                   <Clock size={15} className="text-slate-400" />
                   <span>Shift Kasir</span>
                 </button>
-                <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800/80">
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileMenu(false)
+                    navigate('/settings?category=akun')
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                >
+                  <SettingsIcon size={15} className="text-slate-400" />
+                  <span>Pengaturan Akun</span>
+                </button>
+
+                <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => {

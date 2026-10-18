@@ -86,6 +86,8 @@ export default function FirstLaunchTutorialModal() {
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md modal-backdrop-animate"
     >
       <div className="relative w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-slate-900 dark:text-white space-y-5 overflow-hidden modal-card-animate">
+        {/* Top Accent Stripe */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-red-600 via-rose-500 to-red-600" />
         {/* Skip button */}
         <button
           onClick={handleFinish}

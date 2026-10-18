@@ -59,11 +59,26 @@ export class DashboardModel {
     const lowStock = db.select().from(barang).where(lte(barang.stok, 5)).all()
     const lowStockOrdered = [...lowStock].sort((a, b) => toNumber(a.stok) - toNumber(b.stok))
 
+    const yesterdayStr = dateKey(new Date(now.getTime() - 86400000))
+    const yesterdaySales = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) === yesterdayStr)
+    const yesterdayTotal = sum(yesterdaySales)
+    const yesterdayCount = yesterdaySales.length
+    const todayQtySold = todaySales.reduce((acc, s) => acc + toNumber(s.total_qty), 0)
+
     // Last 7 days chart data
     const chartData = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now.getTime() - (6 - i) * 86400000)
       const dateStr = dateKey(d)
       const label = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' })
+      const total = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) === dateStr).reduce((a, b) => a + saleAmount(b), 0)
+      return { label, total }
+    })
+
+    // Last 30 days chart data
+    const chartData30 = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(now.getTime() - (29 - i) * 86400000)
+      const dateStr = dateKey(d)
+      const label = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
       const total = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) === dateStr).reduce((a, b) => a + saleAmount(b), 0)
       return { label, total }
     })
@@ -100,6 +115,7 @@ export class DashboardModel {
         SELECT 
           pd.kd_barang,
           b.nama_barang,
+          b.foto_barang,
           SUM(pd.qty) as total_qty,
           SUM(pd.harga_jual * pd.qty) as total_revenue
         FROM mediasoft_penjualan_detail pd
@@ -127,7 +143,11 @@ export class DashboardModel {
       totalBarang: totalBarang?.count ?? 0,
       lowStockCount: lowStock.length,
       chartData,
+      chartData30,
       predictedTomorrow,
+      todayQtySold,
+      yesterdayTotal,
+      yesterdayCount,
       hourlySales,
       recentTransactions: recentTransactions.map((transaction: any) => ({
         kd_tansaksi_jual: transaction.kd_tansaksi_jual,
@@ -147,8 +167,9 @@ export class DashboardModel {
       topProducts: topProducts.map(p => ({
         kd_barang: p.kd_barang,
         nama_barang: p.nama_barang,
-        total_qty: p.total_qty,
-        total_revenue: p.total_revenue,
+        foto_barang: p.foto_barang ?? null,
+        total_qty: toNumber(p.total_qty),
+        total_revenue: toNumber(p.total_revenue),
       })),
       lowStockProducts: lowStockOrdered.slice(0, 5).map(b => ({
         kd_barang: b.kd_barang,

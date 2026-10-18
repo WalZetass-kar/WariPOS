@@ -13,6 +13,7 @@ import { tryCloudSignIn } from '../../shared/supabase/auth.js'
 import { isLicenseSessionExpiredResult } from '../../shared/licenseSession.js'
 import { verifyPassword, encryptPassword } from '../services/crypto.js'
 import { getKnownPlanDefaults } from '../../shared/planDefaults.js'
+import { isDeveloperUser } from '../../shared/config/rbac.js'
 
 type ApiResult<T = unknown> = { success: boolean; data?: T; message?: string }
 
@@ -427,11 +428,41 @@ export class LicenseController {
   static async syncBuyerLicense(username: string, deviceInfo?: unknown): Promise<ApiResult<any>> {
     const cleanIdentifier = (username || '').trim()
     const user = sqlite
-      .prepare(`SELECT nama_pengguna, email, is_buyer, hak_akses, subscription_plan_id, subscription_expires_at FROM mediasoft_pengguna WHERE nama_pengguna = ? OR lower(email) = lower(?) LIMIT 1`)
-      .get(cleanIdentifier, cleanIdentifier) as { nama_pengguna?: string; email?: string | null; is_buyer?: number | null; hak_akses?: string; subscription_plan_id?: number | null; subscription_expires_at?: string | null } | undefined
+      .prepare(`SELECT nama_pengguna, nama_lengkap, email, is_buyer, hak_akses, subscription_plan_id, subscription_expires_at FROM mediasoft_pengguna WHERE nama_pengguna = ? OR lower(email) = lower(?) LIMIT 1`)
+      .get(cleanIdentifier, cleanIdentifier) as { nama_pengguna?: string; nama_lengkap?: string | null; email?: string | null; is_buyer?: number | null; hak_akses?: string; subscription_plan_id?: number | null; subscription_expires_at?: string | null } | undefined
 
     if (!user?.nama_pengguna) {
       return { success: false, message: 'User tidak ditemukan' }
+    }
+
+    if (user.hak_akses === 'developer' || isDeveloperUser(user)) {
+      sqlite.prepare(`
+        UPDATE mediasoft_pengguna SET
+          hak_akses = 'developer',
+          status_user = 'Aktif',
+          is_buyer = 0,
+          access_expires_at = NULL,
+          subscription_expires_at = NULL,
+          subscription_plan_id = NULL
+        WHERE nama_pengguna = ?
+      `).run(user.nama_pengguna)
+
+      return {
+        success: true,
+        data: {
+          subscription: {
+            id: null,
+            status: 'ACTIVE',
+            plan_name: 'Developer Access',
+            duration_days: null,
+            expires_at: null,
+            days_remaining: null,
+            is_unlimited: true,
+          },
+          synced_at: new Date().toISOString(),
+        },
+        message: 'Akses developer aktif',
+      }
     }
 
     // Try remote sync if buyer and email exists
@@ -505,7 +536,9 @@ export class LicenseController {
         } else if (!r.success) {
           const code = String((r as any).error_code ?? '').toUpperCase()
           if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code)) {
-            sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(user.nama_pengguna)
+            if (!isDeveloperUser(user) && user.hak_akses !== 'developer') {
+              sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(user.nama_pengguna)
+            }
           }
         }
       } catch (err) {

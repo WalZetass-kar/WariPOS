@@ -2,6 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Login POS stage animations (CSS-only, no framer-motion) ── */
+.pos-stage-glass {
+  animation: posStageGlass 7s ease-in-out infinite;
+  animation-delay: 2.6s;
+}
+@keyframes posStageGlass {
+  0%, 100% { transform: skewX(-14deg) translateX(-190%); }
+  50% { transform: skewX(-14deg) translateX(340%); }
+}
+
+.pos-receipt-feed {
+  animation: posReceipt 4.4s ease-in-out infinite;
+  animation-delay: 1.2s;
+}
+@keyframes posReceipt {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-58%); }
+}
+
+.pos-scan-move {
+  animation: posScan 2s ease-in-out infinite;
+}
+@keyframes posScan {
+  0% { top: 3px; }
+  50% { top: 14px; }
+  100% { top: 3px; }
+}
+
+.pos-qris-float {
+  animation: posQris 5.6s ease-in-out infinite;
+}
+@keyframes posQris {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-5px) rotate(-4.5deg); }
+}
+
+.pos-tag-float {
+  animation: posTag 5.6s ease-in-out infinite;
+}
+@keyframes posTag {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pos-stage-glass,
+  .pos-receipt-feed,
+  .pos-scan-move,
+  .pos-qris-float,
+  .pos-tag-float {
+    animation: none;
+  }
+}
+
    🎨 THEME SYSTEM — CSS Custom Properties
    All shadow/glow colors derive from these so every theme works fully.
 

@@ -89,13 +89,18 @@ export interface DashboardSummary {
   totalBarang: number
   lowStockCount: number
   chartData: { label: string; total: number }[]
+  chartData30?: { label: string; total: number }[]
   predictedTomorrow?: number
+  todayQtySold?: number
+  yesterdayTotal?: number
+  yesterdayCount?: number
   hourlySales?: { hour: string; count: number; total: number }[]
   recentTransactions?: DashboardRecentTransaction[]
   alertSummary?: DashboardAlertSummary
   topProducts: {
     kd_barang: string | null
     nama_barang: string | null
+    foto_barang?: string | null
     total_qty: number
     total_revenue: number
   }[]

@@ -122,11 +122,16 @@ export default function AppLayout() {
       />
 
       {/* Main Content */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 overflow-hidden relative">
+        {/* Subtle ambient theme aura at top of content */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-[rgba(var(--glass-shadow-rgb),0.07)] via-[rgba(var(--glass-shadow-rgb),0.02)] to-transparent z-0 opacity-80"
+        />
         <Topbar onMenuClick={handleMenuClick} />
         <main
           ref={mainRef}
-          className={`flex-1 overflow-y-auto touch-pan-y ${
+          className={`flex-1 overflow-y-auto touch-pan-y relative z-1 ${
             location.pathname === '/transaksi'
               ? 'p-2.5 sm:p-4 pb-48 sm:pb-40 lg:p-4 lg:pb-4'
               : location.pathname === '/assistant'

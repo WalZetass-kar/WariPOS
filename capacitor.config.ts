@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   bundledWebRuntime: false,
   android: {
     allowMixedContent: true,
-    loggingBehavior: 'none',
+    loggingBehavior: 'debug',
     backgroundColor: '#0f172a',
   },
   ios: {

@@ -53,6 +53,7 @@ export default function Shifts() {
       setModal(null)
       setOpeningBalance('')
       loadShifts()
+      window.dispatchEvent(new CustomEvent('app:refresh'))
     } else {
       toast(r.message || 'Gagal buka shift', 'error')
     }
@@ -73,6 +74,7 @@ export default function Shifts() {
       setClosingBalance('')
       setNotes('')
       loadShifts()
+      window.dispatchEvent(new CustomEvent('app:refresh'))
     } else {
       toast(r.message || 'Gagal tutup shift', 'error')
     }
@@ -87,6 +89,7 @@ export default function Shifts() {
       toast('Shift berhasil dihapus')
       setDeleteShift(null)
       loadShifts()
+      window.dispatchEvent(new CustomEvent('app:refresh'))
     } else {
       toast(r.message || 'Gagal menghapus shift', 'error')
     }

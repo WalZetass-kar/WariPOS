@@ -11,6 +11,7 @@ import { LicenseController } from './LicenseController.js'
 import { tryCloudSignIn, updatePasswordCloud } from '../../shared/supabase/auth.js'
 import { syncBuyerLicense } from '../../shared/supabase/license.js'
 import { getKnownPlanDefaults } from '../../shared/planDefaults.js'
+import { isDeveloperUser, type UserIdentitySummary } from '../../shared/config/rbac.js'
 
 function isAccessExpired(expiresAt?: string | null): boolean {
   if (!expiresAt) return false
@@ -18,8 +19,9 @@ function isAccessExpired(expiresAt?: string | null): boolean {
   return !Number.isNaN(expires.getTime()) && expires.getTime() < Date.now()
 }
 
-function hasUnlimitedAccessRole(role?: string | null): boolean {
-  return role === 'developer'
+function hasUnlimitedAccessRole(role?: string | null, user?: UserIdentitySummary | null): boolean {
+  if (role === 'developer' || role === 'super_admin') return true
+  return isDeveloperUser(user)
 }
 
 function getAccessDaysRemaining(expiresAt?: string | null): number | null {
@@ -32,8 +34,26 @@ function getAccessDaysRemaining(expiresAt?: string | null): number | null {
 type AuthUserRecord = NonNullable<ReturnType<typeof PenggunaModel.findActiveByUsername>>
 
 function getEffectiveAccessExpiresAt(user: AuthUserRecord): string | null {
-  if (hasUnlimitedAccessRole(user.hak_akses)) return null
+  if (hasUnlimitedAccessRole(user.hak_akses, user)) return null
   return user.subscription_expires_at ?? user.access_expires_at ?? null
+}
+
+function ensureDeveloperPrivileges(user: UserIdentitySummary & { nama_pengguna: string; status_user?: string | null; is_buyer?: number | null; access_expires_at?: string | null; subscription_expires_at?: string | null; subscription_plan_id?: number | null }): boolean {
+  if (!isDeveloperUser(user)) return false
+  user.hak_akses = 'developer'
+  user.status_user = 'Aktif'
+  user.is_buyer = 0
+  user.access_expires_at = null
+  user.subscription_expires_at = null
+  user.subscription_plan_id = null
+  try {
+    sqlite.prepare(`
+      UPDATE mediasoft_pengguna
+      SET hak_akses = 'developer', status_user = 'Aktif', is_buyer = 0, access_expires_at = NULL, subscription_expires_at = NULL, subscription_plan_id = NULL
+      WHERE nama_pengguna = ?
+    `).run(user.nama_pengguna)
+  } catch {}
+  return true
 }
 
 interface RestoreSessionInput {
@@ -386,6 +406,29 @@ async function loginRemoteAdmin(input: {
     : (input.existingUser?.email ?? '').trim().toLowerCase()
   if (!EMAIL_PATTERN.test(email)) return null
 
+  // If developer, also try direct Supabase cloud authentication
+  if (isDeveloperUser({ email, nama_pengguna: input.loginName, ...input.existingUser })) {
+    try {
+      const cloudRes = await tryCloudSignIn(email, input.password)
+      if (cloudRes.success && cloudRes.user) {
+        const user = await upsertRemoteBuyerCache({
+          loginName: input.loginName,
+          password: input.password,
+          remote: {
+            customer: { id: cloudRes.user.id, email: cloudRes.user.email, name: cloudRes.user.user_metadata?.name || input.loginName },
+            subscription: null,
+            access_token: cloudRes.session?.access_token,
+            refresh_token: cloudRes.session?.refresh_token,
+          },
+          existingUser: input.existingUser,
+        })
+        if (user) {
+          return { success: true, user, remote: { customer: cloudRes.user, access_token: cloudRes.session?.access_token } }
+        }
+      }
+    } catch {}
+  }
+
   const remote = await LicenseController.loginAdmin({ email, password: input.password }, input.device)
   if (!remote) return null
   if (!remote.success) {
@@ -435,6 +478,11 @@ async function upsertRemoteBuyerCache(input: {
   const name = String(customer.name ?? customer.email ?? username)
   const phone = typeof customer.phone === 'string' ? customer.phone : undefined
   const existing = PenggunaModel.findByUsername(username)
+  const isDev = isDeveloperUser(existing) || isDeveloperUser({ nama_pengguna: username, nama_lengkap: name, email })
+  const targetRole = isDev ? 'developer' : 'admin'
+  const targetExpiresAt = isDev ? null : expiresAt
+  const targetIsBuyer = isDev ? 0 : 1
+  const targetPlanId = isDev ? null : planId
 
   if (existing) {
     PenggunaModel.update(username, {
@@ -442,11 +490,11 @@ async function upsertRemoteBuyerCache(input: {
       email,
       no_telp: phone,
       status_user: 'Aktif',
-      hak_akses: 'admin',
-      access_expires_at: expiresAt,
-      subscription_plan_id: planId,
-      subscription_expires_at: expiresAt,
-      is_buyer: 1,
+      hak_akses: targetRole,
+      access_expires_at: targetExpiresAt,
+      subscription_plan_id: targetPlanId,
+      subscription_expires_at: targetExpiresAt,
+      is_buyer: targetIsBuyer,
       must_change_password: 0,
     } as any)
     await PenggunaModel.updatePassword(username, input.password, false)
@@ -457,11 +505,11 @@ async function upsertRemoteBuyerCache(input: {
       email,
       no_telp: phone,
       kata_sandi: input.password,
-      hak_akses: 'admin',
-      access_expires_at: expiresAt,
-      subscription_plan_id: planId,
-      subscription_expires_at: expiresAt,
-      is_buyer: 1,
+      hak_akses: targetRole,
+      access_expires_at: targetExpiresAt,
+      subscription_plan_id: targetPlanId,
+      subscription_expires_at: targetExpiresAt,
+      is_buyer: targetIsBuyer,
       must_change_password: 0,
     })
   }
@@ -567,6 +615,7 @@ async function loginRemoteBuyer(input: {
 function completeRemoteBuyerLogin(user: AuthUserRecord, device: AuthDeviceInfo, remote?: any) {
   rateLimiter.resetAttempts(user.nama_pengguna)
   PenggunaModel.updateLastLogin(user.nama_pengguna)
+  ensureDeveloperPrivileges(user)
 
   if (device.deviceId) {
     DeviceController.upsert({
@@ -885,7 +934,10 @@ export class AuthController {
         user = PenggunaModel.findActiveByUsername(byEmail.nama_pengguna)
       }
     }
-    const shouldTryRemoteAdmin = EMAIL_PATTERN.test(username) || user?.hak_akses === 'developer'
+    if (user) {
+      ensureDeveloperPrivileges(user)
+    }
+    const shouldTryRemoteAdmin = EMAIL_PATTERN.test(username) || user?.hak_akses === 'developer' || isDeveloperUser(user)
     if (shouldTryRemoteAdmin) {
       const remoteAdmin = await loginRemoteAdmin({ loginName: username, password, device, existingUser: user ?? null })
       if (remoteAdmin?.success && remoteAdmin.user) {
@@ -1025,7 +1077,7 @@ export class AuthController {
     }
 
     const expiresAt = getEffectiveAccessExpiresAt(user)
-    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
+    if (!hasUnlimitedAccessRole(user.hak_akses, user) && isAccessExpired(expiresAt)) {
       const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device, existingUser: user })
       if (remoteLogin?.success && remoteLogin.user) {
         return completeRemoteBuyerLogin(remoteLogin.user, device, remoteLogin.remote)
@@ -1319,10 +1371,19 @@ export class AuthController {
 
     let user = PenggunaModel.findActiveByUsername(username)
     if (!user) {
+      const anyUser = PenggunaModel.findByUsername(username)
+      if (anyUser && isDeveloperUser(anyUser)) {
+        ensureDeveloperPrivileges(anyUser)
+        user = PenggunaModel.findActiveByUsername(username)
+      }
+    }
+    if (!user) {
       return { success: false, error_code: 'USER_NOT_FOUND', message: 'User tidak ditemukan atau tidak aktif' }
     }
 
-    if (user.is_buyer) {
+    ensureDeveloperPrivileges(user)
+
+    if (user.is_buyer && !isDeveloperUser(user) && user.hak_akses !== 'developer') {
       const remote = await LicenseController.syncBuyerLicense(username, device)
       const code = String((remote.data as any)?.error_code ?? '').toUpperCase()
       if (!remote.success && ['BLOCKED', 'SUSPENDED', 'DEVICE_BLOCKED'].includes(code)) {
@@ -1346,11 +1407,14 @@ export class AuthController {
       }
 
       const refreshed = PenggunaModel.findActiveByUsername(username)
-      if (refreshed) user = refreshed
+      if (refreshed) {
+        user = refreshed
+        ensureDeveloperPrivileges(user)
+      }
     }
 
     const expiresAt = getEffectiveAccessExpiresAt(user)
-    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
+    if (!hasUnlimitedAccessRole(user.hak_akses, user) && isAccessExpired(expiresAt)) {
       return {
         success: false,
         error_code: 'EXPIRED',

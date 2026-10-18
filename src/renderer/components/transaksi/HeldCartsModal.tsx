@@ -46,14 +46,14 @@ export default function HeldCartsModal({
                   }
                   onResume(held.id)
                 }}
-                className="px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 transition-colors shadow-sm"
+                className="px-3 py-1.5 rounded-xl bg-primary-600 text-white text-xs font-bold hover:bg-primary-700 transition-colors shadow-sm"
               >
                 Lanjutkan
               </button>
               <button
                 type="button"
                 onClick={() => onDelete(held.id)}
-                className="p-1.5 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                className="p-1.5 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
               >
                 <Trash2 size={16} />
               </button>

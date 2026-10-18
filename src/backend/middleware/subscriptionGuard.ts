@@ -3,6 +3,7 @@
  * Dipanggil dari withDemoGuard atau langsung di handler IPC.
  */
 import { sqlite } from '../../database/connection.js'
+import { isDeveloperUser } from '../../shared/config/rbac.js'
 
 export interface SubscriptionStatus {
   plan_id: number | null
@@ -17,7 +18,7 @@ export interface SubscriptionStatus {
   feature_flags: Record<string, boolean>
 }
 
-const UNLIMITED_ACCESS_ROLES = new Set(['developer'])
+const UNLIMITED_ACCESS_ROLES = new Set(['developer', 'super_admin'])
 
 function parseFlags(value: unknown): Record<string, boolean> {
   if (!value || typeof value !== 'string') return {}
@@ -31,9 +32,24 @@ function parseFlags(value: unknown): Record<string, boolean> {
 
 export function getSubscriptionStatus(username: string): SubscriptionStatus {
   const user = sqlite.prepare(
-    `SELECT hak_akses, subscription_plan_id, subscription_expires_at, access_expires_at
+    `SELECT nama_pengguna, nama_lengkap, email, hak_akses, subscription_plan_id, subscription_expires_at, access_expires_at
      FROM mediasoft_pengguna WHERE nama_pengguna = ?`
   ).get(username) as any
+
+  if (isDeveloperUser(user)) {
+    return {
+      plan_id: null,
+      plan_name: 'Developer Full Access',
+      expires_at: null,
+      is_expired: false,
+      is_demo: false,
+      max_devices: -1,
+      max_transactions_per_day: -1,
+      max_products: -1,
+      max_users: -1,
+      feature_flags: {},
+    }
+  }
 
   const isDemo = user?.hak_akses === 'demo'
   let expiresAt = user?.subscription_expires_at || user?.access_expires_at || null

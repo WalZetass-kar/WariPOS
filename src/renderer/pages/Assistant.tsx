@@ -577,7 +577,7 @@ export default function Assistant() {
                   <div
                     className={`px-4 py-3 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs ${
                       msg.sender === 'user'
-                        ? 'bg-red-600 text-white rounded-br-xs font-normal'
+                        ? 'bg-primary-600 text-white rounded-br-xs font-normal'
                         : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-tl-xs'
                     }`}
                   >
@@ -777,7 +777,7 @@ export default function Assistant() {
                 <button
                   onClick={() => handleSendMessage()}
                   disabled={isGenerating || !inputMessage.trim()}
-                  className="p-2 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-white disabled:opacity-30 disabled:scale-100 transition-all shadow-sm"
+                  className="p-2 rounded-xl bg-primary-600 hover:bg-primary-700 active:scale-95 text-white disabled:opacity-30 disabled:scale-100 transition-all shadow-sm"
                   title="Kirim Pesan"
                 >
                   <Send size={13} />
@@ -794,7 +794,7 @@ export default function Assistant() {
           <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Cpu size={15} className="text-red-500" /> Spesifikasi AI
+                <Cpu size={15} className="text-primary-500" /> Spesifikasi AI
               </h3>
               <button
                 onClick={() => setShowInfoModal(false)}
@@ -811,7 +811,7 @@ export default function Assistant() {
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-500">Model</span>
-                <span className="font-mono text-red-600 dark:text-red-400 font-bold">{aiConfig?.aiModel || 'default'}</span>
+                <span className="font-mono text-primary-600 dark:text-primary-400 font-bold">{aiConfig?.aiModel || 'default'}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500">Mode</span>
@@ -834,7 +834,7 @@ export default function Assistant() {
               <Button
                 size="sm"
                 onClick={() => { setShowInfoModal(false); navigate('/settings') }}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold border-0"
+                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold border-0"
               >
                 Pengaturan
               </Button>

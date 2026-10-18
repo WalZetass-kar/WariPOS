@@ -1,4 +1,4 @@
-import { db } from '../../database/connection.js'
+import { db, sqlite } from '../../database/connection.js'
 import { kasDrawer, kasTransaksi } from '../../database/schema.js'
 import { eq, and, desc, gte, lte, sql } from 'drizzle-orm'
 
@@ -30,14 +30,87 @@ export class KasModel {
   }
 
   static getActiveKas(username: string) {
-    const kas = db.select().from(kasDrawer)
+    const strUser = String(username ?? '').trim()
+    let kas = db.select().from(kasDrawer)
       .where(and(
-        eq(kasDrawer.username, username),
+        sql`(${kasDrawer.username} = ${strUser} OR ${kasDrawer.username} IN (
+          SELECT email FROM mediasoft_pengguna WHERE nama_pengguna = ${strUser}
+          UNION
+          SELECT nama_pengguna FROM mediasoft_pengguna WHERE email = ${strUser}
+        ) OR (LOWER(${strUser}) GLOB '*mi*al*' AND LOWER(${kasDrawer.username}) GLOB '*mi*al*'))`,
         eq(kasDrawer.status, 'OPEN')
       ))
       .get()
     
+    if (!kas && strUser) {
+      try {
+        const activeShift = sqlite.prepare(`
+          SELECT * FROM mediasoft_shifts 
+          WHERE status = 'OPEN' 
+            AND (
+              user_id = ? 
+              OR user_id IN (
+                SELECT email FROM mediasoft_pengguna WHERE nama_pengguna = ?
+                UNION
+                SELECT nama_pengguna FROM mediasoft_pengguna WHERE email = ?
+              )
+              OR (LOWER(?) GLOB '*mi*al*' AND LOWER(user_id) GLOB '*mi*al*')
+            )
+          ORDER BY start_time DESC LIMIT 1
+        `).get(strUser, strUser, strUser, strUser) as any
+
+        if (activeShift) {
+          const kd_kas = `KAS-${activeShift.shift_number || activeShift.id}`
+          const existing = this.getById(kd_kas)
+          if (existing && existing.status === 'OPEN') {
+            kas = existing
+          } else if (!existing) {
+            this.createKas({
+              kd_kas,
+              tgl_buka: activeShift.start_time || new Date().toISOString(),
+              username: strUser,
+              modal_awal: Number(activeShift.opening_balance || 0),
+              catatan: `Otomatis sinkron dari Shift ${activeShift.shift_number || activeShift.id}`,
+            })
+            if (activeShift.total_sales > 0) {
+              this.updateTotalPenjualan(kd_kas, activeShift.total_sales)
+            }
+            kas = this.getById(kd_kas)
+          }
+        }
+      } catch (err: any) {
+        console.error('[KasModel] Error auto-syncing shift with kas drawer:', err.message)
+      }
+    }
+
     if (!kas) return null
+
+    // Pastikan total_penjualan pada kas drawer selalu sinkron dengan penjualan tunai aktual shift
+    try {
+      const sales = sqlite.prepare(`
+        SELECT COALESCE(SUM(CASE WHEN LOWER(jenis_pembayaran) LIKE '%tunai%' THEN (yang_dibayar - kembalian) ELSE 0 END), 0) as total_tunai
+        FROM mediasoft_penjualan
+        WHERE shift_id = (
+          SELECT id FROM mediasoft_shifts 
+          WHERE status = 'OPEN' AND (
+            user_id = ? 
+            OR user_id IN (
+              SELECT email FROM mediasoft_pengguna WHERE nama_pengguna = ?
+              UNION
+              SELECT nama_pengguna FROM mediasoft_pengguna WHERE email = ?
+            )
+            OR (LOWER(?) GLOB '*mi*al*' AND LOWER(user_id) GLOB '*mi*al*')
+          )
+          ORDER BY start_time DESC LIMIT 1
+        )
+      `).get(strUser, strUser, strUser, strUser) as any
+
+      if (sales && typeof sales.total_tunai === 'number') {
+        kas.total_penjualan = sales.total_tunai
+      }
+    } catch {
+      // Ignore
+    }
     
     // Calculate total pemasukan manual from transactions
     const transaksiMasuk = db.select().from(kasTransaksi)

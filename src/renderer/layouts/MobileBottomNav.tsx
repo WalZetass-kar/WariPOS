@@ -1,37 +1,42 @@
 import { useState, useEffect, useRef, type PointerEvent } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { BarChart2, LayoutDashboard, Package, Settings, ShoppingCart } from 'lucide-react'
+import { BarChart2, LayoutDashboard, Package, Settings, ShoppingCart, Receipt, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
-import { hasMinRole } from '../../shared/config/rbac'
+import { hasMinRole, type AppRole } from '../../shared/config/rbac'
+
+interface NavItemDef {
+  to: string
+  label: string
+  icon: LucideIcon
+  isFloating?: boolean
+  minRole?: AppRole
+}
 
 /**
  * Calculates a mathematically exact circular notch path with smooth tangent shoulder fillets.
- * Snugly and uniformly cradles the floating 66px Kasir button with a continuous 5.5px air gap.
- * Button physical center is at (cx, 5) with outer boundary of radius 37px (33px radius + 4px ring).
- * Notch circular arc is concentric at (cx, 5) with radius 42.5px, providing an exact 5.5px uniform gap.
+ * Cradles the floating 62px Kasir button with a uniform air gap.
+ * Button physical center is at (cx, 6) with outer boundary radius 35px (31px radius + 4px ring).
+ * Notch circular arc is concentric at (cx, 6) with radius 40px, providing an exact 5px uniform gap.
  * Shoulder fillets of radius R2 = 14px meet the top edge (y=0) and the notch arc with C1 tangent continuity.
  */
 function getNotchPath(w: number, h: number = 74) {
   const rTop = 20 // Top corner radius of navbar
   const cx = w / 2
 
-  // Center of floating 66px button:
-  // button: width 66, height 66, marginTop -28
-  // center y = -28 + (66 / 2) = 5
-  const cy = 5
-  // Outer radius including ring-4 (4px): 33 + 4 = 37
-  // Uniform 5.5px air gap around the button
-  const R1 = 42.5
-  // Smooth shoulder fillet radius
+  // Center of floating 62px button:
+  // button: width 62, height 62, marginTop -25
+  // center y = -25 + (62 / 2) = 6
+  const cy = 6
+  const R1 = 40
   const R2 = 14
 
-  const D = R1 + R2 // 56.5
-  const dy = R2 - cy // 9
-  const xShoulder = Math.sqrt(D * D - dy * dy) // ~55.7786
-  const xInflect = xShoulder * (R1 / D) // ~41.9576
-  const yInflect = cy + dy * (R1 / D) // ~11.7699
+  const D = R1 + R2 // 54
+  const dy = R2 - cy // 8
+  const xShoulder = Math.sqrt(D * D - dy * dy) // ~53.4041
+  const xInflect = xShoulder * (R1 / D) // ~39.5586
+  const yInflect = cy + dy * (R1 / D) // ~11.9259
 
   const pLeftShoulder = cx - xShoulder
   const pLeftInflect = cx - xInflect
@@ -98,11 +103,11 @@ export default function MobileBottomNav() {
     return () => clearTimeout(timer)
   }, [])
 
-  const ITEMS = [
+  const ITEMS: NavItemDef[] = [
     { to: '/', label: t('menu.dashboard'), icon: LayoutDashboard },
-    { to: '/transaksi', label: t('menu.transactions'), icon: ShoppingCart, isFloating: true },
-    { to: '/produk', label: t('menu.products'), icon: Package },
-    { to: '/laporan', label: t('menu.reports'), icon: BarChart2, minRole: 'admin' as const },
+    { to: '/riwayat', label: t('menu.history'), icon: Receipt, minRole: 'kasir' },
+    { to: '/transaksi', label: t('menu.transactions'), icon: ShoppingCart, isFloating: true, minRole: 'kasir' },
+    { to: '/produk', label: t('menu.products'), icon: Package, minRole: 'kasir' },
     { to: '/settings', label: t('menu.settings'), icon: Settings },
   ]
 
@@ -113,8 +118,8 @@ export default function MobileBottomNav() {
     return hasMinRole(user?.hak_akses, item.minRole)
   })
 
-  const leftItems = filtered.filter(i => i.to === '/' || i.to === '/produk')
-  const rightItems = filtered.filter(i => i.to === '/laporan' || i.to === '/settings')
+  const leftItems = filtered.filter(i => i.to === '/' || i.to === '/riwayat')
+  const rightItems = filtered.filter(i => i.to === '/produk' || i.to === '/settings')
   const isKasirActive = location.pathname.startsWith('/transaksi')
 
   const handlePointerDown = (e: PointerEvent<HTMLAnchorElement>) => {
@@ -228,9 +233,9 @@ export default function MobileBottomNav() {
           </div>
 
           {/* Center Gap Space for Floating Button & Notch */}
-          <div className="w-[114px] h-full shrink-0" />
+          <div className="w-[106px] h-full shrink-0" />
 
-          {/* Right Menu Items (Laporan, Pengaturan) */}
+          {/* Right Menu Items (Produk, Pengaturan) */}
           <div className="flex items-center justify-around flex-1 max-w-[148px] h-full pt-1">
             {rightItems.map(({ to, label, icon: Icon }) => (
               <NavLink
@@ -293,9 +298,9 @@ export default function MobileBottomNav() {
           onPointerDown={handlePointerDown}
           className="absolute left-1/2 top-0 z-20 block group"
           style={{
-            width: 66,
-            height: 66,
-            marginTop: -28,
+            width: 62,
+            height: 62,
+            marginTop: -25,
             transform: entered
               ? `translateX(-50%) scale(${pressing ? 0.93 : isKasirActive ? 1.02 : 1})`
               : 'translateX(-50%) scale(0.4)',
@@ -306,16 +311,16 @@ export default function MobileBottomNav() {
           }}
         >
           <div
-            className={`relative flex flex-col items-center justify-center w-full h-full rounded-full overflow-hidden transition-all duration-200 select-none bg-primary-600 text-white ring-4 ring-white dark:ring-slate-900 shadow-lg shadow-primary-600/30 hover:opacity-95 ${
+            className={`relative flex flex-col items-center justify-center w-full h-full rounded-full overflow-hidden transition-all duration-200 select-none bg-primary-600 text-white ring-4 ring-white dark:ring-slate-900 shadow-md shadow-primary-600/25 hover:opacity-95 ${
               isKasirActive ? 'ring-primary-200/80 dark:ring-primary-900/80' : ''
             }`}
           >
             <ShoppingCart
-              size={22}
+              size={21}
               strokeWidth={2}
               className="text-white transition-transform duration-200 group-hover:scale-105"
             />
-            <span className="text-[11px] font-extrabold tracking-tight text-white leading-none mt-0.5">
+            <span className="text-[11px] font-bold tracking-tight text-white leading-none mt-0.5">
               Kasir
             </span>
 

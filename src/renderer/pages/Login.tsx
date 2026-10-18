@@ -15,12 +15,14 @@ import {
   ArrowRight,
   ShieldCheck,
   MessageCircle,
+  Store,
 } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
-import appLogo from '../assets/app-logo.png'
+import LoginShowcase, { BrandLockup } from '../components/login/LoginShowcase'
+import appLogo from '../assets/app-logo-200.png'
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -39,6 +41,8 @@ interface PublicPlan {
   duration_days: number
   is_recommended?: boolean
 }
+
+const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) || '1.0.0'
 
 function formatPrice(n: number): string {
   return 'Rp ' + n.toLocaleString('id-ID')
@@ -453,94 +457,41 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between select-none font-sans transition-colors duration-200">
       
-      {/* 2-Column Split: Clean Left Brand + Focused Center Right Card */}
-      <div className="flex-1 lg:grid lg:grid-cols-[1.1fr_0.9fr] w-full min-h-screen">
+      {/* 2-Column Split: Prominent Left 3D Showcase (60-70% visual focus) + Comfortable Right Login Card */}
+      <div className="flex-1 lg:grid lg:grid-cols-[1.12fr_0.88fr] xl:grid-cols-[1.18fr_0.82fr] w-full min-h-screen">
         
         {/* ─── LEFT BRAND PANEL ─── */}
-        <div className="hidden lg:flex flex-col justify-between bg-slate-50/80 dark:bg-slate-900/60 p-12 lg:p-16 border-r border-slate-200 dark:border-slate-800 transition-colors duration-200">
-          
-          {/* Top Bar Logo */}
-          <div className="flex items-center gap-3.5">
-            <div className="shrink-0 flex items-center justify-center">
-              <img
-                src={appLogo}
-                alt="WariPOS"
-                className="h-11 w-11 object-contain drop-shadow-sm"
-              />
-            </div>
-            <div>
-              <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight block">WariPOS</span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Sistem Kasir & Manajemen Toko</span>
-            </div>
-          </div>
-
-          {/* Core Value Statement */}
-          <div className="my-auto py-10 space-y-8 max-w-lg">
-            <div className="space-y-3">
-              <h1 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.2]">
-                Kelola Toko Lebih Rapi, Cepat & Akurat.
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-                Dirancang untuk memudahkan operasional kasir, pelacakan stok produk, hingga laporan keuangan harian secara real-time.
-              </p>
-            </div>
-
-            {/* 3 Core Highlights */}
-            <div className="space-y-3.5 pt-2">
-              <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 shadow-sm">
-                <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 shrink-0 mt-0.5">
-                  <Zap size={18} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Transaksi Kasir Cepat & Praktis</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Mendukung scan barcode, cetak struk thermal, dan pembayaran QRIS.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 shadow-sm">
-                <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 shrink-0 mt-0.5">
-                  <Package size={18} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Manajemen Stok Real-Time</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Pengurangan stok otomatis dengan notifikasi stok menipis & kadaluarsa.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 shadow-sm">
-                <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 shrink-0 mt-0.5">
-                  <BarChart3 size={18} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Laporan Keuangan & Laba Rugi</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Analitik penjualan harian, bulanan, serta export data ke Excel & PDF.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Left Footer */}
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-            <span>© 2026 WariPOS</span>
-          </div>
+        <div className="hidden lg:flex flex-col justify-between bg-[#f6f4ee] dark:bg-slate-900/70 px-8 py-6 lg:px-10 lg:py-8 xl:px-14 xl:py-10 border-r border-slate-200/90 dark:border-slate-800 transition-colors duration-200 overflow-y-auto">
+          <LoginShowcase />
         </div>
 
         {/* ─── RIGHT LOGIN CARD PANEL ─── */}
-        <div className="flex flex-col justify-between items-center px-4 py-4 sm:px-8 sm:py-8 lg:p-12 bg-slate-100 dark:bg-slate-950 min-h-screen transition-colors duration-200">
+        <div className="flex flex-col justify-between items-center px-4 py-6 sm:px-8 sm:py-8 lg:p-10 xl:p-12 bg-slate-50 dark:bg-slate-950 min-h-screen transition-colors duration-200 overflow-y-auto">
+
+          {/* Compact brand header: only below lg, where the showcase panel is hidden */}
+          <div className="w-full max-w-md mb-6 lg:hidden">
+            <BrandLockup compact />
+            <h1 className="mt-4 text-[1.35rem] font-black leading-tight tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+              Semua Transaksi, Satu Kendali.
+            </h1>
+          </div>
 
           {/* Main Card Container */}
           <div className={`w-full transition-all duration-300 my-auto ${showRegisterForm ? 'max-w-lg' : 'max-w-md'}`}>
-            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-8 shadow-sm transition-colors duration-200">
+            <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl shadow-slate-200/60 dark:shadow-none transition-colors duration-200 border-t-4 border-t-red-600 relative overflow-hidden">
               
-              {/* Card Header with Centered Logo */}
-              <div className="mb-6 text-center flex flex-col items-center">
-                <div className="w-16 h-16 rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-2.5 border border-slate-200 dark:border-slate-700/80 shadow-sm flex items-center justify-center mb-3">
-                  <img src={appLogo} alt="WariPOS" className="w-11 h-11 object-contain drop-shadow-sm" />
+              {/* Card Header with Centered Logo & Retail Badge */}
+              <div className="mb-5 sm:mb-6 text-center flex flex-col items-center">
+                <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-2.5 border border-slate-200 dark:border-slate-700/80 shadow-sm flex items-center justify-center mb-2.5">
+                  <img src={appLogo} alt="WariPOS" className="w-9 h-9 object-contain drop-shadow-sm" />
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border border-red-200/60 dark:border-red-900/60 mb-2">
+                  <span>POS Kasir &amp; Manajemen Toko</span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                   {showRegisterForm ? 'Daftar Akun Baru' : 'Masuk ke WariPOS'}
                 </h2>
-                <p className="text-slate-500 dark:text-slate-400 text-xs mt-1.5 leading-relaxed max-w-xs">
+                <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-[13px] mt-1 leading-relaxed max-w-xs">
                   {showRegisterForm
                     ? 'Lengkapi formulir untuk memulai masa trial 3 hari gratis dengan semua fitur terbuka penuh.'
                     : 'Gunakan akun Anda untuk membuka sesi kasir & manajemen toko.'}
@@ -652,38 +603,38 @@ export default function Login() {
                 /* ─── LOGIN FORM ─── */
                 <form onSubmit={handleSubmit} className="space-y-3.5">
                   
-                  {/* Clean Mode Switcher (Password vs PIN) */}
-                  <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  {/* Segmented Control (Password vs PIN) */}
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
                     <button
                       type="button"
                       onClick={() => { setLoginMode('password'); setError('') }}
-                      className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 ${
                         loginMode === 'password'
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-slate-700'
+                          ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
-                      <Lock size={14} />
+                      <Lock size={15} />
                       Password
                     </button>
 
                     <button
                       type="button"
                       onClick={() => { setLoginMode('pin'); setError('') }}
-                      className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 ${
                         loginMode === 'pin'
-                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-slate-200/60 dark:border-slate-700'
+                          ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
-                      <Key size={14} />
+                      <Key size={15} />
                       PIN Kasir
                     </button>
                   </div>
 
                   {/* Username Field */}
                   <div className="space-y-1.5">
-                    <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       Username / Email
                     </label>
                     <div className="relative">
@@ -696,7 +647,7 @@ export default function Login() {
                         value={username}
                         onChange={e => setUsername(e.target.value)}
                         autoComplete="username"
-                        className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                        className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/20 focus:bg-white dark:focus:bg-slate-900 transition-all shadow-sm"
                       />
                     </div>
                   </div>
@@ -704,7 +655,7 @@ export default function Login() {
                   {/* Password / PIN Field */}
                   {loginMode === 'password' ? (
                     <div className="space-y-1.5">
-                      <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                         Password
                       </label>
                       <div className="relative">
@@ -717,12 +668,12 @@ export default function Login() {
                           value={password}
                           onChange={e => setPassword(e.target.value)}
                           autoComplete="current-password"
-                          className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-10 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                          className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-10 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/20 focus:bg-white dark:focus:bg-slate-900 transition-all shadow-sm"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPass(v => !v)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 rounded-lg p-0.5"
                         >
                           {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
                         </button>
@@ -730,7 +681,7 @@ export default function Login() {
                     </div>
                   ) : (
                     <div className="space-y-1.5">
-                      <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                         PIN Kasir (4-8 Digit)
                       </label>
                       <div className="relative">
@@ -746,7 +697,7 @@ export default function Login() {
                           value={pin}
                           onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
                           autoComplete="off"
-                          className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-4 text-base sm:text-lg font-mono font-bold text-center text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm tracking-widest"
+                          className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-4 text-base sm:text-lg font-mono font-bold text-center text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/20 focus:bg-white dark:focus:bg-slate-900 transition-all shadow-sm tracking-widest"
                         />
                       </div>
                     </div>
@@ -754,19 +705,19 @@ export default function Login() {
 
                   {/* Remember & Forgot Bar */}
                   <div className="flex items-center justify-between text-xs sm:text-sm pt-0.5">
-                    <label className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-medium cursor-pointer">
+                    <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={rememberMe}
                         onChange={e => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-red-600 focus:ring-0"
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-red-600 focus:ring-red-500 focus:ring-offset-0"
                       />
                       Ingat Saya
                     </label>
                     <button
                       type="button"
                       onClick={handleForgotPassword}
-                      className="text-red-600 dark:text-red-400 hover:underline font-bold"
+                      className="text-red-600 dark:text-red-400 hover:underline font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 rounded"
                     >
                       Lupa Sandi?
                     </button>
@@ -790,7 +741,7 @@ export default function Login() {
                           <button
                             type="button"
                             onClick={handleRenewAccess}
-                            className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-2.5 transition-colors shadow-sm"
+                            className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-2.5 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
                           >
                             <MessageCircle size={15} />
                             Hubungi WhatsApp Developer
@@ -804,7 +755,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full h-12 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full h-12 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base shadow-lg shadow-red-600/20 hover:shadow-red-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2"
                   >
                     {loading ? 'Memverifikasi...' : loginMode === 'pin' ? 'Masuk dengan PIN' : 'Masuk ke Kasir'}
                   </button>
@@ -815,22 +766,43 @@ export default function Login() {
                       type="button"
                       onClick={handleBiometricLogin}
                       disabled={biometricLoading || loading}
-                      className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-4 text-xs sm:text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors shadow-sm"
+                      className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-4 text-xs sm:text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
                     >
                       <Fingerprint size={18} className={biometricLoading ? 'animate-pulse' : ''} />
                       {biometricLoading ? 'Memverifikasi Sidik Jari...' : 'Masuk dengan Sidik Jari'}
                     </button>
                   )}
 
-                  {/* Register Trial Link */}
-                  <div className="pt-1.5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => { setAuthView('register'); setError('') }}
-                      className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    >
-                      Belum punya akun? <span className="text-red-600 dark:text-red-400 font-bold">Daftar Akun Trial (3 Hari)</span>
-                    </button>
+                  {/* Integrated Trial Promo Card */}
+                  <div className="pt-2">
+                    <div className="rounded-2xl border border-red-200/80 dark:border-red-950/60 bg-gradient-to-br from-red-50/70 via-rose-50/35 to-slate-50/60 dark:from-red-950/25 dark:via-slate-900/60 dark:to-slate-900/40 p-3.5 transition-all">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-red-600/10 dark:bg-red-500/15 border border-red-200/60 dark:border-red-900/60 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0 mt-0.5">
+                          <Store size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                              Mulai Gratis 3 Hari
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-red-600 text-white uppercase tracking-wider">
+                              Trial
+                            </span>
+                          </div>
+                          <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">
+                            Coba kasir, inventori &amp; laporan toko tanpa kartu kredit.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthView('register'); setError('') }}
+                        className="mt-2.5 w-full h-9 rounded-xl border border-red-600/80 dark:border-red-500/80 bg-white dark:bg-slate-900 hover:bg-red-50 dark:hover:bg-red-950/50 text-red-600 dark:text-red-400 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-1"
+                      >
+                        <span>Buat Akun Trial</span>
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
                   </div>
                 </form>
               )}
@@ -839,8 +811,8 @@ export default function Login() {
           </div>
 
           {/* Bottom DB Indicator */}
-          <div className="w-full max-w-md mt-3 pt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium border-t border-slate-200/60 dark:border-slate-800">
-            <span>v1.0.0</span>
+          <div className="w-full max-w-md mt-3 pt-2.5 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 font-semibold border-t border-slate-200/60 dark:border-slate-800">
+            <span>v{APP_VERSION}</span>
             <a
               href="https://github.com/WalZetass-kar"
               target="_blank"

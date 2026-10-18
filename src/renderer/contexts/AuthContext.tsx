@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import type { UserSession } from '../../shared/types'
+import { isDeveloperUser } from '../../shared/config/rbac'
 import { api } from '../utils/api'
 import { secureStorage } from '../utils/secureStorage'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
@@ -325,6 +326,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           syncing = false
           return
         }
+
+        // Developer users have unrestricted permanent access; bypass buyer sync
+        if (user.hak_akses === 'developer' || isDeveloperUser(user)) {
+          if (cancelled) return
+          syncing = false
+          return
+        }
+
         // 1. Sync license with backend
         const r = await api<any>('license:syncBuyerLicense', user.nama_pengguna, collectAuthDeviceInfo())
         if (cancelled) return
@@ -377,7 +386,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }))
             }
           } else if (!cancelled && restoreRes && !restoreRes.success) {
-            logout()
+            if (!isDeveloperUser(user) && user.hak_akses !== 'developer') {
+              logout()
+            }
           }
         }
 
@@ -392,29 +403,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const lastSuccess = Number(secureStorage.getItem(LICENSE_LAST_SUCCESS_KEY) ?? 0)
           const graceExceeded = lastSuccess > 0 && Date.now() - lastSuccess > LICENSE_OFFLINE_GRACE_MS
           if (graceExceeded) {
-            window.dispatchEvent(new CustomEvent('license:remote-popup', {
-              detail: {
-                force: true,
-                popup: {
-                  code: 'OFFLINE_GRACE_EXPIRED',
-                  title: 'Validasi Lisensi Gagal',
-                  description: 'Aplikasi terlalu lama tidak terhubung ke server developer. Sambungkan internet lalu login ulang.',
-                  severity: 'danger',
-                  dismissible: false,
+            if (!isDeveloperUser(user) && user.hak_akses !== 'developer') {
+              window.dispatchEvent(new CustomEvent('license:remote-popup', {
+                detail: {
+                  force: true,
+                  popup: {
+                    code: 'OFFLINE_GRACE_EXPIRED',
+                    title: 'Validasi Lisensi Gagal',
+                    description: 'Aplikasi terlalu lama tidak terhubung ke server developer. Sambungkan internet lalu login ulang.',
+                    severity: 'danger',
+                    dismissible: false,
+                  },
                 },
-              },
-            }))
-            setTimeout(() => {
-              if (!cancelled) logout()
-            }, 1200)
+              }))
+              setTimeout(() => {
+                if (!cancelled) logout()
+              }, 1200)
+            }
           }
           return
         }
 
         if (['BLOCKED', 'SUSPENDED', 'DEVICE_BLOCKED'].includes(code)) {
-          setTimeout(() => {
-            if (!cancelled) logout()
-          }, 1200)
+          if (!isDeveloperUser(user) && user.hak_akses !== 'developer') {
+            setTimeout(() => {
+              if (!cancelled) logout()
+            }, 1200)
+          }
         }
       } finally {
         syncing = false

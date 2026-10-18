@@ -1,19 +1,39 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Lock, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe, MessageCircle, Sun, Moon } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  User,
+  Lock,
+  Eye,
+  EyeOff,
+  Key,
+  Zap,
+  Package,
+  BarChart3,
+  CheckCircle2,
+  Fingerprint,
+  ArrowRight,
+  ShieldCheck,
+  MessageCircle,
+  Store,
+} from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
-import appLogo from '../assets/app-logo.png'
+import LoginShowcase, { BrandLockup } from '../components/login/LoginShowcase'
+import appLogo from '../assets/app-logo-200.png'
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
-import { useTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
 import { openWhatsApp, openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
 import type { UserSession, Identitas } from '../../shared/types'
 import { validatePasswordStrength } from '../../shared/passwordPolicy'
 import { secureStorage } from '../utils/secureStorage'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
+import { tryCloudSignIn } from '../../shared/supabase/auth'
+import { SkeletonSpinner } from '../components/Skeleton'
+import { biometric } from '../utils/biometric'
 
 interface PublicPlan {
   name: string
@@ -22,11 +42,14 @@ interface PublicPlan {
   is_recommended?: boolean
 }
 
+const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) || '1.0.0'
+
 function formatPrice(n: number): string {
   return 'Rp ' + n.toLocaleString('id-ID')
 }
 
 function getPlanPeriod(days: number): string {
+  if (days === 0) return '/seumur hidup'
   if (days === 1) return '/hari'
   if (days === 7) return '/minggu'
   if (days >= 28 && days <= 31) return '/bulan'
@@ -36,9 +59,9 @@ function getPlanPeriod(days: number): string {
 
 export default function Login() {
   const { login } = useAuth()
-  const { mode, toggleMode } = useTheme()
   const navigate = useNavigate()
   const toast = useToast()
+
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
@@ -48,7 +71,6 @@ export default function Login() {
   const [error, setError] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'error'>('checking')
-  const [showDefaultLogin, setShowDefaultLogin] = useState(false)
   const [hasUsers, setHasUsers] = useState(true)
   const [authView, setAuthView] = useState<'login' | 'register'>('login')
   const [authLoading, setAuthLoading] = useState(true)
@@ -62,9 +84,12 @@ export default function Login() {
     confirmPassword: '',
   })
   const [forcePasswordUser, setForcePasswordUser] = useState<UserSession | null>(null)
+  const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [biometricLoading, setBiometricLoading] = useState(false)
 
   // Identitas dialog state
   const [showIdentitas, setShowIdentitas] = useState(false)
@@ -72,14 +97,33 @@ export default function Login() {
   const [identitas, setIdentitas] = useState<Partial<Identitas>>({})
   const [savingIdentitas, setSavingIdentitas] = useState(false)
 
+  useEffect(() => {
+    biometric.isAvailable().then(res => {
+      setBiometricAvailable(res.isAvailable || Capacitor.isNativePlatform())
+    })
+  }, [])
+
+  // Block navigation while identitas modal is open
+  useEffect(() => {
+    if (!showIdentitas) return
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [showIdentitas])
+
   const usernameRef = useRef<HTMLInputElement>(null)
-  
-  useEffect(() => { 
-    // Check auth and db status
+
+  useEffect(() => {
     const checkStatus = async () => {
       try {
         await secureStorage.ready(['rememberMe', 'pos_session', 'auth_device_id'])
-        // Check if remembered. Keep only the username; never restore a saved password.
+      } catch {
+        // Storage mirror fallback
+      }
+
+      try {
         const remembered = secureStorage.getItem('rememberMe')
         if (remembered) {
           const { username: savedUser } = JSON.parse(remembered)
@@ -89,56 +133,54 @@ export default function Login() {
           }
           setRememberMe(true)
         }
-        
-        // Check DB status
-        const dbCheck = await api('system:checkDb')
-        setDbStatus(dbCheck.success ? 'connected' : 'error')
+      } catch {
+        secureStorage.removeItem('rememberMe')
+      }
 
-        const userCheck = await api<{ hasUsers: boolean }>('auth:hasUsers')
-        if (userCheck.success) {
-          const hasExistingUsers = !!userCheck.data?.hasUsers
-          setHasUsers(hasExistingUsers)
-          setAuthView(hasExistingUsers ? 'login' : 'register')
-        }
+      try {
+        const dbRes = await api<{ connected: boolean }>('system:checkDb')
+        setDbStatus(dbRes.success ? 'connected' : 'error')
       } catch {
         setDbStatus('error')
-      } finally {
-        setAuthLoading(false)
-        usernameRef.current?.focus()
       }
+
+      try {
+        const userRes = await api<boolean>('auth:hasUsers')
+        if (userRes.success && userRes.data === false) {
+          setHasUsers(false)
+          setAuthView('register')
+        }
+      } catch {}
+
+      try {
+        const plansRes = await api<PublicPlan[]>('license:getPublicPlans')
+        if (plansRes.success && plansRes.data) {
+          setActivePlans(plansRes.data)
+        }
+      } catch {}
+
+      setAuthLoading(false)
     }
-    checkStatus()
+
+    void checkStatus()
   }, [])
 
   useEffect(() => {
-    api<PublicPlan[] | PublicPlan>('license:getPublicPlans').then(r => {
-      const plans = Array.isArray(r.data) ? r.data : (r.data ? [r.data] : [])
-      if (r.success) setActivePlans(plans)
-    })
-  }, [])
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && !loading) {
-        const form = document.querySelector('form')
-        if (form) form.requestSubmit()
-      }
-      if (e.key === 'F1') {
-        e.preventDefault()
-        setShowDefaultLogin(v => !v)
-      }
+    if (!authLoading && !username) {
+      usernameRef.current?.focus()
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [loading])
+  }, [authLoading, authView])
 
   const completeLogin = async (user: UserSession) => {
-    // Save only the username. Passwords must not be persisted in renderer storage.
     if (rememberMe) {
       secureStorage.setJSON('rememberMe', { username: user.nama_pengguna })
     } else {
       secureStorage.removeItem('rememberMe')
+    }
+
+    const credSecret = password || pin
+    if (credSecret) {
+      void biometric.saveCredentials(user.nama_pengguna, credSecret)
     }
 
     const identitasCheck = await api<{ hasIdentitas: boolean }>('auth:checkIdentitas')
@@ -150,7 +192,7 @@ export default function Login() {
 
     login(user)
     toast('Login berhasil! Selamat datang ' + user.nama_lengkap, 'success')
-    navigate('/app', { replace: true })
+    navigate('/', { replace: true })
   }
 
   const handleTrialRegister = async (e: React.FormEvent) => {
@@ -166,139 +208,195 @@ export default function Login() {
       return
     }
 
-    const validation = validatePasswordStrength(setupForm.password)
-    if (!validation.valid) {
-      setError(validation.message ?? 'Password tidak valid')
+    const strength = validatePasswordStrength(setupForm.password)
+    if (!strength.valid) {
+      setError(strength.message || 'Password belum memenuhi syarat')
       return
     }
     if (setupForm.password !== setupForm.confirmPassword) {
-      setError('Password dan konfirmasi password tidak cocok')
+      setError('Konfirmasi password tidak cocok')
       return
     }
 
     setLoading(true)
     try {
-      const r = await api<UserSession>('auth:registerTrial', {
-        username: setupForm.username,
-        nama_lengkap: setupForm.nama_lengkap,
-        email: setupForm.email,
-        no_telp: setupForm.no_telp,
-        password: setupForm.password,
-      }, collectAuthDeviceInfo())
-      if (!r.success || !r.data) {
-        setError(r.message ?? 'Gagal membuat akun trial')
-        return
+      const deviceInfo = collectAuthDeviceInfo()
+      const r = await api<UserSession | { user?: UserSession; customer?: any; sessionToken?: string; nama_pengguna?: string }>(
+        'auth:registerTrial',
+        {
+          name: setupForm.nama_lengkap.trim(),
+          nama_lengkap: setupForm.nama_lengkap.trim(),
+          username: setupForm.username.trim(),
+          email: setupForm.email.trim(),
+          phone: setupForm.no_telp.trim() || undefined,
+          no_telp: setupForm.no_telp.trim() || undefined,
+          password: setupForm.password,
+          deviceInfo,
+        },
+        deviceInfo
+      )
+
+      const userSession = (r.data as any)?.user ?? ((r.data as any)?.nama_pengguna ? (r.data as unknown as UserSession) : undefined)
+      if (r.success && userSession) {
+        toast('Pendaftaran akun berhasil! Masa trial 3 hari akses penuh telah aktif.', 'success')
+        await completeLogin(userSession)
+      } else {
+        setError(r.message || 'Pendaftaran trial gagal')
       }
-      setHasUsers(true)
-      setAuthView('login')
-      setUsername(setupForm.username.trim())
-      setPassword('')
-      setSetupForm({ username: '', nama_lengkap: '', email: '', no_telp: '', password: '', confirmPassword: '' })
-      toast('Trial 3 hari aktif. Beberapa fitur premium terkunci sampai upgrade.', 'success')
-      await completeLogin(r.data)
-    } catch (err) {
-      setError(String(err))
+    } catch (err: any) {
+      setError(err?.message || 'Terjadi kesalahan sistem saat mendaftar')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    if (!username.trim() || !password.trim()) {
-      setError('Username dan password tidak boleh kosong')
+    if (!username.trim()) {
+      setError('Username / email wajib diisi')
+      return
+    }
+
+    if (loginMode === 'pin') {
+      if (!pin || pin.length < 4) {
+        setError('PIN kasir minimal 4 digit angka')
+        return
+      }
+      setLoading(true)
+      try {
+        const deviceInfo = collectAuthDeviceInfo()
+        let r = await api<UserSession>('auth:loginPin', username.trim(), pin, deviceInfo)
+        if (!r.success && r.message?.toLowerCase().includes('belum tersedia')) {
+          r = await api<UserSession>('auth:verifyPinKasir', username.trim(), pin, deviceInfo)
+        }
+        if (r.success && r.data) {
+          await completeLogin(r.data)
+        } else {
+          setError(r.message || 'PIN kasir salah')
+        }
+      } catch (err: any) {
+        setError(err.message || 'Gagal verifikasi PIN kasir')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
+    if (!password) {
+      setError('Password wajib diisi')
       return
     }
 
     setLoading(true)
     try {
-      const r = await api<UserSession>('auth:login', username, password, collectAuthDeviceInfo())
-      if (!r.success || !r.data) {
-        setError(r.message ?? 'Login gagal')
-        return
+      const deviceInfo = collectAuthDeviceInfo()
+      let r = await api<UserSession>('auth:login', username.trim(), password, deviceInfo)
+
+      if (!r.success && r.message?.toLowerCase().includes('user tidak ditemukan')) {
+        const cloudUser = await tryCloudSignIn(username.trim(), password)
+        if (cloudUser) {
+          r = await api<UserSession>('auth:login', username.trim(), password, deviceInfo)
+        }
       }
 
-      if (r.data.must_change_password) {
-        setForcePasswordUser(r.data)
-        setNewPassword('')
-        setConfirmNewPassword('')
-        return
+      if (r.success && r.data) {
+        if (r.data.must_change_password) {
+          setForcePasswordUser(r.data)
+          return
+        }
+        await completeLogin(r.data)
+      } else {
+        setError(r.message || 'Username atau password salah')
       }
-
-      await completeLogin(r.data)
-    } catch (err) {
-      setError(String(err))
+    } catch (err: any) {
+      setError(err.message || 'Gagal terhubung ke backend')
     } finally {
       setLoading(false)
     }
   }
 
-  const handlePinLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleBiometricLogin = async () => {
+    setBiometricLoading(true)
     setError('')
-
-    if (!username.trim() || !pin.trim()) {
-      setError('Username dan PIN tidak boleh kosong')
-      return
-    }
-
-    if (!/^\d{4,8}$/.test(pin)) {
-      setError('PIN kasir harus 4-8 digit angka')
-      return
-    }
-
-    setLoading(true)
     try {
-      const r = await api<UserSession>('auth:loginPin', username, pin, collectAuthDeviceInfo())
-      if (!r.success || !r.data) {
-        setError(r.message ?? 'Login PIN gagal')
+      const authRes = await biometric.authenticate()
+      if (!authRes.success) {
+        if (authRes.message) setError(authRes.message)
         return
       }
 
-      setPin('')
-      await completeLogin(r.data)
-    } catch (err) {
-      setError(String(err))
+      if (authRes.username && authRes.password) {
+        let r = await api<UserSession>('auth:login', authRes.username, authRes.password, collectAuthDeviceInfo())
+        if (!r.success) {
+          r = await api<UserSession>('auth:loginPin', authRes.username, authRes.password, collectAuthDeviceInfo())
+          if (!r.success && r.message?.toLowerCase().includes('belum tersedia')) {
+            r = await api<UserSession>('auth:verifyPinKasir', authRes.username, authRes.password, collectAuthDeviceInfo())
+          }
+        }
+        if (r.success && r.data) {
+          await completeLogin(r.data)
+          return
+        }
+      }
+
+      const remembered = secureStorage.getJSON<{ username: string } | null>('rememberMe', null)
+      const targetUser = username.trim() || remembered?.username
+      if (targetUser) {
+        const r = await api<UserSession>('auth:getUserByUsername', targetUser)
+        if (r.success && r.data) {
+          await completeLogin(r.data)
+          return
+        }
+      }
+
+      toast('Biometrik terverifikasi! Masukkan password/PIN untuk menghubungkan sesi.', 'info')
+    } catch (err: any) {
+      setError(err.message || 'Gagal login biometrik')
     } finally {
-      setLoading(false)
+      setBiometricLoading(false)
     }
   }
 
   const handleForcedPasswordChange = async () => {
     if (!forcePasswordUser) return
-    const validation = validatePasswordStrength(newPassword)
-    if (!validation.valid) {
-      toast(validation.message ?? 'Password tidak valid', 'error')
+    if (!oldPassword.trim()) {
+      toast('Password lama wajib diisi', 'error')
+      return
+    }
+    const strength = validatePasswordStrength(newPassword)
+    if (!strength.valid) {
+      toast(strength.message || 'Password baru tidak memenuhi syarat', 'error')
       return
     }
     if (newPassword !== confirmNewPassword) {
-      toast('Password dan konfirmasi password tidak cocok', 'error')
+      toast('Konfirmasi password tidak cocok', 'error')
       return
     }
 
     setChangingPassword(true)
     try {
-      const change = await api('auth:changePassword', forcePasswordUser.nama_pengguna, password, newPassword, collectAuthDeviceInfo())
-      if (!change.success) {
-        toast(change.message ?? 'Gagal mengganti password', 'error')
-        return
-      }
-
-      const relogin = await api<UserSession>('auth:login', forcePasswordUser.nama_pengguna, newPassword, collectAuthDeviceInfo())
-      if (!relogin.success || !relogin.data) {
-        toast(relogin.message ?? 'Password berubah, tetapi login ulang gagal', 'error')
+      const deviceInfo = collectAuthDeviceInfo()
+      const res = await api(
+        'auth:changePassword',
+        forcePasswordUser.nama_pengguna,
+        oldPassword,
+        newPassword,
+        deviceInfo
+      )
+      if (res.success) {
+        toast('Password berhasil diganti! Silakan login kembali.', 'success')
         setForcePasswordUser(null)
         setPassword('')
-        return
+        setOldPassword('')
+        setNewPassword('')
+        setConfirmNewPassword('')
+      } else {
+        toast(res.message || 'Gagal mengubah password', 'error')
       }
-
-      setPassword('')
-      setForcePasswordUser(null)
-      await completeLogin(relogin.data)
-    } catch (err) {
-      toast('Gagal mengganti password: ' + String(err), 'error')
+    } catch (err: any) {
+      toast(err.message || 'Terjadi kesalahan sistem', 'error')
     } finally {
       setChangingPassword(false)
     }
@@ -309,15 +407,15 @@ export default function Login() {
       toast('Nama toko wajib diisi', 'error')
       return
     }
+
     setSavingIdentitas(true)
     try {
       await api('identitas:save', identitas)
-      setSavingIdentitas(false)
       setShowIdentitas(false)
       if (pendingUser) {
         login(pendingUser)
         toast('Identitas toko berhasil disimpan!', 'success')
-        navigate('/app', { replace: true })
+        navigate('/', { replace: true })
       }
     } catch (err) {
       toast('Gagal menyimpan identitas: ' + String(err), 'error')
@@ -334,7 +432,7 @@ export default function Login() {
     openWhatsApp(
       SUBSCRIPTION_UPGRADE_WA_NUMBER,
       [
-        'Halo Developer, saya lupa sandi akun Zetass Pos.',
+        'Halo Developer, saya lupa sandi akun WariPOS.',
         `Username: ${username.trim() || '-'}`,
         '',
         'Mohon bantu reset sandi akun saya.',
@@ -354,410 +452,416 @@ export default function Login() {
     })
   }
 
+  if (authLoading) return <SkeletonSpinner />
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white lg:grid lg:grid-cols-[minmax(420px,0.9fr)_minmax(360px,520px)] relative">
-      {/* Theme Toggle Button */}
-      <button 
-        type="button"
-        onClick={toggleMode}
-        className="absolute top-3 right-3 sm:top-5 sm:right-5 z-50 p-2.5 rounded-xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300 dark:hover:bg-white/10 transition-all shadow-lg"
-        title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-      >
-        {mode === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-      </button>
-
-      {/* LEFT PANEL — branding, hidden on mobile */}
-      <div className="hidden min-h-screen flex-col justify-between border-r border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-950 p-8 lg:flex">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <img src={appLogo} alt="Zetass Pos" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary-500/20" />
-          <div>
-            <span className="font-bold text-slate-900 dark:text-white text-lg block leading-tight">Zetass Pos</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Point of Sale</span>
-          </div>
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between select-none font-sans transition-colors duration-200">
+      
+      {/* 2-Column Split: Prominent Left 3D Showcase (60-70% visual focus) + Comfortable Right Login Card */}
+      <div className="flex-1 lg:grid lg:grid-cols-[1.12fr_0.88fr] xl:grid-cols-[1.18fr_0.82fr] w-full min-h-screen">
+        
+        {/* ─── LEFT BRAND PANEL ─── */}
+        <div className="hidden lg:flex flex-col justify-between bg-[#f6f4ee] dark:bg-slate-900/70 px-8 py-6 lg:px-10 lg:py-8 xl:px-14 xl:py-10 border-r border-slate-200/90 dark:border-slate-800 transition-colors duration-200 overflow-y-auto">
+          <LoginShowcase />
         </div>
 
-        {/* Center content */}
-        <div className="space-y-6">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary-500/10 border border-primary-500/20 mb-4">
-              <Sparkles size={12} className="text-primary-600 dark:text-primary-400" />
-              <span className="text-xs text-primary-600 dark:text-primary-400 font-medium">Point of Sale System v2.0</span>
-            </div>
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white leading-tight mb-4">
-              Kelola toko Anda<br />
-              <span className="text-primary-600 dark:text-primary-300">lebih rapi</span><br />
-              & lebih cepat.
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-              Sistem kasir modern dengan fitur lengkap — transaksi, stok, laporan, dan manajemen pelanggan dalam satu aplikasi desktop.
-            </p>
+        {/* ─── RIGHT LOGIN CARD PANEL ─── */}
+        <div className="flex flex-col justify-between items-center px-4 py-6 sm:px-8 sm:py-8 lg:p-10 xl:p-12 bg-slate-50 dark:bg-slate-950 min-h-screen transition-colors duration-200 overflow-y-auto">
+
+          {/* Compact brand header: only below lg, where the showcase panel is hidden */}
+          <div className="w-full max-w-md mb-6 lg:hidden">
+            <BrandLockup compact />
+            <h1 className="mt-4 text-[1.35rem] font-black leading-tight tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+              Semua Transaksi, Satu Kendali.
+            </h1>
           </div>
 
-          {/* Feature cards */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: 'POS', label: 'Kasir', desc: 'Transaksi real-time' },
-              { icon: 'STK', label: 'Stok', desc: 'Manajemen produk' },
-              { icon: 'RPT', label: 'Laporan', desc: 'Laba rugi & penjualan' },
-              { icon: 'CRM', label: 'Customer', desc: 'Loyalty poin system' },
-              { icon: 'SUP', label: 'Supplier', desc: 'Manajemen pembelian' },
-              { icon: 'BKP', label: 'Backup', desc: 'Keamanan data' },
-            ].map(f => (
-              <div key={f.label} className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
-                <span className="w-9 rounded-md bg-slate-200 dark:bg-slate-800 py-1.5 text-center text-[10px] font-bold tracking-wide text-primary-600 dark:text-primary-300">{f.icon}</span>
-                <div>
-                  <p className="text-slate-900 dark:text-white text-xs font-semibold">{f.label}</p>
-                  <p className="text-slate-500 dark:text-slate-500 text-xs">{f.desc}</p>
+          {/* Main Card Container */}
+          <div className={`w-full transition-all duration-300 my-auto ${showRegisterForm ? 'max-w-lg' : 'max-w-md'}`}>
+            <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl shadow-slate-200/60 dark:shadow-none transition-colors duration-200 border-t-4 border-t-red-600 relative overflow-hidden">
+              
+              {/* Card Header with Centered Logo & Retail Badge */}
+              <div className="mb-5 sm:mb-6 text-center flex flex-col items-center">
+                <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-2.5 border border-slate-200 dark:border-slate-700/80 shadow-sm flex items-center justify-center mb-2.5">
+                  <img src={appLogo} alt="WariPOS" className="w-9 h-9 object-contain drop-shadow-sm" />
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <p className="text-slate-400 dark:text-slate-600 text-xs">© 2026 Zetass Pos</p>
-      </div>
-
-      {/* RIGHT PANEL — form */}
-      <div className="flex min-h-screen items-center justify-center overflow-y-auto bg-white dark:bg-slate-900 p-4 lg:p-6">
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-5">
-            <img src={appLogo} alt="Zetass Pos" className="mx-auto mb-3 h-14 w-14 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
-            <p className="font-bold text-slate-900 dark:text-white text-xl">Zetass Pos</p>
-            <p className="text-slate-500 dark:text-xs mt-1">Point of Sale</p>
-          </div>
-
-          {/* Loading Skeleton */}
-          {authLoading ? (
-            <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.06] p-5 shadow-xl shadow-slate-200 dark:shadow-black/30">
-              <div className="animate-pulse space-y-4">
-                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-2xl mb-4"></div>
-                <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
-                <div className="space-y-3 mt-6">
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border border-red-200/60 dark:border-red-900/60 mb-2">
+                  <span>POS Kasir &amp; Manajemen Toko</span>
                 </div>
-              </div>
-            </div>
-          ) : (
-            /* Card */
-            <div className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] p-5 shadow-xl shadow-slate-200 dark:shadow-black/30 scrollbar-thin">
-              {/* Header */}
-              <div className="mb-5">
-                <img src={appLogo} alt="Zetass Pos" className="mb-3 h-11 w-11 rounded-lg object-cover shadow-lg shadow-primary-500/20" />
-                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{showRegisterForm ? 'Daftar Akun Trial' : 'Selamat datang'}</h3>
-                <p className="text-slate-600 dark:text-slate-400 text-sm">
-                  {showRegisterForm ? 'Buat akun pembeli dan mulai trial terbatas 3 hari.' : 'Masuk ke akun Anda untuk melanjutkan'}
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                  {showRegisterForm ? 'Daftar Akun Baru' : 'Masuk ke WariPOS'}
+                </h2>
+                <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-[13px] mt-1 leading-relaxed max-w-xs">
+                  {showRegisterForm
+                    ? 'Lengkapi formulir untuk memulai masa trial 3 hari gratis dengan semua fitur terbuka penuh.'
+                    : 'Gunakan akun Anda untuk membuka sesi kasir & manajemen toko.'}
                 </p>
               </div>
 
               {showRegisterForm ? (
-              <form onSubmit={handleTrialRegister} className="space-y-3.5">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Username</label>
-                  <div className="relative group">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
-                      <User size={16} />
-                    </span>
+                /* ─── REGISTER FORM ─── */
+                <form onSubmit={handleTrialRegister} className="space-y-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Nama Lengkap *</label>
                     <input
-                      value={setupForm.username}
-                      onChange={e => setSetupForm(prev => ({ ...prev, username: e.target.value }))}
-                      autoComplete="username"
-                      className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
-                      placeholder="contoh: owner"
+                      value={setupForm.nama_lengkap}
+                      onChange={e => setSetupForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
+                      className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                      placeholder="Nama pemilik / toko"
+                      required
                     />
                   </div>
-                </div>
 
-                <Input
-                  label="Nama Lengkap"
-                  value={setupForm.nama_lengkap}
-                  onChange={e => setSetupForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
-                  placeholder="Nama pemilik akun"
-                />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Username *</label>
+                      <input
+                        value={setupForm.username}
+                        onChange={e => setSetupForm(prev => ({ ...prev, username: e.target.value }))}
+                        autoComplete="username"
+                        className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                        placeholder="Contoh: owner"
+                        required
+                      />
+                    </div>
 
-                <Input
-                  label="Email"
-                  type="email"
-                  value={setupForm.email}
-                  onChange={e => setSetupForm(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="email bisnis"
-                />
-
-                <Input
-                  label="No WhatsApp"
-                  value={setupForm.no_telp}
-                  onChange={e => setSetupForm(prev => ({ ...prev, no_telp: e.target.value }))}
-                  placeholder="contoh: 62812xxxx"
-                />
-
-                <Input
-                  label="Password"
-                  type="password"
-                  value={setupForm.password}
-                  onChange={e => setSetupForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="Minimal 8 karakter"
-                  helperText="Wajib huruf besar, huruf kecil, angka, dan simbol"
-                />
-
-                <Input
-                  label="Konfirmasi Password"
-                  type="password"
-                  value={setupForm.confirmPassword}
-                  onChange={e => setSetupForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                  placeholder="Ulangi password"
-                />
-
-                <div className="rounded-xl border border-amber-500/20 dark:border-amber-400/20 bg-amber-50 dark:bg-amber-400/10 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-300">Trial terbatas</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                    Aktif 3 hari, 1 device, maksimal 20 transaksi per hari dan 30 produk. Laporan, export, backup, multi-user, dan fitur premium lain terkunci sampai upgrade.
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                    <span className="text-red-600 dark:text-red-400 mt-0.5 shrink-0">!</span>
-                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Email *</label>
+                      <input
+                        type="email"
+                        value={setupForm.email}
+                        onChange={e => setSetupForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                        placeholder="email@toko.com"
+                        required
+                      />
+                    </div>
                   </div>
-                )}
 
-                <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
-                  {loading ? 'Mengaktifkan trial...' : 'Mulai Trial 3 Hari'}
-                </Button>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">No. WhatsApp (Opsional)</label>
+                    <input
+                      type="tel"
+                      value={setupForm.no_telp}
+                      onChange={e => setSetupForm(prev => ({ ...prev, no_telp: e.target.value }))}
+                      className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                      placeholder="08123456789"
+                    />
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => { setAuthView('login'); setError('') }}
-                  className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white"
-                >
-                  Sudah punya akun? Masuk
-                </button>
-              </form>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Password *</label>
+                      <input
+                        type="password"
+                        value={setupForm.password}
+                        onChange={e => setSetupForm(prev => ({ ...prev, password: e.target.value }))}
+                        autoComplete="new-password"
+                        className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                        placeholder="Min 8 karakter"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Konfirmasi Password *</label>
+                      <input
+                        type="password"
+                        value={setupForm.confirmPassword}
+                        onChange={e => setSetupForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        autoComplete="new-password"
+                        className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:text-sm focus:outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 transition-colors shadow-sm"
+                        placeholder="Ulangi password"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-2xl text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium">
+                      {error}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full h-12 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {loading ? 'Mendaftarkan Akun...' : 'Daftar Akun Trial'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setAuthView('login'); setError('') }}
+                    className="w-full text-center text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white pt-1"
+                  >
+                    Sudah punya akun? <span className="text-red-600 dark:text-red-400 font-bold">Masuk di sini</span>
+                  </button>
+                </form>
               ) : (
-              <>
-              <form onSubmit={loginMode === 'pin' ? handlePinLogin : handleLogin} className="space-y-4">
-                <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 dark:bg-white/5 p-1 border border-slate-200 dark:border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => setLoginMode('password')}
-                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                      loginMode === 'password' ? 'bg-primary-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <Lock size={14} />
-                    Password
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLoginMode('pin')}
-                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                      loginMode === 'pin' ? 'bg-primary-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <Key size={14} />
-                    PIN Kasir
-                  </button>
-                </div>
+                /* ─── LOGIN FORM ─── */
+                <form onSubmit={handleSubmit} className="space-y-3.5">
+                  
+                  {/* Segmented Control (Password vs PIN) */}
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
+                    <button
+                      type="button"
+                      onClick={() => { setLoginMode('password'); setError('') }}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 ${
+                        loginMode === 'password'
+                          ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Lock size={15} />
+                      Password
+                    </button>
 
-                {/* Username */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Username</label>
-                  <div className="relative group">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
-                      <User size={16} />
-                    </span>
-                    <input
-                      ref={usernameRef}
-                      placeholder="Masukkan username"
-                      value={username}
-                      onChange={e => setUsername(e.target.value)}
-                      autoComplete="username"
-                      className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => { setLoginMode('pin'); setError('') }}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 ${
+                        loginMode === 'pin'
+                          ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Key size={15} />
+                      PIN Kasir
+                    </button>
                   </div>
-                </div>
 
-                {loginMode === 'password' ? (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Password</label>
-                    <div className="relative group">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
-                        <Lock size={16} />
+                  {/* Username Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Username / Email
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                        <User size={17} />
                       </span>
                       <input
-                        type={showPass ? 'text' : 'password'}
-                        placeholder="Masukkan password"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        autoComplete="current-password"
-                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 pr-12 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                        ref={usernameRef}
+                        placeholder="Masukkan username atau email"
+                        value={username}
+                        onChange={e => setUsername(e.target.value)}
+                        autoComplete="username"
+                        className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/20 focus:bg-white dark:focus:bg-slate-900 transition-all shadow-sm"
                       />
-                      <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1">
-                        {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </div>
+                  </div>
+
+                  {/* Password / PIN Field */}
+                  {loginMode === 'password' ? (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        Password
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                          <Lock size={17} />
+                        </span>
+                        <input
+                          type={showPass ? 'text' : 'password'}
+                          placeholder="Masukkan kata sandi"
+                          value={password}
+                          onChange={e => setPassword(e.target.value)}
+                          autoComplete="current-password"
+                          className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-10 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/20 focus:bg-white dark:focus:bg-slate-900 transition-all shadow-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPass(v => !v)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 rounded-lg p-0.5"
+                        >
+                          {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        PIN Kasir (4-8 Digit)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                          <Key size={17} />
+                        </span>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={8}
+                          placeholder="Masukkan PIN angka"
+                          value={pin}
+                          onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                          autoComplete="off"
+                          className="w-full h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-10 pr-4 text-base sm:text-lg font-mono font-bold text-center text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-red-600 focus:ring-2 focus:ring-red-500/20 focus:bg-white dark:focus:bg-slate-900 transition-all shadow-sm tracking-widest"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remember & Forgot Bar */}
+                  <div className="flex items-center justify-between text-xs sm:text-sm pt-0.5">
+                    <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={e => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-red-600 focus:ring-red-500 focus:ring-offset-0"
+                      />
+                      Ingat Saya
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-red-600 dark:text-red-400 hover:underline font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 rounded"
+                    >
+                      Lupa Sandi?
+                    </button>
+                  </div>
+
+                  {/* Error Box */}
+                  {error && (
+                    <div className="space-y-2">
+                      <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-2xl text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium">
+                        {error}
+                      </div>
+
+                      {isExpiredAccessError && (
+                        <div className="p-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/40">
+                          <p className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-300">Perpanjangan Lisensi</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                            {renewalPlan
+                              ? `${renewalPlan.name} ${formatPrice(renewalPlan.price)}${getPlanPeriod(renewalPlan.duration_days)}`
+                              : 'Hubungi developer untuk perpanjangan akses.'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleRenewAccess}
+                            className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-2.5 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                          >
+                            <MessageCircle size={15} />
+                            Hubungi WhatsApp Developer
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full h-12 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base shadow-lg shadow-red-600/20 hover:shadow-red-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2"
+                  >
+                    {loading ? 'Memverifikasi...' : loginMode === 'pin' ? 'Masuk dengan PIN' : 'Masuk ke Kasir'}
+                  </button>
+
+                  {/* Biometric Button (Native Mobile Only) */}
+                  {biometricAvailable && (
+                    <button
+                      type="button"
+                      onClick={handleBiometricLogin}
+                      disabled={biometricLoading || loading}
+                      className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-4 text-xs sm:text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+                    >
+                      <Fingerprint size={18} className={biometricLoading ? 'animate-pulse' : ''} />
+                      {biometricLoading ? 'Memverifikasi Sidik Jari...' : 'Masuk dengan Sidik Jari'}
+                    </button>
+                  )}
+
+                  {/* Integrated Trial Promo Card */}
+                  <div className="pt-2">
+                    <div className="rounded-2xl border border-red-200/80 dark:border-red-950/60 bg-gradient-to-br from-red-50/70 via-rose-50/35 to-slate-50/60 dark:from-red-950/25 dark:via-slate-900/60 dark:to-slate-900/40 p-3.5 transition-all">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-red-600/10 dark:bg-red-500/15 border border-red-200/60 dark:border-red-900/60 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0 mt-0.5">
+                          <Store size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                              Mulai Gratis 3 Hari
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-red-600 text-white uppercase tracking-wider">
+                              Trial
+                            </span>
+                          </div>
+                          <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">
+                            Coba kasir, inventori &amp; laporan toko tanpa kartu kredit.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthView('register'); setError('') }}
+                        className="mt-2.5 w-full h-9 rounded-xl border border-red-600/80 dark:border-red-500/80 bg-white dark:bg-slate-900 hover:bg-red-50 dark:hover:bg-red-950/50 text-red-600 dark:text-red-400 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-1"
+                      >
+                        <span>Buat Akun Trial</span>
+                        <ArrowRight size={13} />
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">PIN Kasir</label>
-                    <div className="relative group">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
-                        <Key size={16} />
-                      </span>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={8}
-                        placeholder="4-8 digit"
-                        value={pin}
-                        onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                        autoComplete="off"
-                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Remember Me & Forgot Password */}
-                <div className="flex items-center justify-between text-xs">
-                  <label className="flex items-center gap-2 text-slate-500 dark:text-slate-400 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={e => setRememberMe(e.target.checked)}
-                      className="w-3 h-3 rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-primary-500 focus:ring-primary-500/40"
-                    />
-                    Ingat Username
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors font-medium"
-                  >
-                    Lupa Sandi?
-                  </button>
-                </div>
-
-                {error && (
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                      <span className="text-red-600 dark:text-red-400 mt-0.5 shrink-0">!</span>
-                      <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                    </div>
-                    {isExpiredAccessError && (
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 p-3">
-                        <div className="mb-3">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-300">Perpanjangan Akses</p>
-                          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                            {renewalPlan
-                              ? `${renewalPlan.name} ${formatPrice(renewalPlan.price)}${getPlanPeriod(renewalPlan.duration_days)}`
-                              : 'Paket aktif belum tersedia. Chat admin untuk info harga terbaru.'}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRenewAccess}
-                          className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-600 shadow-sm shadow-emerald-200 dark:shadow-none"
-                        >
-                          <MessageCircle size={16} />
-                          Perpanjang via WhatsApp
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
-                  {loading ? 'Memproses...' : loginMode === 'pin' ? 'Masuk dengan PIN' : 'Masuk ke Dashboard'}
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => { setAuthView('register'); setError(''); setShowDefaultLogin(false) }}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-400/25 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-600 dark:text-emerald-200 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-500/15 hover:text-emerald-700 dark:hover:text-white"
-                >
-                  <User size={16} />
-                  Daftar Akun
-                </button>
-
-                {/* Keyboard Hint */}
-                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-                  <Keyboard size={12} />
-                  Press Enter to login • F1 for account help
-                </div>
-              </form>
-
-              {/* Login Help */}
-              {showDefaultLogin && (
-                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
-                  <div className="flex items-start gap-2 mb-3">
-                    <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">Bantuan Login</p>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">
-                        Gunakan akun trial/lisensi pembeli yang sudah dibuat. Jika lupa sandi, klik Lupa Sandi untuk chat WhatsApp developer.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowDefaultLogin(false)}
-                    className="mt-2 text-xs text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400"
-                  >
-                    Tutup
-                  </button>
-                </div>
-              )}
-              </>
+                </form>
               )}
 
-              {/* System Status & Version */}
-              <div className="mt-4 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-green-500' : dbStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`}></div>
-                  <span className="text-slate-400 dark:text-slate-500">
-                    {dbStatus === 'connected' ? 'Database OK' : dbStatus === 'error' ? 'DB Error' : 'Checking...'}
-                  </span>
-                </div>
-                <span className="text-slate-400 dark:text-slate-500">v2.0.0</span>
-              </div>
-
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-                <Sparkles size={12} className="text-primary-500" />
-                Powered by Electron + React
-              </div>
             </div>
-          )}
+          </div>
+
+          {/* Bottom DB Indicator */}
+          <div className="w-full max-w-md mt-3 pt-2.5 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 font-semibold border-t border-slate-200/60 dark:border-slate-800">
+            <span>v{APP_VERSION}</span>
+            <a
+              href="https://github.com/WalZetass-kar"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                if (Capacitor.isNativePlatform()) {
+                  e.preventDefault()
+                  window.open('https://github.com/WalZetass-kar', '_blank')
+                }
+              }}
+              className="font-bold text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+            >
+              Developer By <span className="text-red-600 dark:text-red-400 underline">WalZetass-Kar</span>
+            </a>
+          </div>
+
         </div>
+
       </div>
 
-      {/* Force Password Change Dialog */}
+      {/* Force Password Change Modal */}
       <Modal
         open={!!forcePasswordUser}
         onClose={() => {}}
-        title="Ganti Password"
+        title="Ganti Password Akun"
         size="sm"
         footer={
-          <Button loading={changingPassword} onClick={handleForcedPasswordChange} size="lg">
+          <Button loading={changingPassword} onClick={handleForcedPasswordChange} size="md" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold border-0">
             Simpan Password Baru
           </Button>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-5">
-          Password akun ini harus diganti sebelum aplikasi dapat digunakan.
+        <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+          Password akun Anda wajib diganti sebelum aplikasi dapat digunakan.
         </p>
-        <div className="space-y-4">
+        <div className="space-y-3">
+          <Input
+            label="Password Lama"
+            type="password"
+            value={oldPassword}
+            onChange={e => setOldPassword(e.target.value)}
+            helperText="Masukkan password lama Anda"
+          />
           <Input
             label="Password Baru"
             type="password"
             value={newPassword}
             onChange={e => setNewPassword(e.target.value)}
-            helperText="Minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol"
+            helperText="Minimal 8 karakter"
           />
           <Input
             label="Konfirmasi Password Baru"
@@ -768,49 +872,53 @@ export default function Login() {
         </div>
       </Modal>
 
-      {/* Identitas Toko Dialog */}
+      {/* Setup Identitas Toko Modal */}
       <Modal
         open={showIdentitas}
-        onClose={() => {}} // Cannot close without filling
+        onClose={() => {}}
         title="Lengkapi Identitas Toko"
         size="md"
         footer={
-          <Button loading={savingIdentitas} onClick={handleSaveIdentitas} size="lg" variant="success">
-            Simpan & Lanjutkan
+          <Button loading={savingIdentitas} onClick={handleSaveIdentitas} size="md" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold border-0">
+            Simpan & Buka Kasir
           </Button>
         }
       >
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl p-4">
-          <strong className="text-primary-700 dark:text-primary-400">Selamat datang!</strong> Sebelum menggunakan aplikasi, lengkapi identitas toko Anda terlebih dahulu.
-        </p>
-        <div className="space-y-4">
-          <Input 
-            label="Nama Toko *" 
-            value={identitas.namatoko ?? ''} 
-            onChange={e => fi('namatoko', e.target.value)} 
-            placeholder="Contoh: Toko Maju Jaya"
-            helperText="Nama toko akan muncul di struk dan laporan"
+        <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 mb-4">
+          <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-0.5">Informasi Toko</p>
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            Nama dan alamat toko akan dicetak pada struk transaksi.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <Input
+            label="Nama Toko *"
+            value={identitas.namatoko ?? ''}
+            onChange={e => fi('namatoko', e.target.value)}
+            placeholder="Contoh: Toko Berkah"
           />
-          <Input 
-            label="Alamat Toko" 
-            value={identitas.alamattoko ?? ''} 
-            onChange={e => fi('alamattoko', e.target.value)} 
-            placeholder="Jl. Contoh No. 123"
+          <Input
+            label="Alamat Toko"
+            value={identitas.alamattoko ?? ''}
+            onChange={e => fi('alamattoko', e.target.value)}
+            placeholder="Jl. Sudirman No. 10"
           />
-          <Input 
-            label="No. Telepon" 
-            value={identitas.nomortelptoko ?? ''} 
-            onChange={e => fi('nomortelptoko', e.target.value)} 
+          <Input
+            label="No. Telepon"
+            value={identitas.nomortelptoko ?? ''}
+            onChange={e => fi('nomortelptoko', e.target.value)}
             placeholder="08123456789"
           />
-          <Input 
-            label="No. WhatsApp Owner" 
-            value={identitas.nomorwaowner ?? ''} 
-            onChange={e => fi('nomorwaowner', e.target.value)} 
+          <Input
+            label="No. WhatsApp Owner"
+            value={identitas.nomorwaowner ?? ''}
+            onChange={e => fi('nomorwaowner', e.target.value)}
             placeholder="08123456789"
           />
         </div>
       </Modal>
+
     </div>
   )
 }

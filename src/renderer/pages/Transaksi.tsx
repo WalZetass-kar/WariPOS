@@ -25,6 +25,9 @@ import {
   CheckCircle2
 } from 'lucide-react'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Modal from '../components/Modal'
+import Input from '../components/Input'
+import Button from '../components/Button'
 import StrukSettingsModal from '../components/StrukSettingsModal'
 import BluetoothPrinterModal from '../components/BluetoothPrinterModal'
 import CameraBarcodeScannerModal from '../components/CameraBarcodeScannerModal'
@@ -62,6 +65,8 @@ import QrisModal from '../components/transaksi/QrisModal'
 import StrukModal from '../components/transaksi/StrukModal'
 import HeldCartsModal from '../components/transaksi/HeldCartsModal'
 
+import { cachedKasirProducts, cachedKasirCategories, setCachedKasirProducts, setCachedKasirCategories, clearKasirCache } from '../utils/kasirCache'
+
 export default function Transaksi() {
   const toast = useToast()
   const { user } = useAuth()
@@ -71,17 +76,69 @@ export default function Transaksi() {
   const { heldCarts, holdCart, resumeCart, deleteHeld } = useHoldCart()
   const lastScanTimestampRef = useRef<number>(0)
   const [storeTaxRate, setStoreTaxRate] = useState<number | null>(null)
+  const [openShiftModal, setOpenShiftModal] = useState(false)
+  const [openShiftModalAwal, setOpenShiftModalAwal] = useState('')
+  const [openShiftLoading, setOpenShiftLoading] = useState(false)
 
   const state = useTransaksiState()
-  
+
+  // Depend on the stable setter, not `state`: useTransaksiState() returns a new object every
+  // render, and the data-loading effect below lists refreshShift as a dependency.
+  const { setActiveShiftId } = state
+  const refreshShift = useCallback(async () => {
+    if (user?.nama_pengguna) {
+      const r = await api<any>('shift:getCurrent', user.nama_pengguna)
+      if (r.success && r.data) {
+        setActiveShiftId(r.data.id)
+      } else {
+        setActiveShiftId(null)
+      }
+    }
+  }, [user?.nama_pengguna, setActiveShiftId])
+
+  const handleOpenShiftSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const modalAwal = Number(openShiftModalAwal.replace(/\D/g, '')) || 0
+    setOpenShiftLoading(true)
+    try {
+      const [rShift, rKas] = await Promise.all([
+        api<any>('shift:open', { user_id: user?.nama_pengguna, opening_balance: modalAwal }),
+        api<any>('kas:bukaKas', user?.nama_pengguna, modalAwal, 'Modal Awal Kasir')
+      ])
+      if (rShift.success || rKas.success) {
+        if (rShift.data?.id) state.setActiveShiftId(rShift.data.id)
+        toast('Shift kasir berhasil dibuka! Selamat bertransaksi.', 'success')
+        setOpenShiftModal(false)
+        setOpenShiftModalAwal('')
+        window.dispatchEvent(new CustomEvent('app:refresh'))
+      } else {
+        toast((rShift.message as string) || (rKas.message as string) || 'Gagal membuka shift', 'error')
+      }
+    } catch (err: any) {
+      toast(err.message || 'Gagal membuka shift', 'error')
+    } finally {
+      setOpenShiftLoading(false)
+    }
+  }
+
   const loadProducts = useCallback(async () => {
-    state.setProductsLoading(true)
+    // If cache is empty, show skeleton while loading
+    if (cachedKasirProducts === null) {
+      state.setProductsLoading(true)
+    }
+    // Fetch fresh data silently (no skeleton if cache exists)
     const r = await api<Barang[]>('barang:getAll')
-    if (r.success) state.setProducts(r.data ?? [])
+    if (r.success) {
+      const fresh = r.data ?? []
+      setCachedKasirProducts(fresh)
+      state.setProducts(fresh)
+    }
     state.setProductsLoading(false)
   }, [])
 
   useEffect(() => { loadProducts() }, [loadProducts])
+
+
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) {
       state.searchRef.current?.focus()
@@ -89,7 +146,16 @@ export default function Transaksi() {
   }, [])
   useEffect(() => {
     api<Customer[]>('customer:getAll').then(r => { if (r.success) state.setCustomers(r.data ?? []) })
-    api<Kategori[]>('kategori:getAll').then(r => { if (r.success) state.setCategories(r.data ?? []) })
+    // SWR for categories: serve cache immediately, background-fetch to refresh
+    if (cachedKasirCategories !== null) {
+      state.setCategories(cachedKasirCategories)
+    }
+    api<Kategori[]>('kategori:getAll').then(r => {
+      if (r.success) {
+        setCachedKasirCategories(r.data ?? [])
+        state.setCategories(r.data ?? [])
+      }
+    })
     api<any[]>('table:getAll').then(r => { if (r.success && r.data) state.setAvailableTables(r.data) })
     api<{ rate: number }>('tax:getActiveRate').then(r => {
       if (r.success && r.data) {
@@ -98,10 +164,24 @@ export default function Transaksi() {
         state.setPajakPersen(rate)
       }
     })
-    if (user?.nama_pengguna) {
-      api<any>('shift:getCurrent', user.nama_pengguna).then(r => { if (r.success && r.data) state.setActiveShiftId(r.data.id) })
+    refreshShift()
+  }, [user?.nama_pengguna, refreshShift])
+
+
+  const loadProductsRef = useRef(loadProducts)
+  useEffect(() => { loadProductsRef.current = loadProducts }, [loadProducts])
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      // Clear SWR cache on explicit refresh so next load fetches fresh data
+      clearKasirCache()
+      refreshShift()
+      loadProductsRef.current()
     }
-  }, [user?.nama_pengguna])
+    window.addEventListener('app:refresh', handleRefresh)
+    return () => window.removeEventListener('app:refresh', handleRefresh)
+  }, [refreshShift])
+
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (state.customerRef.current && !state.customerRef.current.contains(e.target as Node)) state.setShowCustomerDrop(false) }
@@ -576,6 +656,8 @@ Terima kasih atas kunjungan Anda!`
         toast(`Sisa ${remainingUsage - 1} transaksi demo`, 'error')
       }
 
+      window.dispatchEvent(new CustomEvent('app:refresh'))
+
       // Notifikasi banner transaksi kasir berhasil
       void showSaleSuccessNotification(
         r.data?.kd_transaksi || state.lastKd || 'TRX',
@@ -808,7 +890,9 @@ Terima kasih atas kunjungan Anda!`
     }
     if (!state.activeShiftId) {
       cashierSound.playErrorBuzz()
-      toast('Shift kasir belum dibuka. Buka shift terlebih dahulu.', 'error')
+      toast('Shift kasir belum dibuka. Masukkan modal awal untuk membuka shift.', 'info')
+      setOpenShiftModalAwal('')
+      setOpenShiftModal(true)
       return
     }
     if (state.jenisBayar !== 'QRIS' && (parseFloat(state.bayar) || 0) < totalBayar) {
@@ -975,9 +1059,9 @@ Terima kasih atas kunjungan Anda!`
               : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
           }`}
         >
-          <ShoppingCart size={15} className={state.mobileCheckoutTab === 'cart' ? 'text-red-600' : ''} />
+          <ShoppingCart size={15} className={state.mobileCheckoutTab === 'cart' ? 'text-primary-600' : ''} />
           <span>1. Keranjang</span>
-          <span className="px-1.5 py-0.2 rounded-full bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 text-[10px] font-black">
+          <span className="px-1.5 py-0.2 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-600 dark:text-primary-400 text-[10px] font-black">
             {totalCartQty}
           </span>
         </button>
@@ -988,7 +1072,7 @@ Terima kasih atas kunjungan Anda!`
           disabled={state.cart.length === 0}
           className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 ${
             state.mobileCheckoutTab === 'payment'
-              ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
+              ? 'bg-primary-600 text-white shadow-md shadow-primary-600/30'
               : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
           }`}
         >
@@ -1129,7 +1213,7 @@ Terima kasih atas kunjungan Anda!`
               </div>
               <div className="flex justify-between text-sm font-black border-t border-slate-200 dark:border-slate-800 pt-2 text-slate-900 dark:text-white">
                 <span>Total Tagihan</span>
-                <span className="text-red-600 dark:text-red-400 text-base">{formatRupiah(totalBayar)}</span>
+                <span className="text-primary-600 dark:text-primary-400 text-base">{formatRupiah(totalBayar)}</span>
               </div>
             </div>
           </div>
@@ -1141,13 +1225,13 @@ Terima kasih atas kunjungan Anda!`
           >
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase">Total Tagihan</p>
-              <p className="text-base font-black text-red-600 dark:text-red-400">{formatRupiah(totalBayar)}</p>
+              <p className="text-base font-black text-primary-600 dark:text-primary-400">{formatRupiah(totalBayar)}</p>
             </div>
             <button
               type="button"
               onClick={() => state.setMobileCheckoutTab('payment')}
               disabled={state.cart.length === 0}
-              className="flex-1 max-w-[220px] h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all disabled:opacity-40"
+              className="flex-1 max-w-[220px] h-12 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary-600/30 active:scale-95 transition-all disabled:opacity-40"
             >
               <span>Lanjut Bayar</span>
               <ArrowRight size={16} />
@@ -1175,7 +1259,7 @@ Terima kasih atas kunjungan Anda!`
                   onClick={() => state.setJenisBayar(j)}
                   className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-black border transition-all ${
                     state.jenisBayar === j
-                      ? 'bg-red-600 text-white border-red-600 shadow-md shadow-red-600/20'
+                      ? 'bg-primary-600 text-white border-primary-600 shadow-md shadow-primary-600/20'
                       : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:border-slate-300'
                   }`}
                 >
@@ -1198,7 +1282,7 @@ Terima kasih atas kunjungan Anda!`
                       className={`py-2 px-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 truncate ${
                         amt === totalBayar
                           ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold shadow-sm'
-                          : 'border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:border-red-600/50'
+                          : 'border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:border-primary-600/50'
                       }`}
                     >
                       {amt === totalBayar ? 'Uang Pas' : formatRupiah(amt)}
@@ -1217,7 +1301,7 @@ Terima kasih atas kunjungan Anda!`
                       value={state.bayar}
                       onChange={e => state.setBayar(e.target.value)}
                       placeholder="0"
-                      className="w-full h-12 pl-3 pr-10 text-base font-black rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-red-600 focus:ring-2 focus:ring-red-600/20"
+                      className="w-full h-12 pl-3 pr-10 text-base font-black rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-primary-600 focus:ring-2 focus:ring-primary-600/20"
                     />
                     {state.bayar && (
                       <button
@@ -1233,9 +1317,9 @@ Terima kasih atas kunjungan Anda!`
 
                 {state.bayar.trim() !== '' && (
                   kembalian < 0 ? (
-                    <div className="flex items-center justify-between text-xs font-bold text-red-600 dark:text-red-400 bg-red-100/60 dark:bg-red-950/60 border border-red-200 dark:border-red-900/50 rounded-xl px-3.5 py-2.5">
+                    <div className="flex items-center justify-between text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl px-3.5 py-2.5">
                       <div className="flex items-center gap-1.5">
-                        <AlertCircle size={16} className="shrink-0 text-red-500" />
+                        <AlertCircle size={16} className="shrink-0 text-rose-500" />
                         <span>Kurang Bayar:</span>
                       </div>
                       <span className="text-sm font-black">{formatRupiah(Math.abs(kembalian))}</span>
@@ -1293,7 +1377,7 @@ Terima kasih atas kunjungan Anda!`
               type="button"
               disabled={state.loading || (state.jenisBayar === 'QRIS' ? !qrisCanPay : (!state.cart.length || !state.bayar || (state.jenisBayar === 'TUNAI' && kembalian < 0)))}
               onClick={handleBayar}
-              className="flex-1 h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all disabled:opacity-40"
+              className="flex-1 h-12 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-primary-600/30 active:scale-98 transition-all disabled:opacity-40"
             >
               {state.loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1316,12 +1400,13 @@ Terima kasih atas kunjungan Anda!`
   )
 
   return (
-    <div className="flex flex-col gap-2.5 lg:gap-3 lg:h-[calc(100vh-8.5rem)] lg:flex-row touch-pan-y">
+    <div className="flex flex-col gap-2.5 lg:gap-3 lg:h-[calc(100vh-8.5rem)] lg:flex-row touch-pan-y relative">
       {/* Catalog & Search Area */}
-      <div className="flex min-w-0 flex-none lg:flex-1 flex-col gap-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-white dark:bg-slate-900 p-2.5 sm:p-3 shadow-sm lg:p-4 lg:h-full lg:overflow-hidden">
+      <div className="flex min-w-0 flex-none lg:flex-1 flex-col gap-2.5 rounded-2xl border border-primary-200/50 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs p-2.5 sm:p-3 shadow-sm lg:p-4 lg:h-full lg:overflow-hidden relative">
+        <div aria-hidden="true" className="absolute inset-0 bg-pos-grid opacity-40 pointer-events-none rounded-2xl" />
         
         {/* Header Bar */}
-        <div className="shrink-0 flex flex-col gap-2">
+        <div className="shrink-0 flex flex-col gap-2 relative z-1">
           {!state.activeShiftId && (
             <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-2.5 text-xs text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
@@ -1330,8 +1415,11 @@ Terima kasih atas kunjungan Anda!`
               </div>
               <button
                 type="button"
-                onClick={() => navigate('/shifts')}
-                className="rounded-lg bg-amber-600 px-3 py-1 font-bold text-white transition-colors hover:bg-amber-700 shadow-sm shrink-0 text-xs"
+                onClick={() => {
+                  setOpenShiftModalAwal('')
+                  setOpenShiftModal(true)
+                }}
+                className="rounded-lg bg-amber-600 px-3 py-1 font-bold text-white transition-colors hover:bg-amber-700 shadow-sm shrink-0 text-xs cursor-pointer"
               >
                 Buka Shift Kasir
               </button>
@@ -1342,7 +1430,7 @@ Terima kasih atas kunjungan Anda!`
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate">Kasir</h1>
-              <span className="px-2 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[10px] sm:text-[11px] font-bold border border-red-600/20 shrink-0">
+              <span className="px-2 py-0.5 rounded-full bg-primary-600/10 text-primary-600 dark:bg-primary-950/60 dark:text-primary-400 text-[10px] sm:text-[11px] font-bold border border-primary-600/20 shrink-0">
                 {filtered.length} Produk
               </span>
             </div>
@@ -1351,12 +1439,19 @@ Terima kasih atas kunjungan Anda!`
               {/* Shift Quick Badge */}
               <button
                 type="button"
-                onClick={() => navigate('/shifts')}
+                onClick={() => {
+                  if (!state.activeShiftId) {
+                    setOpenShiftModalAwal('')
+                    setOpenShiftModal(true)
+                  } else {
+                    navigate('/shifts')
+                  }
+                }}
                 className="px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-bold flex items-center gap-1 text-slate-700 dark:text-slate-300 shadow-sm transition"
                 title="Buka / Tutup Shift Kasir"
               >
                 <Clock size={13} className={state.activeShiftId ? "text-emerald-500" : "text-amber-500"} />
-                <span>{state.activeShiftId ? 'Shift Aktif' : 'Shift'}</span>
+                <span>{state.activeShiftId ? 'Shift Aktif' : 'Buka Shift'}</span>
               </button>
 
               {/* Held Carts Badge */}
@@ -1376,12 +1471,12 @@ Terima kasih atas kunjungan Anda!`
               <button
                 type="button"
                 onClick={() => { state.setMobileCheckoutTab('cart'); state.setMobileCartDrawerOpen(true) }}
-                className="lg:hidden relative p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:text-red-600 transition-colors"
+                className="lg:hidden relative p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:text-primary-600 transition-colors"
                 title="Buka Keranjang Belanja"
               >
                 <ShoppingCart size={15} />
                 {totalCartQty > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center shadow">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-primary-600 text-white text-[9px] font-black flex items-center justify-center shadow">
                     {totalCartQty}
                   </span>
                 )}
@@ -1394,7 +1489,7 @@ Terima kasih atas kunjungan Anda!`
                 className={`p-1.5 rounded-xl border transition-colors ${
                   bluetoothPrinter.isConnected()
                     ? 'border-emerald-500 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-500 hover:text-red-600'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-500 hover:text-primary-600'
                 }`}
                 title="Printer Thermal Bluetooth"
               >
@@ -1405,7 +1500,7 @@ Terima kasih atas kunjungan Anda!`
               <button
                 type="button"
                 onClick={() => state.setShowSettings(true)}
-                className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-500 hover:text-red-600 transition-colors"
+                className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-500 hover:text-primary-600 transition-colors"
                 title="Pengaturan Struk"
               >
                 <Settings size={15} />
@@ -1416,7 +1511,7 @@ Terima kasih atas kunjungan Anda!`
           {/* Search Input & Scanner */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1 group">
-              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-red-600 transition-colors" />
+              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-600 transition-colors" />
               <input
                 ref={state.searchRef}
                 type="text"
@@ -1424,7 +1519,7 @@ Terima kasih atas kunjungan Anda!`
                 value={state.search}
                 onChange={e => state.setSearch(e.target.value)}
                 onKeyDown={handleSearchKey}
-                className="w-full h-11 pl-10 pr-9 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/80 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-600/15 transition-all shadow-inner"
+                className="w-full h-11 pl-10 pr-9 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/80 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-primary-600 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-primary-600/15 transition-all shadow-inner"
               />
               {state.search && (
                 <button
@@ -1440,10 +1535,10 @@ Terima kasih atas kunjungan Anda!`
             <button
               type="button"
               onClick={openCameraScanner}
-              className="h-11 px-3.5 sm:px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-red-600 dark:hover:text-red-400 font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0 shadow-sm active:scale-95 transition-all"
+              className="h-11 px-3.5 sm:px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-400 font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0 shadow-sm active:scale-95 transition-all"
               title="Buka Kamera Barcode Scanner"
             >
-              <ScanLine size={18} className="text-red-600" />
+              <ScanLine size={18} className="text-primary-600" />
               <span className="hidden sm:inline">Scan</span>
             </button>
           </div>
@@ -1456,7 +1551,7 @@ Terima kasih atas kunjungan Anda!`
                 onClick={() => state.setSelectedCategory('ALL')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                   state.selectedCategory === 'ALL'
-                    ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                    ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/20'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
@@ -1475,7 +1570,7 @@ Terima kasih atas kunjungan Anda!`
                   onClick={() => state.setSelectedCategory(cat.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                     state.selectedCategory === cat.id
-                      ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                      ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/20'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
@@ -1496,7 +1591,7 @@ Terima kasih atas kunjungan Anda!`
                 onClick={() => state.setViewMode('grid')}
                 className={`p-1.5 rounded-lg transition-colors ${
                   state.viewMode === 'grid'
-                    ? 'bg-white dark:bg-slate-700 text-red-600 shadow-sm'
+                    ? 'bg-white dark:bg-slate-700 text-primary-600 shadow-sm'
                     : 'text-slate-400 hover:text-slate-600'
                 }`}
                 title="Tampilan Grid"
@@ -1508,7 +1603,7 @@ Terima kasih atas kunjungan Anda!`
                 onClick={() => state.setViewMode('list')}
                 className={`p-1.5 rounded-lg transition-colors ${
                   state.viewMode === 'list'
-                    ? 'bg-white dark:bg-slate-700 text-red-600 shadow-sm'
+                    ? 'bg-white dark:bg-slate-700 text-primary-600 shadow-sm'
                     : 'text-slate-400 hover:text-slate-600'
                 }`}
                 title="Tampilan List"
@@ -1554,10 +1649,10 @@ Terima kasih atas kunjungan Anda!`
           >
             <div
               onClick={() => { state.setMobileCheckoutTab('cart'); state.setMobileCartDrawerOpen(true) }}
-              className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/95 dark:bg-slate-900/95 text-white shadow-2xl shadow-red-600/30 border border-red-500/40 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
+              className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/95 dark:bg-slate-900/95 text-white shadow-2xl shadow-primary-600/30 border border-primary-500/40 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
             >
               <div className="flex items-center gap-3 min-w-0 pr-2">
-                <div className="relative p-2.5 rounded-xl bg-red-600 text-white font-bold shadow-sm shrink-0">
+                <div className="relative p-2.5 rounded-xl bg-primary-600 text-white font-bold shadow-sm shrink-0">
                   <ShoppingCart size={18} />
                   <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow">
                     {totalCartQty}
@@ -1576,7 +1671,7 @@ Terima kasih atas kunjungan Anda!`
                   state.setMobileCheckoutTab('cart')
                   state.setMobileCartDrawerOpen(true)
                 }}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform shrink-0"
+                className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform shrink-0"
               >
                 <span>Keranjang & Bayar</span>
                 <ArrowRight size={14} />
@@ -1613,7 +1708,7 @@ Terima kasih atas kunjungan Anda!`
               {/* Drawer Header */}
               <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800 mb-2.5 shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/50 text-red-600">
+                  <div className="p-1.5 rounded-lg bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400">
                     <ShoppingCart size={16} />
                   </div>
                   <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">Keranjang & Kasir</h3>
@@ -1624,7 +1719,7 @@ Terima kasih atas kunjungan Anda!`
                     <button
                       type="button"
                       onClick={() => state.setShowClearCart(true)}
-                      className="px-2.5 py-1 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors flex items-center gap-1"
+                      className="px-2.5 py-1 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition-colors flex items-center gap-1"
                     >
                       <Trash2 size={13} />
                       <span>Kosongkan</span>
@@ -1735,6 +1830,54 @@ Terima kasih atas kunjungan Anda!`
         cancelText="Batal"
         variant="warning"
       />
+
+      {/* Modal Cepat Buka Shift di Kasir */}
+      <Modal
+        open={openShiftModal}
+        onClose={() => setOpenShiftModal(false)}
+        title="Buka Shift Kasir Baru"
+        size="sm"
+      >
+        <form onSubmit={handleOpenShiftSubmit} className="space-y-4 pt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Masukkan modal awal uang kembalian di laci kasir untuk memulai sesi shift kasir Anda.
+          </p>
+          <div>
+            <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+              Modal Awal Laci (Rp) *
+            </label>
+            <Input
+              type="text"
+              placeholder="Contoh: 100.000"
+              value={openShiftModalAwal ? Number(openShiftModalAwal.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
+              onChange={e => {
+                const raw = e.target.value.replace(/\D/g, '')
+                setOpenShiftModalAwal(raw)
+              }}
+              required
+              autoFocus
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setOpenShiftModal(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              loading={openShiftLoading}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              Buka Shift Sekarang
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

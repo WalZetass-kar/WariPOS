@@ -1,4 +1,5 @@
 import { KasModel } from '../models/KasModel.js'
+import { sqlite } from '../../database/connection.js'
 import type { KasDrawer, KasTransaksi } from '../../shared/types'
 import { requireAuth } from '../utils/authGuard.js'
 
@@ -60,6 +61,32 @@ export class KasController {
         catatan: catatan || null,
       })
 
+      // Sync dengan shift aktif jika belum ada
+      try {
+        const activeShift = sqlite.prepare(`
+          SELECT id FROM mediasoft_shifts 
+          WHERE status = 'OPEN' AND (
+            user_id = ? 
+            OR user_id IN (
+              SELECT email FROM mediasoft_pengguna WHERE nama_pengguna = ?
+              UNION
+              SELECT nama_pengguna FROM mediasoft_pengguna WHERE email = ?
+            )
+            OR (LOWER(?) GLOB '*mi*al*' AND LOWER(user_id) GLOB '*mi*al*')
+          )
+          LIMIT 1
+        `).get(username, username, username, username)
+        if (!activeShift) {
+          const shiftNumber = `SHIFT${Date.now()}`
+          sqlite.prepare(`
+            INSERT INTO mediasoft_shifts (shift_number, user_id, start_time, opening_balance)
+            VALUES (?, ?, CURRENT_TIMESTAMP, ?)
+          `).run(shiftNumber, username, modal_awal)
+        }
+      } catch (shiftErr: any) {
+        console.warn('[KasController] Sync shift open:', shiftErr.message)
+      }
+
       return { success: true, message: 'Kas berhasil dibuka', data: { kd_kas } }
     } catch (error) {
       return { success: false, message: 'Gagal membuka kas: ' + (error as Error).message }
@@ -88,6 +115,30 @@ export class KasController {
         status: 'CLOSED',
         catatan: catatan || kas.catatan,
       })
+
+      // Sync tutup shift aktif terkait
+      try {
+        sqlite.prepare(`
+          UPDATE mediasoft_shifts
+          SET end_time = CURRENT_TIMESTAMP,
+              closing_balance = ?,
+              expected_balance = ?,
+              difference = ?,
+              status = 'CLOSED',
+              notes = COALESCE(notes, '') || ' (Ditutup bersamaan dari Kas)'
+          WHERE status = 'OPEN' AND (
+            user_id = ? 
+            OR user_id IN (
+              SELECT email FROM mediasoft_pengguna WHERE nama_pengguna = ?
+              UNION
+              SELECT nama_pengguna FROM mediasoft_pengguna WHERE email = ?
+            )
+            OR (LOWER(?) GLOB '*mi*al*' AND LOWER(user_id) GLOB '*mi*al*')
+          )
+        `).run(saldo_akhir_fisik, saldo_sistem, selisih, kas.username, kas.username, kas.username, kas.username)
+      } catch (shiftErr: any) {
+        console.warn('[KasController] Sync shift close:', shiftErr.message)
+      }
 
       return {
         success: true,

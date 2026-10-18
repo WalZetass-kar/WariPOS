@@ -1,6 +1,6 @@
 {
   "name": "waripos",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "WariPOS - Desktop & Mobile Point of Sale Application",
   "type": "module",
   "main": "dist-electron/main/index.js",
@@ -274,5 +274,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "WariPOS"
     }
-  }
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }

@@ -505,7 +505,8 @@ export default function Produk() {
   const soonCount = data.filter(d => getExpiredStatus(d.expired_date) === 'soon').length
 
   return (
-    <div className="space-y-4 select-none">
+    <div className="space-y-4 select-none relative">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-pos-checkered opacity-[0.35]" />
       {loadingData ? (
         <SkeletonPage rows={7} />
       ) : (
@@ -515,7 +516,7 @@ export default function Produk() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Katalog & Inventaris Produk</h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[11px] font-bold border border-red-600/20">
+                <span className="px-2.5 py-0.5 rounded-full bg-primary-600/10 text-primary-600 dark:bg-primary-950/60 dark:text-primary-400 text-[11px] font-bold border border-primary-600/20">
                   {productPagination.total} Total Barang
                 </span>
               </div>
@@ -532,7 +533,7 @@ export default function Produk() {
                   onClick={() => handleSetViewMode('table')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     viewMode === 'table'
-                      ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
                       : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                   title="Tampilan Tabel / List"
@@ -545,7 +546,7 @@ export default function Produk() {
                   onClick={() => handleSetViewMode('grid')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     viewMode === 'grid'
-                      ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-xs'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
                       : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                   title="Tampilan Grid Kartu"
@@ -566,7 +567,7 @@ export default function Produk() {
               <Button
                 icon={<Plus size={16} />}
                 onClick={openAdd}
-                className="flex-1 sm:flex-initial bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20"
+                className="flex-1 sm:flex-initial bg-primary-600 hover:bg-primary-700 text-white font-bold border-0 shadow-md shadow-primary-600/20"
               >
                 Tambah Produk Baru
               </Button>
@@ -664,7 +665,7 @@ export default function Produk() {
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto font-bold text-xs">Batal</Button>
-              <Button loading={loading} onClick={handleSave} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold text-xs border-0">Simpan Data Produk</Button>
+              <Button loading={loading} onClick={handleSave} className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs border-0">Simpan Data Produk</Button>
             </div>
           </div>
         }

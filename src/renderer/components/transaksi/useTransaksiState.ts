@@ -2,11 +2,14 @@ import { useState, useRef, useEffect } from 'react'
 import type { Barang, CartItem, Customer, Kategori } from '../../../shared/types'
 import type { SalePayload, QrisPayment } from './types'
 import { useAppStore } from '../../stores'
+import { cachedKasirProducts } from '../../utils/kasirCache'
 
 export function useTransaksiState() {
   const { posMode } = useAppStore()
-  const [products, setProducts] = useState<Barang[]>([])
-  const [productsLoading, setProductsLoading] = useState(true)
+
+  const [products, setProducts] = useState<Barang[]>(() => cachedKasirProducts ?? [])
+  const [productsLoading, setProductsLoading] = useState(() => cachedKasirProducts === null)
+
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [bayar, setBayar] = useState('')

@@ -27,9 +27,9 @@ export default function CustomerSelector({
     <div ref={customerRef} className="relative">
       <div
         onClick={onToggleDropdown}
-        className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 transition-colors hover:border-red-600/40"
+        className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 transition-colors hover:border-primary-600/40"
       >
-        <UserCircle size={20} className={selectedCustomer ? 'text-red-600' : 'text-slate-400'} />
+        <UserCircle size={20} className={selectedCustomer ? 'text-primary-600' : 'text-slate-400'} />
         <span className={`flex-1 text-xs truncate ${selectedCustomer ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-500'}`}>
           {selectedCustomer ? `${selectedCustomer.nama_customer} · ${selectedCustomer.poin ?? 0} Poin` : 'Pilih Pelanggan / Member (Opsional)'}
         </span>
@@ -37,7 +37,7 @@ export default function CustomerSelector({
           <button
             type="button"
             onClick={e => { e.stopPropagation(); onClearCustomer() }}
-            className="p-1 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
           >
             <X size={16} />
           </button>
@@ -52,7 +52,7 @@ export default function CustomerSelector({
               placeholder="Cari nama / no. telepon..."
               value={customerSearch}
               onChange={e => onSearchChange(e.target.value)}
-              className="w-full rounded-xl border-0 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-red-600/30"
+              className="w-full rounded-xl border-0 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-primary-600/30"
             />
           </div>
           <div className="max-h-48 overflow-y-auto scrollbar-thin">

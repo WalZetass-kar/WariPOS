@@ -586,7 +586,7 @@ function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
     secureStorage.setItem(AI_API_KEY_STORAGE_KEY, industrySettings.aiApiKey)
     industrySettings.aiApiKey = ''
   }
-  const legacyMockUsers = new Set(['walkece5@gmail.com', 'ihwalmaulana2', 'tokohalal@gmail.com'])
+  const legacyMockUsers = new Set(['walkece5@gmail.com', 'tokohalal@gmail.com'])
   const userList: MobileUser[] = (Array.isArray(value.users) ? value.users : [])
     .filter(u => !legacyMockUsers.has(String(u.nama_pengguna ?? '').toLowerCase()) && !legacyMockUsers.has(String(u.email ?? '').toLowerCase()))
     .map(user => ({
@@ -868,11 +868,30 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
 
   const total = (rows: Penjualan[]) => rows.reduce((sum, item) => sum + saleAmount(item), 0)
 
+  const yesterday = new Date(nowDate)
+  yesterday.setDate(nowDate.getDate() - 1)
+  const yesterdayKey = dateKey(yesterday)
+  const yesterdaySales = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === yesterdayKey)
+  const yesterdayTotal = total(yesterdaySales)
+  const yesterdayCount = yesterdaySales.length
+  const todayQtySold = todaySales.reduce((sum, item) => sum + toNumber(item.total_qty), 0)
+
   const chartData = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(nowDate)
     date.setDate(nowDate.getDate() - (6 - index))
     const key = dateKey(date)
     const label = date.toLocaleDateString('id-ID', { weekday: 'short' })
+    return {
+      label,
+      total: total(store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === key)),
+    }
+  })
+
+  const chartData30 = Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(nowDate)
+    date.setDate(nowDate.getDate() - (29 - index))
+    const key = dateKey(date)
+    const label = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
     return {
       label,
       total: total(store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === key)),
@@ -888,11 +907,18 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
     }
   })
 
-  const productMap = new Map<string, { kd_barang: string; nama_barang: string | null; total_qty: number; total_revenue: number }>()
+  const productMap = new Map<string, { kd_barang: string; nama_barang: string | null; foto_barang?: string | null; total_qty: number; total_revenue: number }>()
   for (const detailRows of Object.values(store.penjualanDetails)) {
     for (const detail of detailRows) {
       const kd = detail.kd_barang ?? ''
-      const current = productMap.get(kd) ?? { kd_barang: kd, nama_barang: detail.nama_barang, total_qty: 0, total_revenue: 0 }
+      const bObj = store.barang.find(b => b.kd_barang === kd)
+      const current = productMap.get(kd) ?? {
+        kd_barang: kd,
+        nama_barang: detail.nama_barang || bObj?.nama_barang || null,
+        foto_barang: bObj?.foto_barang || null,
+        total_qty: 0,
+        total_revenue: 0,
+      }
       current.total_qty += toNumber(detail.qty)
       current.total_revenue += toNumber(detail.total_harga_jual)
       productMap.set(kd, current)
@@ -929,7 +955,11 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
     totalBarang: store.barang.length,
     lowStockCount: lowStockProducts.length,
     chartData,
+    chartData30,
     predictedTomorrow: Math.round(chartData.reduce((sum, item) => sum + item.total, 0) / 7),
+    todayQtySold,
+    yesterdayTotal,
+    yesterdayCount,
     hourlySales,
     recentTransactions,
     alertSummary: {
@@ -3655,7 +3685,16 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
           if (
             user.nama_pengguna.toLowerCase() === 'developer' ||
             user.nama_pengguna.toLowerCase() === 'kartikadevi' ||
+            user.nama_pengguna.toLowerCase().includes('mihwalmaulana') ||
+            user.nama_pengguna.toLowerCase().includes('mihalmaulana') ||
+            user.nama_pengguna.toLowerCase().includes('ihwalmaulana') ||
             user.nama_lengkap?.toLowerCase().includes('[developer]') ||
+            user.nama_lengkap?.toLowerCase().includes('ihwal maulana') ||
+            user.nama_lengkap?.toLowerCase().includes('mihwal maulana') ||
+            user.nama_lengkap?.toLowerCase().includes('mihal maulana') ||
+            user.email?.toLowerCase().includes('mihwalmaulana') ||
+            user.email?.toLowerCase().includes('mihalmaulana') ||
+            user.email?.toLowerCase().includes('ihwalmaulana') ||
             user.email?.toLowerCase().endsWith('@zetass.dev')
           ) {
             user.hak_akses = 'developer'
@@ -4200,8 +4239,42 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'penjualan:create':
       return createSale(store, args[0] as AnyRecord) as IpcResponse<T>
 
-    case 'kas:getActiveKas':
-      return ok(store.kasDrawers.find(item => item.status === 'OPEN' && item.username === String(args[0] ?? 'admin')) as T)
+    case 'kas:getActiveKas': {
+      const username = String(args[0] ?? 'admin').trim()
+      let drawer = store.kasDrawers.find(item => item.status === 'OPEN' && (
+        item.username === username ||
+        ((username.toLowerCase().includes('mihwal') || username.toLowerCase().includes('mihal')) && (item.username.toLowerCase().includes('mihwal') || item.username.toLowerCase().includes('mihal')))
+      ))
+      if (!drawer) {
+        const activeShift = store.shifts.find(item => item.status === 'OPEN' && (
+          String(item.user_id) === username ||
+          ((username.toLowerCase().includes('mihwal') || username.toLowerCase().includes('mihal')) && (String(item.user_id).toLowerCase().includes('mihwal') || String(item.user_id).toLowerCase().includes('mihal')))
+        ))
+        if (activeShift) {
+          const kd = `KAS-${activeShift.shift_number || activeShift.id}`
+          drawer = store.kasDrawers.find(item => item.kd_kas === kd)
+          if (!drawer) {
+            drawer = {
+              kd_kas: kd,
+              tgl_buka: activeShift.start_time || now(),
+              tgl_tutup: null,
+              username,
+              modal_awal: toNumber(activeShift.opening_balance),
+              total_penjualan: toNumber(activeShift.total_sales),
+              total_pengeluaran: 0,
+              total_pemasukan: 0,
+              saldo_akhir: 0,
+              selisih: 0,
+              status: 'OPEN',
+              catatan: `Otomatis sinkron dari Shift ${activeShift.shift_number || activeShift.id}`,
+            }
+            store.kasDrawers.unshift(drawer)
+            saveStore(store)
+          }
+        }
+      }
+      return ok(drawer as T)
+    }
 
     case 'kas:getAllKas':
       return ok(store.kasDrawers as T)
@@ -4210,8 +4283,8 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return ok(store.kasDrawers.find(item => item.kd_kas === String(args[0] ?? '')) as T)
 
     case 'kas:bukaKas': {
-      const username = String(args[0] ?? 'admin')
-      if (store.kasDrawers.some(item => item.status === 'OPEN' && item.username === username)) return fail('Kas masih terbuka')
+      const username = String(args[0] ?? 'admin').trim()
+      if (store.kasDrawers.some(item => item.status === 'OPEN' && (item.username === username || ((username.toLowerCase().includes('mihwal') || username.toLowerCase().includes('mihal')) && (item.username.toLowerCase().includes('mihwal') || item.username.toLowerCase().includes('mihal')))))) return fail('Kas masih terbuka')
       const kd = `KAS-${compactDateKey()}-${pad(nextCounter(store, 'kas'), 3)}`
       const row: KasDrawer = {
         kd_kas: kd,
@@ -4228,6 +4301,18 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         catatan: String(args[2] ?? ''),
       }
       store.kasDrawers.unshift(row)
+      if (!store.shifts.some(item => item.status === 'OPEN' && (String(item.user_id) === username || ((username.toLowerCase().includes('mihwal') || username.toLowerCase().includes('mihal')) && (String(item.user_id).toLowerCase().includes('mihwal') || String(item.user_id).toLowerCase().includes('mihal')))))) {
+        store.shifts.unshift({
+          id: nextCounter(store, 'shift'),
+          shift_number: `SHIFT-${compactDateKey()}-${pad(store.counters.shift ?? 1)}`,
+          user_id: username,
+          start_time: now(),
+          opening_balance: toNumber(args[1]),
+          total_sales: 0,
+          total_transactions: 0,
+          status: 'OPEN'
+        })
+      }
       saveStore(store)
       return ok(row as T, 'Kas berhasil dibuka')
     }
@@ -5404,22 +5489,94 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return deleteSimpleRow(store, store.returns, args[0]) as IpcResponse<T>
     }
 
-    case 'shift:getCurrent':
-      return ok(store.shifts.find(item => item.status === 'OPEN' && String(item.user_id) === String(args[0])) as T)
+    case 'shift:getCurrent': {
+      const username = String(args[0] ?? '').trim()
+      const shift = store.shifts.find(item => item.status === 'OPEN' && (
+        String(item.user_id) === username ||
+        ((username.toLowerCase().includes('mihwal') || username.toLowerCase().includes('mihal')) && (String(item.user_id).toLowerCase().includes('mihwal') || String(item.user_id).toLowerCase().includes('mihal')))
+      ))
+      if (!shift) return ok(null as T)
+
+      const shiftSales = store.penjualan.filter(p => toNumber(p.shift_id) === shift.id)
+      let totalTunai = 0
+      let totalNonTunai = 0
+      let totalSales = 0
+      for (const s of shiftSales) {
+        const amt = toNumber(s.yang_dibayar) - toNumber(s.kembalian)
+        totalSales += amt
+        if (String(s.jenis_pembayaran || '').toLowerCase().includes('tunai')) {
+          totalTunai += amt
+        } else {
+          totalNonTunai += amt
+        }
+      }
+      const drawer = store.kasDrawers.find(item => item.status === 'OPEN' && (item.kd_kas === `KAS-${shift.shift_number}` || item.username === String(shift.user_id)))
+      const totalPemasukan = toNumber(drawer?.total_pemasukan || 0)
+      const totalPengeluaran = toNumber(drawer?.total_pengeluaran || 0)
+      const expectedCash = toNumber(shift.opening_balance) + totalTunai + totalPemasukan - totalPengeluaran
+
+      return ok({
+        ...shift,
+        total_tunai: totalTunai,
+        total_nontunai: totalNonTunai,
+        total_sales: totalSales,
+        total_transactions: shiftSales.length,
+        total_pemasukan: totalPemasukan,
+        total_pengeluaran: totalPengeluaran,
+        expected_cash: expectedCash,
+      } as T)
+    }
 
     case 'shift:getAll':
       return ok(store.shifts as T)
 
     case 'shift:open': {
       const data = args[0] as AnyRecord
-      const row = { id: nextCounter(store, 'shift'), shift_number: `SHIFT-${compactDateKey()}-${pad(store.counters.shift ?? 1)}`, user_id: data.user_id, start_time: now(), opening_balance: toNumber(data.opening_balance), total_sales: 0, total_transactions: 0, status: 'OPEN' }
+      const userId = String(data.user_id ?? 'admin').trim()
+      const row = { id: nextCounter(store, 'shift'), shift_number: `SHIFT-${compactDateKey()}-${pad(store.counters.shift ?? 1)}`, user_id: userId, start_time: now(), opening_balance: toNumber(data.opening_balance), total_sales: 0, total_transactions: 0, status: 'OPEN' }
       store.shifts.unshift(row)
+      if (!store.kasDrawers.some(item => item.status === 'OPEN' && (item.username === userId || ((userId.toLowerCase().includes('mihwal') || userId.toLowerCase().includes('mihal')) && (item.username.toLowerCase().includes('mihwal') || item.username.toLowerCase().includes('mihal')))))) {
+        store.kasDrawers.unshift({
+          kd_kas: `KAS-${row.shift_number}`,
+          tgl_buka: now(),
+          tgl_tutup: null,
+          username: userId,
+          modal_awal: toNumber(data.opening_balance),
+          total_penjualan: 0,
+          total_pengeluaran: 0,
+          total_pemasukan: 0,
+          saldo_akhir: 0,
+          selisih: 0,
+          status: 'OPEN',
+          catatan: `Otomatis sinkron dari Shift ${row.shift_number}`,
+        })
+      }
       saveStore(store)
       return ok(row as T, 'Shift dibuka')
     }
 
-    case 'shift:close':
-      return updateSimpleRow(store, store.shifts, args[0], { ...(args[1] as AnyRecord), end_time: now(), status: 'CLOSED' }) as IpcResponse<T>
+    case 'shift:close': {
+      let shiftId: number
+      let data: AnyRecord
+      if (typeof args[0] === 'object' && args[0] !== null) {
+        const obj = args[0] as AnyRecord
+        shiftId = toNumber(obj.id)
+        data = obj
+      } else {
+        shiftId = toNumber(args[0])
+        data = (args[1] as AnyRecord) || {}
+      }
+      const shift = store.shifts.find(item => item.id === shiftId)
+      if (shift) {
+        const drawer = store.kasDrawers.find(item => item.status === 'OPEN' && (item.kd_kas === `KAS-${shift.shift_number}` || item.username === String(shift.user_id)))
+        if (drawer) {
+          drawer.tgl_tutup = now()
+          drawer.status = 'CLOSED'
+          drawer.saldo_akhir = toNumber(data.closing_balance)
+        }
+      }
+      return updateSimpleRow(store, store.shifts, shiftId, { ...data, end_time: now(), status: 'CLOSED' }) as IpcResponse<T>
+    }
 
     case 'shift:delete': {
       const shiftId = toNumber(args[0])

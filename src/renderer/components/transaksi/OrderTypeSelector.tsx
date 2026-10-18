@@ -22,7 +22,7 @@ export default function OrderTypeSelector({
             onClick={() => onChangeTipe(type)}
             className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
               tipePesanan === type
-                ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/20'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
             }`}
           >
@@ -37,7 +37,7 @@ export default function OrderTypeSelector({
           <select
             value={nomorMeja}
             onChange={e => onChangeMeja(e.target.value)}
-            className="w-full text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-slate-900 dark:text-white outline-none focus:border-red-600"
+            className="w-full text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-slate-900 dark:text-white outline-none focus:border-primary-600"
           >
             <option value="">-- Pilih Nomor Meja (Opsional) --</option>
             {availableTables.map(t => (

@@ -206,7 +206,7 @@ export default function CustomerPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Pelanggan & Loyalty Poin</h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[11px] font-bold border border-red-600/20">
+                <span className="px-2.5 py-0.5 rounded-full bg-primary-600/10 text-primary-600 dark:bg-primary-950/60 dark:text-primary-400 text-[11px] font-bold border border-primary-600/20">
                   {data.length} Member Terdaftar
                 </span>
               </div>
@@ -218,7 +218,7 @@ export default function CustomerPage() {
             <Button
               icon={<Plus size={16} />}
               onClick={openAdd}
-              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20"
+              className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white font-bold border-0 shadow-md shadow-primary-600/20"
             >
               Tambah Customer Baru
             </Button>
@@ -232,7 +232,7 @@ export default function CustomerPage() {
                   <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Pelanggan</p>
                   <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{data.length} Member</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-red-600/10 text-red-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-primary-600/10 text-primary-600 flex items-center justify-center">
                   <Users size={20} />
                 </div>
               </div>
@@ -273,7 +273,7 @@ export default function CustomerPage() {
         footer={
           <>
             <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto font-bold">Batal</Button>
-            <Button loading={loading} onClick={handleSave} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">Simpan Data Customer</Button>
+            <Button loading={loading} onClick={handleSave} className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white font-bold border-0">Simpan Data Customer</Button>
           </>
         }
       >
@@ -293,7 +293,7 @@ export default function CustomerPage() {
         footer={
           <>
             <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto font-bold">Batal</Button>
-            <Button loading={loading} onClick={handlePoin} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">Simpan Perubahan Poin</Button>
+            <Button loading={loading} onClick={handlePoin} className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white font-bold border-0">Simpan Perubahan Poin</Button>
           </>
         }
       >

@@ -91,6 +91,7 @@ export default function Kas() {
         setModal(null)
         setModalAwal('')
         load()
+        window.dispatchEvent(new CustomEvent('app:refresh'))
       } else {
         toast(r.message as string, 'error')
       }
@@ -111,6 +112,7 @@ export default function Kas() {
         setModal(null)
         setModalAkhir('')
         load()
+        window.dispatchEvent(new CustomEvent('app:refresh'))
       } else {
         toast(r.message as string, 'error')
       }
@@ -135,6 +137,7 @@ export default function Kas() {
         setModal(null)
         setExpense({ jumlah: '', keterangan: '' })
         load()
+        window.dispatchEvent(new CustomEvent('app:refresh'))
       } else {
         toast(r.message as string, 'error')
       }
@@ -159,6 +162,7 @@ export default function Kas() {
         setModal(null)
         setIncome({ jumlah: '', keterangan: '' })
         load()
+        window.dispatchEvent(new CustomEvent('app:refresh'))
       } else {
         toast(r.message as string, 'error')
       }
@@ -176,6 +180,7 @@ export default function Kas() {
       toast(r.message as string)
       setDeleteKas(null)
       load()
+      window.dispatchEvent(new CustomEvent('app:refresh'))
     } else {
       toast(r.message as string, 'error')
     }
@@ -190,6 +195,7 @@ export default function Kas() {
       toast('Transaksi dihapus')
       setDeleteTransaksi(null)
       load()
+      window.dispatchEvent(new CustomEvent('app:refresh'))
     } else {
       toast(r.message as string, 'error')
     }

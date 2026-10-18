@@ -192,3 +192,40 @@ export function hasPermission(
   }
   return true
 }
+
+export interface UserIdentitySummary {
+  nama_pengguna?: string | null
+  nama_lengkap?: string | null
+  email?: string | null
+  hak_akses?: string | null
+}
+
+export function isDeveloperUser(user?: UserIdentitySummary | null): boolean {
+  if (!user) return false
+  if (user.hak_akses === 'developer' || user.hak_akses === 'super_admin') return true
+  const u = (user.nama_pengguna || '').toLowerCase().trim()
+  const n = (user.nama_lengkap || '').toLowerCase().trim()
+  const e = (user.email || '').toLowerCase().trim()
+  return (
+    u === 'developer' ||
+    u === 'kartikadevi' ||
+    u === 'mihwalmaulana' ||
+    u === 'mihalmaulana' ||
+    u === 'ihwalmaulana' ||
+    u === 'mihwal' ||
+    u === 'mihal' ||
+    u === 'ihwal' ||
+    u.startsWith('mihwalmaulana') ||
+    u.startsWith('mihalmaulana') ||
+    u.startsWith('ihwalmaulana') ||
+    n.includes('[developer]') ||
+    n.includes('ihwal maulana') ||
+    n.includes('mihwal maulana') ||
+    n.includes('mihal maulana') ||
+    e.startsWith('mihwalmaulana') ||
+    e.startsWith('mihalmaulana') ||
+    e.startsWith('ihwalmaulana') ||
+    e.endsWith('@zetass.dev')
+  )
+}
+

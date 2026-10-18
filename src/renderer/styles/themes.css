@@ -1,0 +1,366 @@
+/* Vibrant, High-Clarity Theme Tokens for WariPOS.
+   Upgraded from washed-out pastels to crisp, vibrant POS colors.
+   50-300: Fresh, clean surface tints and badge backgrounds.
+   400-500: Vibrant accents and data visualizations.
+   600-700: Bold, punchy primary actions with >= 4.5:1 WCAG contrast on white text.
+   800-900: Deep solid anchors for dark mode and pressed states. */
+
+/* ── Default (Crimson Vibrant), used before data-theme is set ── */
+:root {
+  --color-primary-50: #fff1f2;
+  --color-primary-100: #ffe4e6;
+  --color-primary-200: #fecdd3;
+  --color-primary-300: #fda4af;
+  --color-primary-400: #fb7185;
+  --color-primary-500: #f43f5e;
+  --color-primary-600: #e11d48;
+  --color-primary-700: #be123c;
+  --color-primary-800: #9f1239;
+  --color-primary-900: #881337;
+  --glass-shadow-rgb: 225, 29, 72;
+  --scrollbar-thumb: #fecdd3;
+  --scrollbar-thumb-hover: #fda4af;
+  --scrollbar-thumb-dark: #9f1239;
+  --scrollbar-thumb-dark-hover: #be123c;
+  --chart-bar-color: #f43f5e;
+}
+
+/* ── Theme: Crimson (Vibrant POS Red) ── */
+[data-theme="crimson"] {
+  --color-primary-50: #fff1f2;
+  --color-primary-100: #ffe4e6;
+  --color-primary-200: #fecdd3;
+  --color-primary-300: #fda4af;
+  --color-primary-400: #fb7185;
+  --color-primary-500: #f43f5e;
+  --color-primary-600: #e11d48;
+  --color-primary-700: #be123c;
+  --color-primary-800: #9f1239;
+  --color-primary-900: #881337;
+  --glass-shadow-rgb: 225, 29, 72;
+  --scrollbar-thumb: #fecdd3;
+  --scrollbar-thumb-hover: #fda4af;
+  --scrollbar-thumb-dark: #9f1239;
+  --scrollbar-thumb-dark-hover: #be123c;
+  --chart-bar-color: #f43f5e;
+}
+
+/* ── Theme: Indigo (Royal Indigo) ── */
+[data-theme="indigo"] {
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+  --color-primary-800: #3730a3;
+  --color-primary-900: #312e81;
+  --glass-shadow-rgb: 79, 70, 229;
+  --scrollbar-thumb: #c7d2fe;
+  --scrollbar-thumb-hover: #a5b4fc;
+  --scrollbar-thumb-dark: #3730a3;
+  --scrollbar-thumb-dark-hover: #4338ca;
+  --chart-bar-color: #6366f1;
+}
+
+/* ── Theme: Emerald (Fresh Emerald Green) ── */
+[data-theme="emerald"] {
+  --color-primary-50: #ecfdf5;
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-300: #6ee7b7;
+  --color-primary-400: #34d399;
+  --color-primary-500: #10b981;
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065f46;
+  --color-primary-900: #064e3b;
+  --glass-shadow-rgb: 5, 150, 105;
+  --scrollbar-thumb: #a7f3d0;
+  --scrollbar-thumb-hover: #6ee7b7;
+  --scrollbar-thumb-dark: #065f46;
+  --scrollbar-thumb-dark-hover: #047857;
+  --chart-bar-color: #10b981;
+}
+
+/* ── Theme: Blue (Bright Sapphire Blue) ── */
+[data-theme="blue"] {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --glass-shadow-rgb: 37, 99, 235;
+  --scrollbar-thumb: #bfdbfe;
+  --scrollbar-thumb-hover: #93c5fd;
+  --scrollbar-thumb-dark: #1e40af;
+  --scrollbar-thumb-dark-hover: #1d4ed8;
+  --chart-bar-color: #3b82f6;
+}
+
+/* ── Theme: Rose (Vibrant Rose) ── */
+[data-theme="rose"] {
+  --color-primary-50: #fff1f2;
+  --color-primary-100: #ffe4e6;
+  --color-primary-200: #fecdd3;
+  --color-primary-300: #fda4af;
+  --color-primary-400: #fb7185;
+  --color-primary-500: #f43f5e;
+  --color-primary-600: #e11d48;
+  --color-primary-700: #be123c;
+  --color-primary-800: #9f1239;
+  --color-primary-900: #881337;
+  --glass-shadow-rgb: 225, 29, 72;
+  --scrollbar-thumb: #fecdd3;
+  --scrollbar-thumb-hover: #fda4af;
+  --scrollbar-thumb-dark: #9f1239;
+  --scrollbar-thumb-dark-hover: #be123c;
+  --chart-bar-color: #f43f5e;
+}
+
+/* ── Theme: Amber (Warm Radiant Amber) ── */
+[data-theme="amber"] {
+  --color-primary-50: #fffbeb;
+  --color-primary-100: #fef3c7;
+  --color-primary-200: #fde68a;
+  --color-primary-300: #fcd34d;
+  --color-primary-400: #fbbf24;
+  --color-primary-500: #f59e0b;
+  --color-primary-600: #d97706;
+  --color-primary-700: #b45309;
+  --color-primary-800: #92400e;
+  --color-primary-900: #78350f;
+  --glass-shadow-rgb: 217, 119, 6;
+  --scrollbar-thumb: #fde68a;
+  --scrollbar-thumb-hover: #fcd34d;
+  --scrollbar-thumb-dark: #92400e;
+  --scrollbar-thumb-dark-hover: #b45309;
+  --chart-bar-color: #f59e0b;
+}
+
+/* ── Theme: Sky (Crisp Sky Blue) ── */
+[data-theme="sky"] {
+  --color-primary-50: #f0f9ff;
+  --color-primary-100: #e0f2fe;
+  --color-primary-200: #bae6fd;
+  --color-primary-300: #7dd3fc;
+  --color-primary-400: #38bdf8;
+  --color-primary-500: #0ea5e9;
+  --color-primary-600: #0284c7;
+  --color-primary-700: #0369a1;
+  --color-primary-800: #075985;
+  --color-primary-900: #0c4a6e;
+  --glass-shadow-rgb: 2, 132, 199;
+  --scrollbar-thumb: #bae6fd;
+  --scrollbar-thumb-hover: #7dd3fc;
+  --scrollbar-thumb-dark: #075985;
+  --scrollbar-thumb-dark-hover: #0369a1;
+  --chart-bar-color: #0ea5e9;
+}
+
+/* ── Theme: Pink (Electric Pink) ── */
+[data-theme="pink"] {
+  --color-primary-50: #fdf2f8;
+  --color-primary-100: #fce7f3;
+  --color-primary-200: #fbcfe8;
+  --color-primary-300: #f9a8d4;
+  --color-primary-400: #f472b6;
+  --color-primary-500: #ec4899;
+  --color-primary-600: #db2777;
+  --color-primary-700: #be185d;
+  --color-primary-800: #9d174d;
+  --color-primary-900: #831843;
+  --glass-shadow-rgb: 219, 39, 119;
+  --scrollbar-thumb: #fbcfe8;
+  --scrollbar-thumb-hover: #f9a8d4;
+  --scrollbar-thumb-dark: #9d174d;
+  --scrollbar-thumb-dark-hover: #be185d;
+  --chart-bar-color: #ec4899;
+}
+
+/* ── Theme: Violet (Deep Vivid Violet) ── */
+[data-theme="violet"] {
+  --color-primary-50: #f5f3ff;
+  --color-primary-100: #ede9fe;
+  --color-primary-200: #ddd6fe;
+  --color-primary-300: #c4b5fd;
+  --color-primary-400: #a78bfa;
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
+  --color-primary-700: #6d28d9;
+  --color-primary-800: #5b21b6;
+  --color-primary-900: #4c1d95;
+  --glass-shadow-rgb: 124, 58, 237;
+  --scrollbar-thumb: #ddd6fe;
+  --scrollbar-thumb-hover: #c4b5fd;
+  --scrollbar-thumb-dark: #5b21b6;
+  --scrollbar-thumb-dark-hover: #6d28d9;
+  --chart-bar-color: #8b5cf6;
+}
+
+/* ── Theme: Purple (Regal Purple) ── */
+[data-theme="purple"] {
+  --color-primary-50: #faf5ff;
+  --color-primary-100: #f3e8ff;
+  --color-primary-200: #e9d5ff;
+  --color-primary-300: #d8b4fe;
+  --color-primary-400: #c084fc;
+  --color-primary-500: #a855f7;
+  --color-primary-600: #9333ea;
+  --color-primary-700: #7e22ce;
+  --color-primary-800: #6b21a8;
+  --color-primary-900: #581c87;
+  --glass-shadow-rgb: 147, 51, 234;
+  --scrollbar-thumb: #e9d5ff;
+  --scrollbar-thumb-hover: #d8b4fe;
+  --scrollbar-thumb-dark: #6b21a8;
+  --scrollbar-thumb-dark-hover: #7e22ce;
+  --chart-bar-color: #a855f7;
+}
+
+/* ── Theme: Teal (Tropical Teal) ── */
+[data-theme="teal"] {
+  --color-primary-50: #f0fdfa;
+  --color-primary-100: #ccfbf1;
+  --color-primary-200: #99f6e4;
+  --color-primary-300: #5eead4;
+  --color-primary-400: #2dd4bf;
+  --color-primary-500: #14b8a6;
+  --color-primary-600: #0d9488;
+  --color-primary-700: #0f766e;
+  --color-primary-800: #115e59;
+  --color-primary-900: #134e4a;
+  --glass-shadow-rgb: 13, 148, 136;
+  --scrollbar-thumb: #99f6e4;
+  --scrollbar-thumb-hover: #5eead4;
+  --scrollbar-thumb-dark: #115e59;
+  --scrollbar-thumb-dark-hover: #0f766e;
+  --chart-bar-color: #14b8a6;
+}
+
+/* ── Theme: Cyan (Vivid Cyan) ── */
+[data-theme="cyan"] {
+  --color-primary-50: #ecfeff;
+  --color-primary-100: #cffafe;
+  --color-primary-200: #a5f3fc;
+  --color-primary-300: #67e8f9;
+  --color-primary-400: #22d3ee;
+  --color-primary-500: #06b6d4;
+  --color-primary-600: #0891b2;
+  --color-primary-700: #0e7490;
+  --color-primary-800: #155e75;
+  --color-primary-900: #164e63;
+  --glass-shadow-rgb: 8, 145, 178;
+  --scrollbar-thumb: #a5f3fc;
+  --scrollbar-thumb-hover: #67e8f9;
+  --scrollbar-thumb-dark: #155e75;
+  --scrollbar-thumb-dark-hover: #0e7490;
+  --chart-bar-color: #06b6d4;
+}
+
+/* ── Theme: Orange (Fresh Citrus Orange) ── */
+[data-theme="orange"] {
+  --color-primary-50: #fff7ed;
+  --color-primary-100: #ffedd5;
+  --color-primary-200: #fed7aa;
+  --color-primary-300: #fdba74;
+  --color-primary-400: #fb923c;
+  --color-primary-500: #f97316;
+  --color-primary-600: #ea580c;
+  --color-primary-700: #c2410c;
+  --color-primary-800: #9a3412;
+  --color-primary-900: #7c2d12;
+  --glass-shadow-rgb: 234, 88, 12;
+  --scrollbar-thumb: #fed7aa;
+  --scrollbar-thumb-hover: #fdba74;
+  --scrollbar-thumb-dark: #9a3412;
+  --scrollbar-thumb-dark-hover: #c2410c;
+  --chart-bar-color: #f97316;
+}
+
+/* ── Theme: Green (Lively Leaf Green) ── */
+[data-theme="green"] {
+  --color-primary-50: #f0fdf4;
+  --color-primary-100: #dcfce7;
+  --color-primary-200: #bbf7d0;
+  --color-primary-300: #86efac;
+  --color-primary-400: #4ade80;
+  --color-primary-500: #22c55e;
+  --color-primary-600: #16a34a;
+  --color-primary-700: #15803d;
+  --color-primary-800: #166534;
+  --color-primary-900: #14532d;
+  --glass-shadow-rgb: 22, 163, 74;
+  --scrollbar-thumb: #bbf7d0;
+  --scrollbar-thumb-hover: #86efac;
+  --scrollbar-thumb-dark: #166534;
+  --scrollbar-thumb-dark-hover: #15803d;
+  --chart-bar-color: #22c55e;
+}
+
+/* ── Theme: Slate (Polished Slate) ── */
+[data-theme="slate"] {
+  --color-primary-50: #f8fafc;
+  --color-primary-100: #f1f5f9;
+  --color-primary-200: #e2e8f0;
+  --color-primary-300: #cbd5e1;
+  --color-primary-400: #94a3b8;
+  --color-primary-500: #64748b;
+  --color-primary-600: #475569;
+  --color-primary-700: #334155;
+  --color-primary-800: #1e293b;
+  --color-primary-900: #0f172a;
+  --glass-shadow-rgb: 71, 85, 105;
+  --scrollbar-thumb: #e2e8f0;
+  --scrollbar-thumb-hover: #cbd5e1;
+  --scrollbar-thumb-dark: #1e293b;
+  --scrollbar-thumb-dark-hover: #334155;
+  --chart-bar-color: #64748b;
+}
+
+/* ── Theme: Coffee (Warm Espresso & Caramel) ── */
+[data-theme="coffee"] {
+  --color-primary-50: #fdf8f6;
+  --color-primary-100: #f2e8e5;
+  --color-primary-200: #eaddd7;
+  --color-primary-300: #d1b8ab;
+  --color-primary-400: #b9937d;
+  --color-primary-500: #a27255;
+  --color-primary-600: #8b5536;
+  --color-primary-700: #74432a;
+  --color-primary-800: #5f3622;
+  --color-primary-900: #4f2d1c;
+  --glass-shadow-rgb: 139, 85, 54;
+  --scrollbar-thumb: #eaddd7;
+  --scrollbar-thumb-hover: #d1b8ab;
+  --scrollbar-thumb-dark: #5f3622;
+  --scrollbar-thumb-dark-hover: #74432a;
+  --chart-bar-color: #a27255;
+}
+
+/* ── Theme: Gold (Brilliant Gold) ── */
+[data-theme="gold"] {
+  --color-primary-50: #fefce8;
+  --color-primary-100: #fef9c3;
+  --color-primary-200: #fef08a;
+  --color-primary-300: #fde047;
+  --color-primary-400: #facc15;
+  --color-primary-500: #eab308;
+  --color-primary-600: #ca8a04;
+  --color-primary-700: #a16207;
+  --color-primary-800: #854d0e;
+  --color-primary-900: #713f12;
+  --glass-shadow-rgb: 202, 138, 4;
+  --scrollbar-thumb: #fef08a;
+  --scrollbar-thumb-hover: #fde047;
+  --scrollbar-thumb-dark: #854d0e;
+  --scrollbar-thumb-dark-hover: #a16207;
+  --chart-bar-color: #eab308;
+}

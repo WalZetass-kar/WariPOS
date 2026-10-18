@@ -264,7 +264,7 @@ export default function ProductCardGrid({
                 <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between gap-2">
                   <div className="space-y-1">
                     <h3
-                      className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-snug line-clamp-2 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors"
+                      className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-snug line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors"
                       title={p.nama_barang ?? undefined}
                     >
                       {p.nama_barang}
@@ -279,7 +279,7 @@ export default function ProductCardGrid({
                   {/* Price Section */}
                   <div className="pt-1 border-t border-slate-100 dark:border-slate-800/60">
                     <div className="flex items-baseline justify-between gap-1">
-                      <span className="font-black text-xs sm:text-sm text-red-600 dark:text-red-400 truncate">
+                      <span className="font-black text-xs sm:text-sm text-primary-600 dark:text-primary-400 truncate">
                         {formatRupiah(p.harga_barang)}
                       </span>
                       {p.potongan && Number(p.potongan) > 0 ? (
@@ -302,7 +302,7 @@ export default function ProductCardGrid({
                     <button
                       type="button"
                       onClick={() => onEdit(p)}
-                      className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-red-600 hover:bg-white dark:hover:bg-slate-700 transition-all active:scale-90"
+                      className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 hover:bg-white dark:hover:bg-slate-700 transition-all active:scale-90"
                       title="Edit Produk"
                     >
                       <Pencil size={13} />
@@ -310,7 +310,7 @@ export default function ProductCardGrid({
                     <button
                       type="button"
                       onClick={() => onBarcode(p)}
-                      className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-red-600 hover:bg-white dark:hover:bg-slate-700 transition-all active:scale-90"
+                      className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 hover:bg-white dark:hover:bg-slate-700 transition-all active:scale-90"
                       title="Cetak Barcode"
                     >
                       <Barcode size={13} />
@@ -318,7 +318,7 @@ export default function ProductCardGrid({
                     <button
                       type="button"
                       onClick={() => onDuplicate(p)}
-                      className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-red-600 hover:bg-white dark:hover:bg-slate-700 transition-all active:scale-90"
+                      className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 hover:bg-white dark:hover:bg-slate-700 transition-all active:scale-90"
                       title="Duplikat Produk"
                     >
                       <Copy size={13} />

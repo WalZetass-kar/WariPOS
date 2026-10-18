@@ -25,30 +25,185 @@ export class ShiftController {
     ensureTable()
     const userId = String(data.user_id ?? '').trim()
     if (!userId) return { success: false, message: 'User shift wajib diisi' }
-    const active = sqlite.prepare('SELECT id FROM mediasoft_shifts WHERE user_id = ? AND status = ? LIMIT 1').get(userId, 'OPEN')
+    const active = sqlite.prepare(`
+      SELECT id FROM mediasoft_shifts 
+      WHERE status = 'OPEN' 
+        AND (
+          user_id = ? 
+          OR user_id IN (
+            SELECT email FROM mediasoft_pengguna WHERE nama_pengguna = ?
+            UNION
+            SELECT nama_pengguna FROM mediasoft_pengguna WHERE email = ?
+          )
+          OR (LOWER(?) GLOB '*mi*al*' AND LOWER(user_id) GLOB '*mi*al*')
+        )
+      LIMIT 1
+    `).get(userId, userId, userId, userId)
     if (active) return { success: false, message: 'Masih ada shift aktif untuk user ini' }
     const shiftNumber = `SHIFT${Date.now()}`
     const result = sqlite.prepare('INSERT INTO mediasoft_shifts (shift_number, user_id, start_time, opening_balance) VALUES (?, ?, CURRENT_TIMESTAMP, ?)').run(shiftNumber, userId, data.opening_balance)
+    
+    try {
+      const openDrawer = sqlite.prepare("SELECT kd_kas FROM mediasoft_kas_drawer WHERE username = ? AND status = 'OPEN' LIMIT 1").get(userId)
+      if (!openDrawer) {
+        sqlite.prepare(`
+          INSERT INTO mediasoft_kas_drawer (kd_kas, tgl_buka, username, modal_awal, total_penjualan, total_pengeluaran, total_pemasukan, saldo_akhir, selisih, status, catatan)
+          VALUES (?, CURRENT_TIMESTAMP, ?, ?, 0, 0, 0, 0, 0, 'OPEN', ?)
+        `).run(`KAS-${shiftNumber}`, userId, Number(data.opening_balance || 0), `Otomatis sinkron dari Shift ${shiftNumber}`)
+      }
+    } catch (e: any) {
+      console.warn('[ShiftController] Sync kas drawer open:', e.message)
+    }
+
     return { success: true, data: { id: result.lastInsertRowid, shift_number: shiftNumber } }
   }
 
-  static close(id: number, data: any) {
+  static close(idOrData: any, maybeData?: any) {
     ensureTable()
+    let id: number
+    let data: any
+    if (typeof idOrData === 'object' && idOrData !== null) {
+      id = Number(idOrData.id)
+      data = idOrData
+    } else {
+      id = Number(idOrData)
+      data = maybeData || {}
+    }
     const shift = sqlite.prepare('SELECT * FROM mediasoft_shifts WHERE id = ?').get(id) as any
     if (!shift) return { success: false, message: 'Shift tidak ditemukan' }
     if (shift.status !== 'OPEN') return { success: false, message: 'Shift sudah ditutup' }
-    const sales = sqlite.prepare('SELECT COUNT(*) as count, COALESCE(SUM(yang_dibayar), 0) as total FROM mediasoft_penjualan WHERE shift_id = ?').get(id) as any
-    const expected = Number(shift.opening_balance ?? 0) + Number(sales.total ?? 0)
-    const difference = data.closing_balance - expected
+
+    // Hitung rincian penjualan: tunai vs non-tunai (bersih dari kembalian)
+    const sales = sqlite.prepare(`
+      SELECT 
+        COUNT(*) as count,
+        COALESCE(SUM(CASE WHEN LOWER(jenis_pembayaran) LIKE '%tunai%' THEN (yang_dibayar - kembalian) ELSE 0 END), 0) as total_tunai,
+        COALESCE(SUM(CASE WHEN LOWER(jenis_pembayaran) NOT LIKE '%tunai%' THEN (yang_dibayar - kembalian) ELSE 0 END), 0) as total_nontunai,
+        COALESCE(SUM(yang_dibayar - kembalian), 0) as total_sales
+      FROM mediasoft_penjualan 
+      WHERE shift_id = ?
+    `).get(id) as any
+
+    // Ambil mutasi kas masuk dan kas keluar dari laci kas
+    const drawer = sqlite.prepare(`
+      SELECT total_pemasukan, total_pengeluaran 
+      FROM mediasoft_kas_drawer 
+      WHERE (kd_kas = ? OR (username = ? AND status = 'OPEN'))
+      ORDER BY tgl_buka DESC LIMIT 1
+    `).get(`KAS-${shift.shift_number}`, shift.user_id) as any
+
+    const totalTunai = Number(sales?.total_tunai || 0)
+    const totalNonTunai = Number(sales?.total_nontunai || 0)
+    const totalSales = Number(sales?.total_sales || 0)
+    const totalTransactions = Number(sales?.count || 0)
+    const totalPemasukan = Number(drawer?.total_pemasukan || 0)
+    const totalPengeluaran = Number(drawer?.total_pengeluaran || 0)
+
+    // Uang fisik yang seharusnya ada di laci: Modal Awal + Tunai + Kas Masuk - Kas Keluar
+    const expected = Number(shift.opening_balance ?? 0) + totalTunai + totalPemasukan - totalPengeluaran
+    const closingBalance = Number(data.closing_balance || 0)
+    const difference = closingBalance - expected
     
-    sqlite.prepare('UPDATE mediasoft_shifts SET end_time = CURRENT_TIMESTAMP, closing_balance = ?, expected_balance = ?, difference = ?, total_sales = ?, total_transactions = ?, notes = ?, status = ? WHERE id = ?').run(data.closing_balance, expected, difference, sales.total, sales.count, data.notes, 'CLOSED', id)
-    return { success: true, data: { difference } }
+    sqlite.prepare(`
+      UPDATE mediasoft_shifts 
+      SET end_time = CURRENT_TIMESTAMP, 
+          closing_balance = ?, 
+          expected_balance = ?, 
+          difference = ?, 
+          total_sales = ?, 
+          total_transactions = ?, 
+          notes = ?, 
+          status = 'CLOSED' 
+      WHERE id = ?
+    `).run(closingBalance, expected, difference, totalSales, totalTransactions, data.notes || '', id)
+
+    try {
+      sqlite.prepare(`
+        UPDATE mediasoft_kas_drawer
+        SET tgl_tutup = CURRENT_TIMESTAMP,
+            saldo_akhir = ?,
+            selisih = ?,
+            status = 'CLOSED',
+            catatan = COALESCE(catatan, '') || ' (Ditutup bersamaan dengan Shift)'
+        WHERE (kd_kas = ? OR (username = ? AND status = 'OPEN'))
+      `).run(closingBalance, difference, `KAS-${shift.shift_number}`, shift.user_id)
+    } catch (e: any) {
+      console.warn('[ShiftController] Sync kas drawer close:', e.message)
+    }
+
+    return { 
+      success: true, 
+      data: { 
+        difference, 
+        expected, 
+        total_tunai: totalTunai, 
+        total_nontunai: totalNonTunai, 
+        total_sales: totalSales, 
+        total_pemasukan: totalPemasukan, 
+        total_pengeluaran: totalPengeluaran 
+      } 
+    }
   }
 
   static getCurrent(userId: string | number) {
     ensureTable()
-    const data = sqlite.prepare('SELECT * FROM mediasoft_shifts WHERE user_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1').get(userId, 'OPEN')
-    return { success: true, data }
+    const strUserId = String(userId ?? '').trim()
+    if (!strUserId) return { success: true, data: null }
+    const shift = sqlite.prepare(`
+      SELECT * FROM mediasoft_shifts 
+      WHERE status = 'OPEN' 
+        AND (
+          user_id = ? 
+          OR user_id IN (
+            SELECT email FROM mediasoft_pengguna WHERE nama_pengguna = ?
+            UNION
+            SELECT nama_pengguna FROM mediasoft_pengguna WHERE email = ?
+          )
+          OR (LOWER(?) GLOB '*mi*al*' AND LOWER(user_id) GLOB '*mi*al*')
+        )
+      ORDER BY start_time DESC LIMIT 1
+    `).get(strUserId, strUserId, strUserId, strUserId) as any
+
+    if (!shift) return { success: true, data: null }
+
+    const sales = sqlite.prepare(`
+      SELECT 
+        COUNT(*) as count,
+        COALESCE(SUM(CASE WHEN LOWER(jenis_pembayaran) LIKE '%tunai%' THEN (yang_dibayar - kembalian) ELSE 0 END), 0) as total_tunai,
+        COALESCE(SUM(CASE WHEN LOWER(jenis_pembayaran) NOT LIKE '%tunai%' THEN (yang_dibayar - kembalian) ELSE 0 END), 0) as total_nontunai,
+        COALESCE(SUM(yang_dibayar - kembalian), 0) as total_sales
+      FROM mediasoft_penjualan 
+      WHERE shift_id = ?
+    `).get(shift.id) as any
+
+    const drawer = sqlite.prepare(`
+      SELECT total_pemasukan, total_pengeluaran 
+      FROM mediasoft_kas_drawer 
+      WHERE (kd_kas = ? OR (username = ? AND status = 'OPEN'))
+      ORDER BY tgl_buka DESC LIMIT 1
+    `).get(`KAS-${shift.shift_number}`, shift.user_id) as any
+
+    const totalTunai = Number(sales?.total_tunai || 0)
+    const totalNonTunai = Number(sales?.total_nontunai || 0)
+    const totalSales = Number(sales?.total_sales || 0)
+    const totalTransactions = Number(sales?.count || 0)
+    const totalPemasukan = Number(drawer?.total_pemasukan || 0)
+    const totalPengeluaran = Number(drawer?.total_pengeluaran || 0)
+    const expectedCash = Number(shift.opening_balance || 0) + totalTunai + totalPemasukan - totalPengeluaran
+
+    return { 
+      success: true, 
+      data: {
+        ...shift,
+        total_tunai: totalTunai,
+        total_nontunai: totalNonTunai,
+        total_sales: totalSales,
+        total_transactions: totalTransactions,
+        total_pemasukan: totalPemasukan,
+        total_pengeluaran: totalPengeluaran,
+        expected_cash: expectedCash,
+      } 
+    }
   }
 
   static getAll() {

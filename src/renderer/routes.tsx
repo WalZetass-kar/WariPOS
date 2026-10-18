@@ -93,7 +93,7 @@ function StandaloneLoadingFallback() {
 // ─── Preload core pages in background after initial render ─────────────────────
 export function preloadCorePages() {
   if (typeof window === 'undefined') return
-  const schedule = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 1200))
+  const schedule = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 100))
   schedule(() => {
     import('./pages/Dashboard').catch(() => {})
     import('./pages/Transaksi').catch(() => {})
@@ -102,6 +102,7 @@ export function preloadCorePages() {
     import('./pages/Kas').catch(() => {})
     import('./pages/Laporan').catch(() => {})
     import('./pages/Settings').catch(() => {})
+    import('./pages/Shifts').catch(() => {})
   })
 }
 

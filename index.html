@@ -28,9 +28,15 @@
           document.documentElement.setAttribute('data-radius', radius);
         } catch (e) {}
       })();
+      window.addEventListener('error', function(e) {
+        var root = document.getElementById('root');
+        if (root && (!root.innerHTML || root.innerHTML.trim() === '')) {
+          root.innerHTML = '<div style="padding:24px;font-family:sans-serif;background:#0f172a;color:#f8fafc;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;"><h2 style="font-size:18px;font-weight:bold;margin-bottom:8px;">Gagal Memuat Aplikasi</h2><p style="font-size:12px;color:#94a3b8;max-width:320px;word-break:break-all;">' + (e.message || 'Script error') + '</p><button onclick="location.reload()" style="margin-top:16px;padding:8px 16px;background:#ef4444;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">Muat Ulang</button></div>';
+        }
+      });
     </script>
   </head>
-  <body>
+  <body class="bg-slate-100 dark:bg-slate-950">
     <div id="root"></div>
     <script type="module" src="/src/renderer/main.tsx"></script>
   </body>

@@ -278,6 +278,9 @@ export default function CameraBarcodeScannerModal({
 
       {/* Container */}
       <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh] modal-card-animate">
+        {/* Top Accent Stripe */}
+        <div className="h-1 sm:h-1.5 w-full bg-gradient-to-r from-red-600 via-rose-500 to-red-600 shrink-0" />
+
         {/* Header */}
         <div className="p-3.5 sm:p-4 flex items-center justify-between border-b border-slate-800/80 bg-slate-900/90 text-white">
           <div className="flex items-center gap-2.5">

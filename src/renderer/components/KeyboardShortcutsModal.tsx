@@ -1,4 +1,5 @@
-import { Keyboard, X } from 'lucide-react'
+import { Keyboard } from 'lucide-react'
+import Modal from './Modal'
 import Button from './Button'
 
 interface Props {
@@ -28,46 +29,48 @@ const SHORTCUTS = [
 ]
 
 export default function KeyboardShortcutsModal({ open, onClose }: Props) {
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm modal-backdrop-animate" onClick={onClose}>
-      <div
-        className="w-full max-w-lg mx-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden modal-card-animate"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <Keyboard size={18} className="text-primary-500" />
-            <h3 className="text-base font-bold text-slate-800 dark:text-white">Keyboard Shortcuts</h3>
-          </div>
-          <button onClick={onClose} aria-label="Tutup" className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="px-5 py-4 space-y-5 max-h-[60vh] overflow-y-auto scrollbar-thin">
-          {SHORTCUTS.map(group => (
-            <div key={group.group}>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">{group.group}</p>
-              <div className="space-y-1.5">
-                {group.items.map(s => (
-                  <div key={s.keys + s.desc} className="flex items-center justify-between gap-3 py-1.5">
-                    <span className="text-sm text-slate-600 dark:text-slate-300">{s.desc}</span>
-                    <kbd className="shrink-0 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-semibold text-slate-600 dark:text-slate-300">
-                      {s.keys}
-                    </kbd>
-                  </div>
-                ))}
-              </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Pintasan Keyboard (Shortcuts)"
+      subtitle="Navigasi cepat transaksi kasir & sistem"
+      icon={<Keyboard size={20} />}
+      size="md"
+      footer={
+        <Button variant="secondary" onClick={onClose} size="sm">
+          Tutup
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {SHORTCUTS.map(group => (
+          <div key={group.group} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-red-600 dark:text-red-400">
+                {group.group}
+              </span>
+              <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
             </div>
-          ))}
-        </div>
-
-        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-          <Button variant="secondary" onClick={onClose} size="sm">Tutup</Button>
-        </div>
+            <div className="space-y-1 bg-slate-50/70 dark:bg-slate-800/40 rounded-2xl p-2 border border-slate-100 dark:border-slate-800/80">
+              {group.items.map(s => (
+                <div
+                  key={s.keys + s.desc}
+                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                >
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                    {s.desc}
+                  </span>
+                  <kbd className="shrink-0 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-[0_1.5px_0_0_rgba(0,0,0,0.08)] dark:shadow-[0_1.5px_0_0_rgba(255,255,255,0.05)] text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+                    {s.keys}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
+    </Modal>
   )
 }
+

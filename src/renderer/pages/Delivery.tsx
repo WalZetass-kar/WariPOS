@@ -282,7 +282,7 @@ export default function Delivery() {
                   <Button size="sm" variant="secondary" icon={<RefreshCw size={14} />} onClick={() => load(true)}>
                     Refresh
                   </Button>
-                  <Button icon={<Plus size={16} />} onClick={() => { resetFormOrder(); setModal('order') }} className="bg-red-600 hover:bg-red-700 text-white border-0 font-bold">
+                  <Button icon={<Plus size={16} />} onClick={() => { resetFormOrder(); setModal('order') }} className="bg-primary-600 hover:bg-primary-700 text-white border-0 font-bold">
                     Buat Order Delivery
                   </Button>
                 </div>
@@ -411,7 +411,7 @@ export default function Delivery() {
                 footer={
                   <>
                     <Button variant="secondary" onClick={() => { setModal(null); setSelectedOrder(null) }} className="w-full sm:w-auto">Batal</Button>
-                    <Button loading={submitting} onClick={handleAssignCourier} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white border-0 font-bold">Tugaskan Sekarang</Button>
+                    <Button loading={submitting} onClick={handleAssignCourier} className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white border-0 font-bold">Tugaskan Sekarang</Button>
                   </>
                 }
               >
@@ -435,7 +435,7 @@ export default function Delivery() {
                 footer={
                   <>
                     <Button variant="secondary" onClick={() => { setModal(null); resetFormOrder() }} className="w-full sm:w-auto">Batal</Button>
-                    <Button loading={submitting} onClick={handleSaveOrder} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white border-0 font-bold">Simpan & Proses</Button>
+                    <Button loading={submitting} onClick={handleSaveOrder} className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white border-0 font-bold">Simpan & Proses</Button>
                   </>
                 }
               >
@@ -457,7 +457,7 @@ export default function Delivery() {
             <>
               {/* Vehicles Controls */}
               <div className="flex justify-end">
-                <Button icon={<Plus size={16} />} onClick={() => { setEditVehicle(null); resetFormVehicle(); setModal('vehicle') }} className="bg-red-600 hover:bg-red-700 text-white border-0 font-bold">
+                <Button icon={<Plus size={16} />} onClick={() => { setEditVehicle(null); resetFormVehicle(); setModal('vehicle') }} className="bg-primary-600 hover:bg-primary-700 text-white border-0 font-bold">
                   Tambah Kendaraan Armada
                 </Button>
               </div>
@@ -505,7 +505,7 @@ export default function Delivery() {
                                   </button>
                                   <button
                                     onClick={() => setDeleteVehicle(v)}
-                                    className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 transition-colors"
+                                    className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-600 transition-colors"
                                     title="Hapus Armada"
                                   >
                                     <Trash2 size={15} />
@@ -530,7 +530,7 @@ export default function Delivery() {
                 footer={
                   <>
                     <Button variant="secondary" onClick={() => { setModal(null); setEditVehicle(null) }} className="w-full sm:w-auto">Batal</Button>
-                    <Button loading={submitting} onClick={handleSaveVehicle} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white border-0 font-bold">{editVehicle ? 'Simpan Perubahan' : 'Tambah Armada'}</Button>
+                    <Button loading={submitting} onClick={handleSaveVehicle} className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white border-0 font-bold">{editVehicle ? 'Simpan Perubahan' : 'Tambah Armada'}</Button>
                   </>
                 }
               >

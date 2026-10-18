@@ -35,24 +35,25 @@ import { GOOGLE_SHEETS_APPS_SCRIPT } from '../../shared/googleSheetsAppsScript'
 import { appConfig } from '../utils/productionConfig'
 import { validatePasswordStrength } from '../../shared/passwordPolicy'
 
-const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
-  { key: 'crimson', label: 'Crimson (Wari Red)', hex: '#ef4444' },
-  { key: 'indigo', label: 'Indigo Classic', hex: '#6366f1' },
-  { key: 'emerald', label: 'Emerald Mint', hex: '#10b981' },
-  { key: 'blue', label: 'Royal Blue', hex: '#2563eb' },
-  { key: 'rose', label: 'Rose Berry', hex: '#f43f5e' },
-  { key: 'amber', label: 'Warm Amber', hex: '#f59e0b' },
-  { key: 'sky', label: 'Sky Blue', hex: '#0ea5e9' },
-  { key: 'pink', label: 'Pink Soft', hex: '#ec4899' },
-  { key: 'violet', label: 'Electric Violet', hex: '#8b5cf6' },
-  { key: 'purple', label: 'Royal Purple', hex: '#9333ea' },
-  { key: 'teal', label: 'Teal Ocean', hex: '#14b8a6' },
-  { key: 'cyan', label: 'Cyan Bright', hex: '#06b6d4' },
-  { key: 'orange', label: 'Sunset Orange', hex: '#f97316' },
-  { key: 'green', label: 'Forest Green', hex: '#16a34a' },
-  { key: 'slate', label: 'Modern Slate', hex: '#475569' },
-  { key: 'coffee', label: 'Warm Coffee', hex: '#934624' },
-  { key: 'gold', label: 'Luxury Gold', hex: '#d97706' },
+// hex = pastel swatch (matches --color-primary-400), ink = readable text tone (--color-primary-700)
+const COLORS: { key: ThemeColor; label: string; hex: string; ink: string }[] = [
+  { key: 'crimson', label: 'Crimson Blush (Wari)', hex: '#f7a59d', ink: '#98524c' },
+  { key: 'indigo', label: 'Indigo Mist', hex: '#aeb8fd', ink: '#5b639f' },
+  { key: 'emerald', label: 'Emerald Mint', hex: '#80d2ab', ink: '#237554' },
+  { key: 'blue', label: 'Periwinkle Blue', hex: '#99bffd', ink: '#46679e' },
+  { key: 'rose', label: 'Rose Petal', hex: '#f6a4a8', ink: '#985156' },
+  { key: 'amber', label: 'Amber Cream', hex: '#e6b376', ink: '#8b5e22' },
+  { key: 'sky', label: 'Sky Pastel', hex: '#7ec7f5', ink: '#246d96' },
+  { key: 'pink', label: 'Pink Blossom', hex: '#f0a3c2', ink: '#93506c' },
+  { key: 'violet', label: 'Lavender', hex: '#bfb2f8', ink: '#6b5e9b' },
+  { key: 'purple', label: 'Lilac', hex: '#cbaef2', ink: '#755a95' },
+  { key: 'teal', label: 'Seafoam Teal', hex: '#6dd3c3', ink: '#017367' },
+  { key: 'cyan', label: 'Aqua Cyan', hex: '#6bcee5', ink: '#017184' },
+  { key: 'orange', label: 'Peach', hex: '#f2ab86', ink: '#955736' },
+  { key: 'green', label: 'Sage Green', hex: '#90d09c', ink: '#377245' },
+  { key: 'slate', label: 'Misty Slate', hex: '#b0bfd4', ink: '#5c687b' },
+  { key: 'coffee', label: 'Latte', hex: '#e3b293', ink: '#885e43' },
+  { key: 'gold', label: 'Butter Gold', hex: '#daba72', ink: '#806319' },
 ]
 
 type SyncMode = 'server' | 'client'
@@ -963,6 +964,7 @@ function TampilanSettings({
   borderRadius: BorderRadius
   setBorderRadius: (v: BorderRadius) => void
 }) {
+  const { isDark } = useTheme()
   const activeColorObj = COLORS.find(c => c.key === color)
   const activeColorLabel = activeColorObj?.label || (color.startsWith('#') ? `Custom (${color.toUpperCase()})` : color)
 
@@ -1019,20 +1021,19 @@ function TampilanSettings({
                     ? 'shadow-sm ring-1 ring-offset-1 dark:ring-offset-slate-900 scale-[1.01]'
                     : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700'
                 }`}
-                style={{
-                  borderColor: isSelected ? c.hex : undefined,
-                  backgroundColor: isSelected ? `${c.hex}18` : undefined,
-                  color: isSelected ? c.hex : undefined,
-                }}
+                style={isSelected ? {
+                  borderColor: c.hex,
+                  backgroundColor: `${c.hex}2e`,
+                } : undefined}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span
                     className="w-4 h-4 rounded-full shrink-0 shadow-sm ring-1 ring-black/10"
                     style={{ backgroundColor: c.hex }}
                   />
-                  <span className="truncate">{c.label}</span>
+                  <span className="truncate" style={isSelected && !isDark ? { color: c.ink } : undefined}>{c.label}</span>
                 </div>
-                {isSelected && <CheckCircle2 size={15} className="shrink-0 ml-1.5" style={{ color: c.hex }} />}
+                {isSelected && <CheckCircle2 size={15} className="shrink-0 ml-1.5" style={{ color: isDark ? c.hex : c.ink }} />}
               </button>
             )
           })}

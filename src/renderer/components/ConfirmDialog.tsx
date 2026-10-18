@@ -18,30 +18,30 @@ interface ConfirmDialogProps {
 const variants = {
   danger: {
     icon: Trash2,
-    iconBg: 'bg-red-50 ring-red-100 dark:bg-red-950/40 dark:ring-red-900/50',
+    iconBg: 'bg-red-100/80 ring-red-200 dark:bg-red-950/60 dark:ring-red-900/60',
     iconColor: 'text-red-600 dark:text-red-400',
-    panel: 'border-red-100 bg-red-50/80 text-red-700 dark:border-red-900/60 dark:bg-red-950/25 dark:text-red-300',
+    panel: 'border-red-100 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/20',
     buttonVariant: 'danger' as const
   },
   warning: {
     icon: AlertTriangle,
-    iconBg: 'bg-amber-50 ring-amber-100 dark:bg-amber-950/40 dark:ring-amber-900/50',
+    iconBg: 'bg-amber-100/80 ring-amber-200 dark:bg-amber-950/60 dark:ring-amber-900/60',
     iconColor: 'text-amber-600 dark:text-amber-400',
-    panel: 'border-amber-100 bg-amber-50/80 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-300',
+    panel: 'border-amber-100 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20',
     buttonVariant: 'primary' as const
   },
   info: {
     icon: Info,
-    iconBg: 'bg-pink-50 ring-pink-100 dark:bg-pink-950/40 dark:ring-pink-900/50',
-    iconColor: 'text-pink-600 dark:text-pink-400',
-    panel: 'border-pink-100 bg-pink-50/80 text-pink-700 dark:border-pink-900/60 dark:bg-pink-950/25 dark:text-pink-300',
+    iconBg: 'bg-sky-100/80 ring-sky-200 dark:bg-sky-950/60 dark:ring-sky-900/60',
+    iconColor: 'text-sky-600 dark:text-sky-400',
+    panel: 'border-sky-100 bg-sky-50/60 dark:border-sky-900/50 dark:bg-sky-950/20',
     buttonVariant: 'primary' as const
   },
   success: {
     icon: CheckCircle,
-    iconBg: 'bg-emerald-50 ring-emerald-100 dark:bg-emerald-950/40 dark:ring-emerald-900/50',
+    iconBg: 'bg-emerald-100/80 ring-emerald-200 dark:bg-emerald-950/60 dark:ring-emerald-900/60',
     iconColor: 'text-emerald-600 dark:text-emerald-400',
-    panel: 'border-emerald-100 bg-emerald-50/80 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/25 dark:text-emerald-300',
+    panel: 'border-emerald-100 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20',
     buttonVariant: 'primary' as const
   }
 }
@@ -67,6 +67,7 @@ export default function ConfirmDialog({
       onClose={loading ? () => undefined : onClose}
       title={title}
       size="sm"
+      accent={variant}
       footer={
         <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:justify-end">
           <Button variant="secondary" onClick={onClose} className="w-full sm:w-auto" disabled={loading}>
@@ -78,19 +79,22 @@ export default function ConfirmDialog({
         </div>
       }
     >
-      <div className="space-y-4">
-        <div className="flex items-start gap-4">
-          <div className={`shrink-0 w-12 h-12 rounded-2xl ${config.iconBg} ring-8 flex items-center justify-center`}>
-            <Icon size={24} className={config.iconColor} />
+      <div className="space-y-3.5">
+        <div className={`p-4 rounded-2xl border ${config.panel} flex items-start gap-3.5`}>
+          <div className={`shrink-0 w-11 h-11 rounded-xl ${config.iconBg} ring-4 ring-offset-1 ring-offset-white dark:ring-offset-slate-900 flex items-center justify-center shadow-xs`}>
+            <Icon size={22} className={config.iconColor} />
           </div>
-          <div className="flex-1 pt-1">
-            <p className="text-sm font-medium leading-6 text-slate-700 dark:text-slate-200">{message}</p>
+          <div className="flex-1 min-w-0 pt-1">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-snug">
+              {message}
+            </p>
           </div>
         </div>
-        <div className={`rounded-xl border px-3 py-2 text-xs leading-5 ${config.panel}`}>
-          Periksa detail sebelum melanjutkan. Aksi ini akan langsung dikirim ke sistem.
-        </div>
-        {children}
+        {children && (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-3 text-xs text-slate-600 dark:text-slate-300">
+            {children}
+          </div>
+        )}
       </div>
     </Modal>
   )

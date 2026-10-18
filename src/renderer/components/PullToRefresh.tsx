@@ -9,19 +9,23 @@ interface PullToRefreshProps {
   threshold?: number
 }
 
-export default function PullToRefresh({ onRefresh, children, disabled = false, threshold = 80 }: PullToRefreshProps) {
+export default function PullToRefresh({ onRefresh, children, disabled = false, threshold = 100 }: PullToRefreshProps) {
   const [pulling, setPulling] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
+  const startX = useRef(0)
   const startY = useRef(0)
+  const mountTime = useRef(Date.now())
   const controls = useAnimation()
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (disabled || refreshing) return
+    // Cooldown: Ignore pull triggers within 1s of mount to prevent accidental triggers on launch
+    if (disabled || refreshing || Date.now() - mountTime.current < 1000) return
     const target = e.currentTarget as HTMLElement
     const scrollParent = target.closest('main') || target.parentElement || document.documentElement
     const scrollTop = scrollParent ? scrollParent.scrollTop : (document.documentElement.scrollTop || document.body.scrollTop)
     if (scrollTop > 0) return
+    startX.current = e.touches[0].clientX
     startY.current = e.touches[0].clientY
     setPulling(true)
   }, [disabled, refreshing])
@@ -36,13 +40,19 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
       setPullDistance(0)
       return
     }
-    const diff = e.touches[0].clientY - startY.current
-    if (diff < 0) {
+
+    const diffX = Math.abs(e.touches[0].clientX - startX.current)
+    const diffY = e.touches[0].clientY - startY.current
+
+    // Cancel if movement is horizontal (e.g. swiping tabs or scrolling horizontally)
+    if (diffX > diffY || diffY <= 0) {
       setPullDistance(0)
       return
     }
-    const distance = Math.min(diff * 0.5, threshold * 1.5)
-    setPullDistance(distance)
+
+    // Require deliberate vertical pull
+    const distance = Math.min((diffY - 10) * 0.45, threshold * 1.4)
+    setPullDistance(Math.max(0, distance))
   }, [pulling, disabled, refreshing, threshold])
 
   const handleTouchEnd = useCallback(async () => {
