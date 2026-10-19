@@ -170,6 +170,9 @@ export default function Login() {
   }, [])
 
   useEffect(() => {
+    // On phones this would pop the keyboard on every visit, and the fingerprint prompt
+    // then closes and reopens it, resizing the WebView twice.
+    if (Capacitor.isNativePlatform()) return
     if (!authLoading && !username) {
       usernameRef.current?.focus()
     }
@@ -321,7 +324,13 @@ export default function Login() {
     }
   }
 
+  const biometricInFlightRef = useRef(false)
+
   const handleBiometricLogin = async () => {
+    // A double tap lands before the disabled state renders and would stack two prompts.
+    if (biometricInFlightRef.current) return
+    biometricInFlightRef.current = true
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
     setBiometricLoading(true)
     setError('')
     try {
@@ -345,20 +354,13 @@ export default function Login() {
         }
       }
 
-      const remembered = secureStorage.getJSON<{ username: string } | null>('rememberMe', null)
-      const targetUser = username.trim() || remembered?.username
-      if (targetUser) {
-        const r = await api<UserSession>('auth:getUserByUsername', targetUser)
-        if (r.success && r.data) {
-          await completeLogin(r.data)
-          return
-        }
-      }
-
+      // A fingerprint proves who holds the phone, not which account they may use, so without
+      // the saved credentials of the enrolled user we fall back to password/PIN.
       toast('Biometrik terverifikasi! Masukkan password/PIN untuk menghubungkan sesi.', 'info')
     } catch (err: any) {
       setError(err.message || 'Gagal login biometrik')
     } finally {
+      biometricInFlightRef.current = false
       setBiometricLoading(false)
     }
   }

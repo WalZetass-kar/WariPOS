@@ -1737,3 +1737,10 @@ export function reopenDatabase(): void {
   sqlite.pragma('journal_mode = WAL')
   sqlite.pragma('foreign_keys = ON')
 }
+
+// Checkpoint the WAL into the main file so an installer update never finds a half-written -wal.
+export function closeDatabase(): void {
+  if (!sqlite.open) return
+  try { sqlite.pragma('wal_checkpoint(TRUNCATE)') } catch {}
+  try { sqlite.close() } catch {}
+}

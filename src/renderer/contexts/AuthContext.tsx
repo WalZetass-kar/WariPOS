@@ -252,6 +252,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout])
 
   const lastHeartbeatRef = useRef(0)
+  const userRef = useRef(user)
+  userRef.current = user
 
   useEffect(() => {
     if (!user?.nama_pengguna) return
@@ -273,14 +275,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     sendHeartbeat()
     const heartbeat = window.setInterval(sendHeartbeat, 60 * 1000)
-    window.addEventListener('focus', sendHeartbeat)
-    document.addEventListener('visibilitychange', () => {
+    const onVisible = () => {
       if (document.visibilityState === 'visible') sendHeartbeat()
-    })
+    }
+    window.addEventListener('focus', sendHeartbeat)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
       window.clearInterval(heartbeat)
       window.removeEventListener('focus', sendHeartbeat)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [user?.nama_pengguna, user?.email, user?.remote_auth_user_id, user?.remote_customer_id, user?.remote_license_token])
 
@@ -360,7 +364,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (!cancelled && restoreRes?.success && restoreRes.data) {
             const nextUser = restoreRes.data
-            const wasDemo = user.hak_akses === 'demo'
+            const wasDemo = userRef.current?.hak_akses === 'demo'
             const isNowPaid = nextUser.hak_akses !== 'demo' && (Boolean(nextUser.subscription_plan_name) || Boolean(nextUser.subscription_plan_id))
 
             const nextStored: StoredSession = {
@@ -372,10 +376,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               expiresAt: Math.min(stored.expiresAt, new Date(stored.sessionExpiresAt).getTime()),
             }
 
-            setUser(toPublicSession(nextStored))
-            secureStorage.setJSON('pos_session', nextStored)
-
-            window.dispatchEvent(new CustomEvent('license:updated', { detail: { user: nextUser } }))
+            // This runs every 12s; a fresh user object each time re-rendered the whole app
+            // and made license:updated listeners refetch, even when nothing had changed.
+            const nextPublic = toPublicSession(nextStored)
+            const publicChanged = JSON.stringify(nextPublic) !== JSON.stringify(userRef.current)
+            const storedChanged = JSON.stringify(nextStored) !== JSON.stringify(stored)
+            if (publicChanged) setUser(nextPublic)
+            if (storedChanged) secureStorage.setJSON('pos_session', nextStored)
+            if (publicChanged || storedChanged) {
+              window.dispatchEvent(new CustomEvent('license:updated', { detail: { user: nextUser } }))
+            }
 
             if (wasDemo && isNowPaid) {
               window.dispatchEvent(new CustomEvent('toast:show', {
@@ -437,7 +447,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     void sync()
-    const interval = window.setInterval(sync, REMOTE_LICENSE_SYNC_INTERVAL_MS)
+    // visibilitychange already syncs on return, so skip background ticks.
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void sync()
+    }, REMOTE_LICENSE_SYNC_INTERVAL_MS)
     window.addEventListener('license:sync-now', sync)
     window.addEventListener('focus', sync)
     document.addEventListener('visibilitychange', sync)

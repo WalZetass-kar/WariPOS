@@ -243,6 +243,8 @@ class SyncServer {
 
     await new Promise<void>(resolve => {
       server.close(() => resolve())
+      // Keep-alive sockets from LAN clients would otherwise hold close() open.
+      server.closeAllConnections()
     })
   }
 

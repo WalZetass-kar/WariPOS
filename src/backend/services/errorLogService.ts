@@ -1,8 +1,9 @@
 import { sqlite } from '../../database/connection.js'
 import * as fs from 'fs'
 import * as path from 'path'
+import { resolveLogDir } from '../utils/logDir.js'
 
-const LOG_DIR = path.join(process.cwd(), 'logs')
+const LOG_DIR = resolveLogDir()
 const LOG_FILE = path.join(LOG_DIR, 'error.log')
 
 export class ErrorLogService {

@@ -58,6 +58,11 @@ function getNotchPath(w: number, h: number = 74) {
   ].join(' ')
 }
 
+// Drawn at its final size and scaled up from 0.1: scaling a 20px dot 24x blurred the edge
+// and stepped visibly on Android. Covers the 62px button from any touch point.
+const RIPPLE_SIZE = 140
+const RIPPLE_MS = 650
+
 export default function MobileBottomNav() {
   const { user } = useAuth()
   const location = useLocation()
@@ -130,7 +135,7 @@ export default function MobileBottomNav() {
     const y = e.clientY - rect.top
     const id = ++rippleId.current
     setRipples(prev => [...prev, { id, x, y }])
-    setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 600)
+    setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), RIPPLE_MS + 50)
     setTimeout(() => setPressing(false), 180)
   }
 
@@ -330,11 +335,11 @@ export default function MobileBottomNav() {
                 key={r.id}
                 className="pointer-events-none absolute rounded-full bg-white/30"
                 style={{
-                  left: r.x - 10,
-                  top: r.y - 10,
-                  width: 20,
-                  height: 20,
-                  animation: 'rippleExpand 0.55s cubic-bezier(0, 0, 0.2, 1) forwards',
+                  left: r.x - RIPPLE_SIZE / 2,
+                  top: r.y - RIPPLE_SIZE / 2,
+                  width: RIPPLE_SIZE,
+                  height: RIPPLE_SIZE,
+                  animation: `rippleExpand ${RIPPLE_MS}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`,
                 }}
               />
             ))}

@@ -11,6 +11,7 @@ import { SyncServerService } from './syncServer.js'
 import { SyncClientService } from './syncClient.js'
 import { registerSecureStorageHandlers } from './secureStorage.js'
 import { PenggunaModel } from '../backend/models/PenggunaModel.js'
+import { closeDatabase } from '../database/connection.js'
 import {
   attachWindowSecurity,
   configureElectronSecurity,
@@ -25,7 +26,12 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 
-registerDesktopDeepLinks(isDev)
+const isPrimaryInstance = registerDesktopDeepLinks(isDev)
+if (!isPrimaryInstance) {
+  // app.quit() alone still lets whenReady fire, which would start a second scheduler,
+  // sync server and window next to the running instance.
+  app.exit(0)
+}
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('com.wari.pos')
@@ -102,6 +108,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (!isPrimaryInstance) return
   configureElectronSecurity(isDev)
 
   // Initialize database tables first
@@ -132,22 +139,21 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('window-all-closed', () => {
-  // Stop scheduler before quit
+function stopBackgroundServices() {
   SchedulerService.stop()
   void SyncServerService.stop()
-  
-  // Clear demo session
   demoSession.clearSession()
-  
+}
+
+app.on('window-all-closed', () => {
+  stopBackgroundServices()
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
-  // Stop scheduler before quit
-  SchedulerService.stop()
-  void SyncServerService.stop()
-  
-  // Clear demo session
-  demoSession.clearSession()
+  stopBackgroundServices()
+})
+
+app.on('will-quit', () => {
+  closeDatabase()
 })

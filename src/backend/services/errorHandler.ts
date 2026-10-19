@@ -5,6 +5,7 @@
 
 import fs from 'fs'
 import path from 'path'
+import { resolveLogDir } from '../utils/logDir.js'
 
 export enum ErrorSeverity {
   INFO = 'INFO',
@@ -30,9 +31,11 @@ class ErrorHandler {
 
   constructor() {
     // Create logs directory if it doesn't exist
-    this.logDir = path.join(process.cwd(), 'logs')
-    if (!fs.existsSync(this.logDir)) {
+    this.logDir = resolveLogDir()
+    try {
       fs.mkdirSync(this.logDir, { recursive: true })
+    } catch (err) {
+      console.error('[ErrorHandler] Cannot create log directory:', err)
     }
   }
 

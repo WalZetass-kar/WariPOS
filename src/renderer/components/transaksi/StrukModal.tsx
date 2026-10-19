@@ -56,9 +56,6 @@ const usePrefersReducedMotion = () => {
 
 const EASE_SETTLE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const EASE_FEED: [number, number, number, number] = [0.42, 0.05, 0.32, 1]
-/* Side and bottom insets are negative so the paper's drop shadow is not clipped once fully fed. */
-const CLIP_OPEN = 'inset(0px -48px -48px -48px)'
-const clipClosed = (h: number) => `inset(0px -48px ${h}px -48px)`
 
 /* ────────────────────────────────────────────────────────────────
    Thermal printer 3D
@@ -180,28 +177,6 @@ const ThermalPrinter3D: React.FC<ThermalPrinter3DProps> = ({ printing, reducedMo
   </div>
 )
 
-/* ────────────────────────────────────────────────────────────────
-   Reveal block: one line group of the receipt, fed out in order
-   ──────────────────────────────────────────────────────────────── */
-const RevealBlock: React.FC<{
-  index: number
-  delay: number
-  instant: boolean
-  children: React.ReactNode
-}> = ({ index, delay, instant, children }) => {
-  if (instant) return <div>{children}</div>
-  return (
-    <motion.div
-      initial={{ opacity: 0, transform: 'translateY(5px)' }}
-      animate={{ opacity: 1, transform: 'translateY(0px)' }}
-      transition={{ duration: 0.3, ease: EASE_SETTLE, delay }}
-      data-reveal={index}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
 const PaperRow: React.FC<{ label: string; value: React.ReactNode; strong?: boolean }> = ({
   label,
   value,
@@ -288,23 +263,14 @@ export default function StrukModal({
     }
   }, [open, cart.length, lastKd, measured])
 
-  const revealCount = 6 + cart.length + 5
   const feedMs = useMemo(() => {
     if (prefersReducedMotion) return 0
     return Math.min(2400, Math.max(850, contentHeight * 5.4))
   }, [contentHeight, prefersReducedMotion])
 
   const staticReveal = measured && (prefersReducedMotion || animationBroken || contentHeight <= 0)
-
-  const delayFor = useCallback(
-    (index: number) => {
-      if (staticReveal) return 0
-      const start = feedMs * 0.3
-      const span = feedMs * 0.5
-      return start + (revealCount > 1 ? (index / (revealCount - 1)) * span : 0)
-    },
-    [staticReveal, feedMs, revealCount]
-  )
+  const feedDistance = contentHeight + PRINTER_LIP
+  const feedTransition = { duration: staticReveal ? 0 : feedMs / 1000, ease: EASE_FEED }
 
   /* ── reset every run of the sequence, keyed per transaction ── */
   useEffect(() => {
@@ -410,7 +376,7 @@ export default function StrukModal({
           'repeating-linear-gradient(0deg, rgba(15,23,42,.018) 0px, rgba(15,23,42,.018) 1px, transparent 1px, transparent 3px), linear-gradient(90deg,#efece4 0%,#faf8f3 12%,#fdfcf9 50%,#faf8f3 88%,#efece4 100%)',
       }}
     >
-      <RevealBlock index={0} delay={delayFor(0)} instant={staticReveal || !measured}>
+      <div>
         <div className="text-center">
           <p className="text-[11px] font-bold tracking-[0.1em] text-rose-700">WARIPOS</p>
           <p className="mt-0.5 text-[9px] tracking-[0.08em] text-slate-500">STRUK TRANSAKSI</p>
@@ -424,36 +390,24 @@ export default function StrukModal({
             })}
           </p>
         </div>
-      </RevealBlock>
+      </div>
 
       <div className="my-2 border-t border-dashed border-slate-400/70" />
 
       <div className="space-y-0.5">
-        <RevealBlock index={1} delay={delayFor(1)} instant={staticReveal || !measured}>
-          <PaperRow label="Invoice" value={lastKd || '-'} strong />
-        </RevealBlock>
-        <RevealBlock index={2} delay={delayFor(2)} instant={staticReveal || !measured}>
-          <PaperRow label="Kasir" value={user?.nama_pengguna || 'Kasir'} />
-        </RevealBlock>
-        <RevealBlock index={3} delay={delayFor(3)} instant={staticReveal || !measured}>
-          <PaperRow label="Pelanggan" value={selectedCustomer?.nama_customer || 'Umum'} />
-        </RevealBlock>
+        <PaperRow label="Invoice" value={lastKd || '-'} strong />
+        <PaperRow label="Kasir" value={user?.nama_pengguna || 'Kasir'} />
+        <PaperRow label="Pelanggan" value={selectedCustomer?.nama_customer || 'Umum'} />
       </div>
 
       <div className="my-2 border-t border-dashed border-slate-400/70" />
 
       <div className="space-y-1">
-        {cart.map((item, i) => {
+        {cart.map(item => {
           const disc = (item.harga_jual * (item.disc ?? 0)) / 100
           const itemTotal = (item.harga_jual - disc) * item.qty
-          const idx = 4 + i
           return (
-            <RevealBlock
-              key={item.kd_barang}
-              index={idx}
-              delay={delayFor(idx)}
-              instant={staticReveal || !measured}
-            >
+            <div key={item.kd_barang}>
               <div>
                 <div className="flex items-end justify-between gap-2">
                   <span className="min-w-0 break-words">
@@ -467,7 +421,7 @@ export default function StrukModal({
                   </p>
                 )}
               </div>
-            </RevealBlock>
+            </div>
           )
         })}
       </div>
@@ -475,22 +429,16 @@ export default function StrukModal({
       <div className="my-2 border-t border-dashed border-slate-400/70" />
 
       <div className="space-y-0.5">
-        <RevealBlock index={4 + cart.length} delay={delayFor(4 + cart.length)} instant={staticReveal || !measured}>
-          <PaperRow label="Subtotal" value={formatRupiah(subTotal)} />
-        </RevealBlock>
+        <PaperRow label="Subtotal" value={formatRupiah(subTotal)} />
         {pajakAmount > 0 && (
-          <RevealBlock index={5 + cart.length} delay={delayFor(5 + cart.length)} instant={staticReveal || !measured}>
-            <PaperRow label={`PPN ${pajakPersen}%`} value={formatRupiah(pajakAmount)} />
-          </RevealBlock>
+          <PaperRow label={`PPN ${pajakPersen}%`} value={formatRupiah(pajakAmount)} />
         )}
         {promoDiskon > 0 && (
-          <RevealBlock index={6 + cart.length} delay={delayFor(6 + cart.length)} instant={staticReveal || !measured}>
-            <PaperRow label="Diskon Promo" value={`-${formatRupiah(promoDiskon)}`} />
-          </RevealBlock>
+          <PaperRow label="Diskon Promo" value={`-${formatRupiah(promoDiskon)}`} />
         )}
       </div>
 
-      <RevealBlock index={7 + cart.length} delay={delayFor(7 + cart.length)} instant={staticReveal || !measured}>
+      <div>
         <div className="mt-2 rounded-[4px] bg-rose-50 px-2 py-1.5">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-900">
@@ -501,32 +449,24 @@ export default function StrukModal({
             </span>
           </div>
         </div>
-      </RevealBlock>
+      </div>
 
       <div className="mt-2 space-y-0.5">
-        <RevealBlock index={8 + cart.length} delay={delayFor(8 + cart.length)} instant={staticReveal || !measured}>
-          <PaperRow label="Metode Bayar" value={jenisBayar} />
-        </RevealBlock>
-        <RevealBlock index={9 + cart.length} delay={delayFor(9 + cart.length)} instant={staticReveal || !measured}>
-          <PaperRow label="Dibayar" value={formatRupiah(paidAmount)} />
-        </RevealBlock>
-        <RevealBlock index={10 + cart.length} delay={delayFor(10 + cart.length)} instant={staticReveal || !measured}>
-          <PaperRow label="Kembalian" value={formatRupiah(kembalian)} strong />
-        </RevealBlock>
+        <PaperRow label="Metode Bayar" value={jenisBayar} />
+        <PaperRow label="Dibayar" value={formatRupiah(paidAmount)} />
+        <PaperRow label="Kembalian" value={formatRupiah(kembalian)} strong />
         {poinEarned > 0 && (
-          <RevealBlock index={11 + cart.length} delay={delayFor(11 + cart.length)} instant={staticReveal || !measured}>
-            <PaperRow label="Poin Ditambahkan" value={`${poinEarned} poin`} />
-          </RevealBlock>
+          <PaperRow label="Poin Ditambahkan" value={`${poinEarned} poin`} />
         )}
       </div>
 
-      <RevealBlock index={12 + cart.length} delay={delayFor(12 + cart.length)} instant={staticReveal || !measured}>
+      <div>
         <p className="mt-3 text-center text-[9.5px] leading-relaxed text-slate-600">
           Terima kasih atas kunjungan Anda.
           <br />
           Simpan struk ini sebagai bukti pembayaran.
         </p>
-      </RevealBlock>
+      </div>
     </div>
   )
 
@@ -540,7 +480,7 @@ export default function StrukModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: prefersReducedMotion ? 0 : 0.24 }}
-            className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-[3px]"
+            className="fixed inset-0 z-50 bg-slate-950/55 sm:backdrop-blur-[3px]"
             role="presentation"
             aria-hidden="true"
           />
@@ -590,21 +530,32 @@ export default function StrukModal({
                 style={{ marginTop: -PRINTER_LIP }}
               >
                 {measured ? (
+                  /* Feed = the clip window slides down while the paper counter-slides up, so the
+                     paper stays put and is uncovered top-down. Both are transforms, which run on
+                     the compositor; text is part of the paper, so it shows the moment it is fed. */
                   <motion.div
-                    className="relative overflow-hidden"
+                    className="relative"
                     style={{
-                      boxShadow: '0 18px 30px -20px rgba(15,23,42,.5)',
-                      height: staticReveal ? 'auto' : contentHeight + PRINTER_LIP,
+                      overflow: 'clip',
+                      overflowClipMargin: 32,
+                      height: staticReveal ? 'auto' : feedDistance,
                     }}
-                    /* clip-path instead of height: the feed runs on the compositor, no layout per frame */
-                    initial={{ clipPath: staticReveal ? CLIP_OPEN : clipClosed(contentHeight + PRINTER_LIP) }}
-                    animate={{ clipPath: CLIP_OPEN }}
-                    transition={{ duration: staticReveal ? 0 : feedMs / 1000, ease: EASE_FEED }}
+                    initial={{ transform: `translateY(${staticReveal ? 0 : -feedDistance}px)` }}
+                    animate={{ transform: 'translateY(0px)' }}
+                    transition={feedTransition}
                     onAnimationComplete={handleFeedComplete}
                   >
-                    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-black/30 via-black/8 to-transparent" />
-                    <div aria-hidden="true" style={{ height: PRINTER_LIP }} />
-                    {paperContent}
+                    <motion.div
+                      className="relative"
+                      style={{ boxShadow: '0 18px 30px -20px rgba(15,23,42,.5)' }}
+                      initial={{ transform: `translateY(${staticReveal ? 0 : feedDistance}px)` }}
+                      animate={{ transform: 'translateY(0px)' }}
+                      transition={feedTransition}
+                    >
+                      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-black/30 via-black/8 to-transparent" />
+                      <div aria-hidden="true" style={{ height: PRINTER_LIP }} />
+                      {paperContent}
+                    </motion.div>
                   </motion.div>
                 ) : (
                   <div className="relative overflow-hidden" style={{ height: 0 }}>

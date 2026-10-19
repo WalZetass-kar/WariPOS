@@ -157,9 +157,9 @@ async function main() {
     fs.copyFileSync(windowsNodeFile, nativeModulePath);
     console.log('[build-win] Swapped in Windows PE64 better_sqlite3.node for packaging.');
 
-    // Step 4: Run electron-builder targeting NSIS and portable
-    console.log('\n[5/5] Building NSIS Windows installer and Portable executable...');
-    run('npx', ['electron-builder', '--win', 'nsis', 'portable', '--publish', 'never']);
+    // Step 4: Run electron-builder targeting NSIS, portable, and zip
+    console.log('\n[5/5] Building NSIS Windows installer, Portable executable, and ZIP package...');
+    run('npx', ['electron-builder', '--win', 'nsis', 'portable', 'zip', '--publish', 'never']);
     buildSuccess = true;
   } finally {
     // Step 5: Always restore Linux binary so local dev environment remains healthy
@@ -176,6 +176,8 @@ async function main() {
       || fs.readdirSync(releaseDir).find(f => f.startsWith('WariPOS-Setup-') && f.endsWith('.exe'));
     const portableFile = fs.readdirSync(releaseDir).find(f => f === `WariPOS-${pkgVersion}-portable.exe`)
       || fs.readdirSync(releaseDir).find(f => f.includes('portable') && f.endsWith('.exe'));
+    const zipFile = fs.readdirSync(releaseDir).find(f => f === `WariPOS-${pkgVersion}-win-x64.zip`)
+      || fs.readdirSync(releaseDir).find(f => f.endsWith('.zip'));
 
     console.log('\n=============================================');
     console.log('  Windows Desktop Build SUCCESS!');
@@ -186,6 +188,10 @@ async function main() {
     if (portableFile) {
       const pStats = fs.statSync(path.join(releaseDir, portableFile));
       console.log(`  Portable file:  release/${portableFile} (${(pStats.size / (1024 * 1024)).toFixed(2)} MB)`);
+    }
+    if (zipFile) {
+      const zStats = fs.statSync(path.join(releaseDir, zipFile));
+      console.log(`  Zip archive:    release/${zipFile} (${(zStats.size / (1024 * 1024)).toFixed(2)} MB)`);
     }
     console.log('=============================================\n');
   }

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, type TouchEvent, type ReactNode } from 'react'
+import { useState, useRef, useCallback, useEffect, type TouchEvent, type ReactNode } from 'react'
 import { motion, useAnimation } from 'framer-motion'
 import { RefreshCw } from 'lucide-react'
 
@@ -16,7 +16,23 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
   const startX = useRef(0)
   const startY = useRef(0)
   const mountTime = useRef(Date.now())
+  const frameRef = useRef<number | null>(null)
+  const pendingDistance = useRef(0)
   const controls = useAnimation()
+
+  useEffect(() => () => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
+  }, [])
+
+  // touchmove fires faster than the display refresh; apply at most one height change per frame.
+  const schedulePullDistance = useCallback((distance: number) => {
+    pendingDistance.current = distance
+    if (frameRef.current !== null) return
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null
+      setPullDistance(prev => (prev === pendingDistance.current ? prev : pendingDistance.current))
+    })
+  }, [])
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
     // Cooldown: Ignore pull triggers within 1s of mount to prevent accidental triggers on launch
@@ -27,6 +43,7 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
     if (scrollTop > 0) return
     startX.current = e.touches[0].clientX
     startY.current = e.touches[0].clientY
+    pendingDistance.current = 0
     setPulling(true)
   }, [disabled, refreshing])
 
@@ -37,6 +54,7 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
     const scrollTop = scrollParent ? scrollParent.scrollTop : (document.documentElement.scrollTop || document.body.scrollTop)
     if (scrollTop > 0) {
       setPulling(false)
+      pendingDistance.current = 0
       setPullDistance(0)
       return
     }
@@ -46,32 +64,38 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
 
     // Cancel if movement is horizontal (e.g. swiping tabs or scrolling horizontally)
     if (diffX > diffY || diffY <= 0) {
-      setPullDistance(0)
+      schedulePullDistance(0)
       return
     }
 
     // Require deliberate vertical pull
     const distance = Math.min((diffY - 10) * 0.45, threshold * 1.4)
-    setPullDistance(Math.max(0, distance))
-  }, [pulling, disabled, refreshing, threshold])
+    schedulePullDistance(Math.round(Math.max(0, distance)))
+  }, [pulling, disabled, refreshing, threshold, schedulePullDistance])
 
   const handleTouchEnd = useCallback(async () => {
     if (!pulling || disabled) return
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
+    }
     setPulling(false)
-    if (pullDistance >= threshold && !refreshing) {
+    if (pendingDistance.current >= threshold && !refreshing) {
       setRefreshing(true)
       controls.start({ rotate: 360, transition: { duration: 0.8, repeat: Infinity, ease: 'linear' } })
       try {
         await onRefresh()
       } finally {
         setRefreshing(false)
+        pendingDistance.current = 0
         setPullDistance(0)
         controls.stop()
       }
     } else {
+      pendingDistance.current = 0
       setPullDistance(0)
     }
-  }, [pulling, disabled, refreshing, pullDistance, threshold, onRefresh, controls])
+  }, [pulling, disabled, refreshing, threshold, onRefresh, controls])
 
   const showIndicator = pullDistance > 10 || refreshing
   const progress = Math.min(pullDistance / threshold, 1)
@@ -86,7 +110,7 @@ export default function PullToRefresh({ onRefresh, children, disabled = false, t
       {/* Pull indicator */}
       {showIndicator && (
         <div
-          className="flex items-center justify-center overflow-hidden transition-all"
+          className={`flex items-center justify-center overflow-hidden ${pulling ? '' : 'transition-[height] duration-200 ease-out'}`}
           style={{ height: refreshing ? 48 : pullDistance }}
         >
           <motion.div
