@@ -97,7 +97,7 @@ interface TopbarProps {
 export default function Topbar({ onMenuClick }: TopbarProps) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { mode, isDark, toggleMode } = useTheme()
+  const { isDark, isThemeTransitioning, toggleMode } = useTheme()
   const { user } = useAuth()
   const { posMode, setPosMode } = useAppStore()
   const { isOnline } = useNetworkStatus()
@@ -266,7 +266,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         </span>
 
         {/* Dark Mode Toggle (Desktop) */}
-        <button onClick={toggleMode} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} className="hidden sm:flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}>
+        <button type="button" onClick={toggleMode} disabled={isThemeTransitioning} aria-label={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'} aria-pressed={isDark} className="hidden sm:flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors disabled:cursor-wait disabled:opacity-60" title={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}>
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
@@ -468,7 +468,10 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
                 <button
                   type="button"
                   onClick={toggleMode}
-                  className="flex flex-col items-center justify-center p-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-[10px] font-bold transition-colors"
+                  disabled={isThemeTransitioning}
+                  aria-label={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}
+                  aria-pressed={isDark}
+                  className="flex flex-col items-center justify-center p-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-[10px] font-bold transition-colors disabled:cursor-wait disabled:opacity-60"
                   title="Ganti Tema"
                 >
                   {isDark ? <Sun size={14} className="mb-0.5 text-amber-500" /> : <Moon size={14} className="mb-0.5 text-slate-600" />}

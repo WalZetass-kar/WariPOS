@@ -182,6 +182,21 @@ export default function Transaksi() {
     return () => window.removeEventListener('app:refresh', handleRefresh)
   }, [refreshShift])
 
+  // Reload produk & shift setelah transaksi ditunda sampai animasi struk selesai,
+  // agar re-render daftar produk tidak berebut frame dengan popup "Transaksi Berhasil".
+  const pendingRefreshRef = useRef<number | null>(null)
+  const flushAppRefresh = useCallback(() => {
+    if (pendingRefreshRef.current === null) return
+    window.clearTimeout(pendingRefreshRef.current)
+    pendingRefreshRef.current = null
+    window.dispatchEvent(new CustomEvent('app:refresh'))
+  }, [])
+  const scheduleAppRefresh = useCallback(() => {
+    if (pendingRefreshRef.current !== null) window.clearTimeout(pendingRefreshRef.current)
+    pendingRefreshRef.current = window.setTimeout(flushAppRefresh, 3200)
+  }, [flushAppRefresh])
+  useEffect(() => flushAppRefresh, [flushAppRefresh])
+
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (state.customerRef.current && !state.customerRef.current.contains(e.target as Node)) state.setShowCustomerDrop(false) }
@@ -656,7 +671,7 @@ Terima kasih atas kunjungan Anda!`
         toast(`Sisa ${remainingUsage - 1} transaksi demo`, 'error')
       }
 
-      window.dispatchEvent(new CustomEvent('app:refresh'))
+      scheduleAppRefresh()
 
       // Notifikasi banner transaksi kasir berhasil
       void showSaleSuccessNotification(
@@ -696,7 +711,7 @@ Terima kasih atas kunjungan Anda!`
       toast(r.message as string, 'error')
       return false
     }
-  }, [isDemo, remainingUsage, showPricing, toast, trackUsage, broadcastCustomerDisplay, totalBayar, state.tipePesanan, state.nomorMeja, state.selectedCustomer, poinEarned])
+  }, [isDemo, remainingUsage, showPricing, toast, trackUsage, broadcastCustomerDisplay, totalBayar, state.tipePesanan, state.nomorMeja, state.selectedCustomer, poinEarned, scheduleAppRefresh])
 
   const createQrisPayment = async () => {
     if (state.qrisCreatingRef.current) return
@@ -932,6 +947,7 @@ Terima kasih atas kunjungan Anda!`
   state.holdCartRef.current = holdCart
 
   const resetTransaksi = () => {
+    flushAppRefresh()
     state.setCart([])
     state.setBayar('')
     state.setMobileCartDrawerOpen(false)

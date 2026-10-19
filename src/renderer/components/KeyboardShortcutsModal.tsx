@@ -47,7 +47,7 @@ export default function KeyboardShortcutsModal({ open, onClose }: Props) {
         {SHORTCUTS.map(group => (
           <div key={group.group} className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-red-600 dark:text-red-400">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-primary-600 dark:text-primary-400">
                 {group.group}
               </span>
               <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />

@@ -157,9 +157,9 @@ async function main() {
     fs.copyFileSync(windowsNodeFile, nativeModulePath);
     console.log('[build-win] Swapped in Windows PE64 better_sqlite3.node for packaging.');
 
-    // Step 4: Run electron-builder targeting NSIS
-    console.log('\n[5/5] Building NSIS Windows installer...');
-    run('npx', ['electron-builder', '--win', 'nsis', '--publish', 'never']);
+    // Step 4: Run electron-builder targeting NSIS and portable
+    console.log('\n[5/5] Building NSIS Windows installer and Portable executable...');
+    run('npx', ['electron-builder', '--win', 'nsis', 'portable', '--publish', 'never']);
     buildSuccess = true;
   } finally {
     // Step 5: Always restore Linux binary so local dev environment remains healthy
@@ -171,14 +171,21 @@ async function main() {
 
   if (buildSuccess) {
     const releaseDir = path.join(rootDir, 'release');
-    const installerFile = fs.readdirSync(releaseDir).find(f => f.startsWith('WariPOS-Setup-') && f.endsWith('.exe'))
-      || fs.readdirSync(releaseDir).find(f => f.endsWith('.exe') && !f.includes('portable'));
+    const pkgVersion = require(path.join(rootDir, 'package.json')).version;
+    const installerFile = fs.readdirSync(releaseDir).find(f => f === `WariPOS-Setup-${pkgVersion}.exe`)
+      || fs.readdirSync(releaseDir).find(f => f.startsWith('WariPOS-Setup-') && f.endsWith('.exe'));
+    const portableFile = fs.readdirSync(releaseDir).find(f => f === `WariPOS-${pkgVersion}-portable.exe`)
+      || fs.readdirSync(releaseDir).find(f => f.includes('portable') && f.endsWith('.exe'));
 
     console.log('\n=============================================');
-    console.log('  Windows Desktop Installer Build SUCCESS!');
+    console.log('  Windows Desktop Build SUCCESS!');
     if (installerFile) {
       const stats = fs.statSync(path.join(releaseDir, installerFile));
       console.log(`  Installer file: release/${installerFile} (${(stats.size / (1024 * 1024)).toFixed(2)} MB)`);
+    }
+    if (portableFile) {
+      const pStats = fs.statSync(path.join(releaseDir, portableFile));
+      console.log(`  Portable file:  release/${portableFile} (${(pStats.size / (1024 * 1024)).toFixed(2)} MB)`);
     }
     console.log('=============================================\n');
   }

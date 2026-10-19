@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 
 export type ThemeColor =
   | 'crimson'
@@ -20,7 +21,7 @@ export type ThemeColor =
   | 'gold'
   | string
 
-export type ThemeMode = 'light' | 'dark' | 'system'
+export type ThemeMode = 'light' | 'dark' | 'system' | 'auto'
 export type FontSize = 'compact' | 'normal' | 'large'
 export type BorderRadius = 'sharp' | 'medium' | 'rounded'
 
@@ -31,11 +32,16 @@ export interface ThemeContextValue {
   isDark: boolean
   fontSize: FontSize
   borderRadius: BorderRadius
+  autoScheduleEnabled: boolean
+  autoScheduleStart: number // Hour (0-23), default 18 (6 PM)
+  autoScheduleEnd: number // Hour (0-23), default 6 (6 AM)
+  isThemeTransitioning: boolean
   setColor: (c: ThemeColor) => void
   setMode: (m: ThemeMode) => void
   toggleMode: () => void
   setFontSize: (f: FontSize) => void
   setBorderRadius: (r: BorderRadius) => void
+  setAutoSchedule: (enabled: boolean, start?: number, end?: number) => void
 }
 
 export const PRESETS: ThemeColor[] = [
@@ -96,6 +102,8 @@ function generateCustomShades(hex: string) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const transitionInProgress = useRef(false)
+  const [isThemeTransitioning, setIsThemeTransitioning] = useState(false)
   const [color, setColorState] = useState<ThemeColor>(() => {
     try {
       return (
@@ -111,12 +119,36 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>(() => {
     try {
       const stored = (
+        localStorage.getItem('theme') ||
         localStorage.getItem('waripos_theme_mode') ||
         localStorage.getItem('theme-mode')
       ) as ThemeMode | null
-      if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
+      if (stored === 'light' || stored === 'dark' || stored === 'system' || stored === 'auto') return stored
     } catch {}
     return 'system'
+  })
+
+  const [autoScheduleEnabled, setAutoScheduleEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('waripos_auto_schedule') === 'true'
+    } catch {}
+    return false
+  })
+
+  const [autoScheduleStart, setAutoScheduleStart] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('waripos_auto_schedule_start')
+      return stored ? parseInt(stored, 10) : 18 // 6 PM default
+    } catch {}
+    return 18
+  })
+
+  const [autoScheduleEnd, setAutoScheduleEnd] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('waripos_auto_schedule_end')
+      return stored ? parseInt(stored, 10) : 6 // 6 AM default
+    } catch {}
+    return 6
   })
 
   const [fontSize, setFontSizeState] = useState<FontSize>(() => {
@@ -206,8 +238,37 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [color])
 
-  // Resolved mode calculation
-  const resolvedMode: 'light' | 'dark' = mode === 'system' ? (systemIsDark ? 'dark' : 'light') : mode
+  // Resolved mode calculation with auto-schedule support
+  const [autoScheduleDark, setAutoScheduleDark] = useState<boolean>(false)
+
+  // Check if current time is within dark mode schedule
+  useEffect(() => {
+    if (!autoScheduleEnabled || mode !== 'auto') return
+
+    const checkSchedule = () => {
+      const now = new Date()
+      const currentHour = now.getHours()
+      
+      // Handle wrap-around (e.g., 18:00 to 06:00)
+      const isInDarkPeriod = autoScheduleStart > autoScheduleEnd
+        ? currentHour >= autoScheduleStart || currentHour < autoScheduleEnd
+        : currentHour >= autoScheduleStart && currentHour < autoScheduleEnd
+      
+      setAutoScheduleDark(isInDarkPeriod)
+    }
+
+    checkSchedule()
+    const interval = setInterval(checkSchedule, 60000) // Check every minute
+    
+    return () => clearInterval(interval)
+  }, [autoScheduleEnabled, autoScheduleStart, autoScheduleEnd, mode])
+
+  const resolvedMode: 'light' | 'dark' = 
+    mode === 'auto' 
+      ? (autoScheduleDark ? 'dark' : 'light')
+      : mode === 'system' 
+      ? (systemIsDark ? 'dark' : 'light') 
+      : mode
   const isDark = resolvedMode === 'dark'
 
   // Mode application & persistence
@@ -219,6 +280,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      localStorage.setItem('theme', mode)
       localStorage.setItem('waripos_theme_mode', mode)
       localStorage.setItem('theme-mode', mode)
     } catch {}
@@ -241,14 +303,78 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [borderRadius])
 
   const setColor = (c: ThemeColor) => setColorState(c)
-  const setMode = (m: ThemeMode) => setModeState(m)
-  const toggleMode = () => {
-    setModeState(() => {
-      return isDark ? 'light' : 'dark'
-    })
+
+  const changeExplicitMode = (nextMode: 'light' | 'dark') => {
+    if (transitionInProgress.current) return
+    transitionInProgress.current = true
+
+    const root = document.documentElement
+    // Ratusan elemen memakai transition-colors; mematikannya selama ganti tema
+    // menghindari recalc style per frame di atas animasi reveal.
+    root.classList.add('theme-switching')
+    const done = () => {
+      root.classList.remove('theme-switching')
+      transitionInProgress.current = false
+      setIsThemeTransitioning(false)
+    }
+
+    const switchTheme = () => {
+      // A View Transition snapshots immediately after its callback. Flush the
+      // React update and root class together so the new snapshot is dark/light.
+      // Mode and the transitioning flag land in one render instead of two.
+      flushSync(() => {
+        setModeState(nextMode)
+        setIsThemeTransitioning(true)
+      })
+      root.classList.toggle('dark', nextMode === 'dark')
+      try {
+        localStorage.setItem('theme', nextMode)
+      } catch {}
+    }
+
+    if (!document.startViewTransition) {
+      switchTheme()
+      requestAnimationFrame(done)
+      return
+    }
+
+    try {
+      const transition = document.startViewTransition(switchTheme)
+      void transition.finished.catch(() => undefined).finally(done)
+    } catch {
+      switchTheme()
+      requestAnimationFrame(done)
+    }
   }
+
+  const setMode = (nextMode: ThemeMode) => {
+    if (nextMode === 'light' || nextMode === 'dark') {
+      changeExplicitMode(nextMode)
+      return
+    }
+    setModeState(nextMode)
+  }
+
+  const toggleMode = () => changeExplicitMode(isDark ? 'light' : 'dark')
+  
   const setFontSize = (f: FontSize) => setFontSizeState(f)
   const setBorderRadius = (r: BorderRadius) => setBorderRadiusState(r)
+  const setAutoSchedule = (enabled: boolean, start?: number, end?: number) => {
+    setAutoScheduleEnabled(enabled)
+    if (start !== undefined) setAutoScheduleStart(start)
+    if (end !== undefined) setAutoScheduleEnd(end)
+    
+    try {
+      localStorage.setItem('waripos_auto_schedule', enabled ? 'true' : 'false')
+      if (start !== undefined) localStorage.setItem('waripos_auto_schedule_start', String(start))
+      if (end !== undefined) localStorage.setItem('waripos_auto_schedule_end', String(end))
+    } catch {}
+    
+    // If enabling auto mode, switch to 'auto' mode
+    if (enabled) {
+      setModeState('auto')
+    }
+  }
 
   return (
     <ThemeContext.Provider
@@ -259,11 +385,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         isDark,
         fontSize,
         borderRadius,
+        autoScheduleEnabled,
+        autoScheduleStart,
+        autoScheduleEnd,
+        isThemeTransitioning,
         setColor,
         setMode,
         toggleMode,
         setFontSize,
         setBorderRadius,
+        setAutoSchedule,
       }}
     >
       {children}

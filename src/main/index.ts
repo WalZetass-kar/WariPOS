@@ -18,8 +18,8 @@ import {
   registerDesktopDeepLinks,
 } from './platformSecurity.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// const __filename = fileURLToPath(import.meta.url)
+// const __dirname = path.dirname(__filename)
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 

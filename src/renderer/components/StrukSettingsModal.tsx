@@ -315,7 +315,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                 {/* Bluetooth Thermal Printer Quick Connect */}
                 <div className="mt-3 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-xl bg-primary-100 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 flex items-center justify-center">
                       <Bluetooth size={18} />
                     </div>
                     <div>
@@ -328,7 +328,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                   <button
                     type="button"
                     onClick={() => setShowBtModal(true)}
-                    className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-red-500 transition shadow-xs"
+                    className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-primary-500 transition shadow-xs"
                   >
                     {bluetoothPrinter.isConnected() ? 'Kelola' : 'Sambungkan'}
                   </button>
@@ -382,7 +382,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                       onClick={() => setSettings({ ...settings, [key]: !settings[key as keyof StrukSettings] })}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
                         settings[key as keyof StrukSettings] 
-                          ? 'bg-red-600' 
+                          ? 'bg-primary-600' 
                           : 'bg-slate-300 dark:bg-slate-600'
                       }`}
                     >
@@ -407,7 +407,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                 onChange={(e) => setSettings({ ...settings, footer_text: e.target.value })}
                 rows={3}
                 placeholder="Terima kasih atas kunjungan Anda"
-                className="w-full min-h-[90px] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all resize-none text-sm"
+                className="w-full min-h-[90px] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all resize-none text-sm"
               />
             </div>
 
@@ -424,7 +424,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                   onClick={() => setSettings({ ...settings, qris_enabled: !settings.qris_enabled })}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${
                     settings.qris_enabled 
-                      ? 'bg-red-600' 
+                      ? 'bg-primary-600' 
                       : 'bg-slate-300 dark:bg-slate-600'
                   }`}
                 >

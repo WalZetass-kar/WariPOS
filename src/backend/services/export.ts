@@ -1,6 +1,5 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import * as https from 'https'
 import { createRequire } from 'module'
 import { app } from 'electron'
 const require = createRequire(import.meta.url)
@@ -10,11 +9,18 @@ import ExcelJS from 'exceljs'
 import { IdentitasModel } from '../models/IdentitasModel.js'
 import { demoSession } from './demoSessionManager.js'
 import { LaporanController } from '../controllers/LaporanController.js'
+import { asNumber, buildCsv, csvEscape, saleGrandTotal, saleNet, saleSettled } from './csvUtils.js'
 
 
 interface SalesExportContext {
   startDate?: string
   endDate?: string
+  /** Angka ringkasan dari LaporanController agar PDF/XLSX/CSV identik dengan UI. */
+  summary?: any
+  labaRugi?: any
+  detailItems?: any[]
+  produk?: any[]
+  pembayaran?: any[]
 }
 
 interface DailySalesRow {
@@ -48,11 +54,6 @@ const BRAND = {
   redSoft: 'FFFEE2E2',
   blue: 'FF2563EB',
   blueSoft: 'FFDBEAFE',
-}
-
-function asNumber(value: unknown) {
-  const numeric = Number(value ?? 0)
-  return Number.isFinite(numeric) ? numeric : 0
 }
 
 function formatIdr(value: unknown) {
@@ -111,7 +112,7 @@ function salesAnalytics(data: any[]) {
 
   for (const item of data) {
     const key = salesDateKey(item.tgl_wkt_transaksi)
-    const total = asNumber(item.yang_dibayar)
+    const total = saleGrandTotal(item)
     const qty = asNumber(item.total_qty)
     const pajak = asNumber(item.pajak)
     const daily = dailyMap.get(key) ?? {
@@ -137,7 +138,7 @@ function salesAnalytics(data: any[]) {
 
   const daily = Array.from(dailyMap.values()).sort((a, b) => a.key.localeCompare(b.key))
   const payments = Array.from(paymentMap.values()).sort((a, b) => b.total - a.total)
-  const totalSales = data.reduce((sum, item) => sum + asNumber(item.yang_dibayar), 0)
+  const totalSales = data.reduce((sum, item) => sum + saleGrandTotal(item), 0)
   const totalSubtotal = data.reduce((sum, item) => sum + asNumber(item.sub_total), 0)
   const totalTax = data.reduce((sum, item) => sum + asNumber(item.pajak), 0)
   const totalQty = data.reduce((sum, item) => sum + asNumber(item.total_qty), 0)
@@ -178,28 +179,13 @@ function exportPath(defaultName: string, customPath?: string) {
   return path.join(exportDir, defaultName)
 }
 
-function getChartBuffer(config: any): Promise<Buffer | null> {
-  return new Promise((resolve) => {
-    const url = `https://quickchart.io/chart?w=600&h=350&bkg=white&c=${encodeURIComponent(JSON.stringify(config))}`
-    const req = https.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        resolve(null)
-        return
-      }
-      const chunks: Buffer[] = []
-      res.on('data', (chunk) => chunks.push(chunk))
-      res.on('end', () => resolve(Buffer.concat(chunks)))
-    })
-    req.on('error', (err) => {
-      console.error('QuickChart download error:', err)
-      resolve(null)
-    })
-    req.setTimeout(3500, () => {
-      console.warn('QuickChart request timed out')
-      req.destroy()
-      resolve(null)
-    })
-  })
+/**
+ * Grafik gambar eksternal dinonaktifkan: data penjualan tidak boleh dikirim ke
+ * layanan pihak ketiga. Analisis visual memakai native Excel data bar dan tabel
+ * ringkasan sehingga ekspor tetap bekerja offline dan deterministik.
+ */
+function getChartBuffer(_config: any): Promise<Buffer | null> {
+  return Promise.resolve(null)
 }
 
 function thinBorder(color = BRAND.border) {
@@ -277,6 +263,17 @@ function excelDataBarRule(priority: number) {
   } as ExcelJS.ConditionalFormattingRule
 }
 
+function columnLetter(col: number) {
+  let n = Math.max(1, Math.trunc(col))
+  let letters = ''
+  while (n > 0) {
+    const remainder = (n - 1) % 26
+    letters = String.fromCharCode(65 + remainder) + letters
+    n = Math.floor((n - 1) / 26)
+  }
+  return letters
+}
+
 function autofitColumnWidths(sheet: ExcelJS.Worksheet, minWidth = 10, maxWidth = 35) {
   sheet.columns.forEach((column) => {
     let maxLen = 0
@@ -301,6 +298,40 @@ function autofitColumnWidths(sheet: ExcelJS.Worksheet, minWidth = 10, maxWidth =
     })
     column.width = Math.min(Math.max(maxLen + 4, minWidth), maxWidth)
   })
+}
+
+// ==========================================
+// CSV HELPERS
+// Struktur CSV: 1 baris header stabil + 1 baris per record, tanpa judul,
+// merge, subtotal, atau simbol mata uang pada kolom numerik.
+// ==========================================
+
+function saveCsv(defaultName: string, content: string, customPath?: string) {
+  const filepath = exportPath(defaultName, customPath)
+  fs.mkdirSync(path.dirname(filepath), { recursive: true })
+  fs.writeFileSync(filepath, content, 'utf8')
+  return {
+    success: true,
+    message: 'Export CSV berhasil disimpan',
+    data: { filepath, filename: path.basename(filepath) },
+  }
+}
+
+function csvDateOnly(value: unknown): string {
+  const key = salesDateKey(value)
+  return key === '-' ? '' : key
+}
+
+function csvTimeOnly(value: unknown): string {
+  const date = safeDate(value)
+  if (!date) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function periodFromContext(context?: SalesExportContext) {
+  if (!context?.startDate || !context?.endDate) return ''
+  return `${context.startDate}_sampai_${context.endDate}`.replace(/[^\w-]+/g, '_')
 }
 
 export class ExportService {
@@ -420,73 +451,88 @@ export class ExportService {
 
       const pageWidth = doc.internal.pageSize.getWidth()
       const pageHeight = doc.internal.pageSize.getHeight()
+      const storeInfo = IdentitasModel.get()
+      const storeName = storeInfo?.namatoko || 'WariPOS'
+      const storeAddress = storeInfo?.alamattoko || '-'
+      const storePhone = storeInfo?.nomortelptoko || '-'
+      const printedAt = new Date().toLocaleString('id-ID')
+      const generatedBy = demoSession.getUsername() || 'Administrator'
 
-      // Header background
-      doc.setFillColor(79, 70, 229) // Indigo
-      doc.rect(0, 0, pageWidth, 35, 'F')
+      const drawHeader = () => {
+        doc.setFillColor(79, 70, 229)
+        doc.rect(0, 0, pageWidth, 32, 'F')
 
-      // Logo/Icon placeholder
-      doc.setFillColor(255, 255, 255)
-      doc.circle(20, 17, 8, 'F')
-      doc.setFontSize(12)
-      doc.setTextColor(79, 70, 229)
-      doc.text('', 17, 20)
+        let logoDrawn = false
+        if (storeInfo?.logo) {
+          try {
+            doc.addImage(storeInfo.logo, 'PNG', 14, 8, 13, 13)
+            logoDrawn = true
+          } catch (err) {
+            console.error('Gagal memuat logo identitas:', err)
+          }
+        }
+        if (!logoDrawn) {
+          doc.setFillColor(255, 255, 255)
+          doc.circle(20.5, 14.5, 6.5, 'F')
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(12)
+          doc.setTextColor(79, 70, 229)
+          doc.text(storeName.slice(0, 1).toUpperCase(), 20.5, 16.5, { align: 'center' })
+        }
 
-      // Title
-      doc.setFontSize(18)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(255, 255, 255)
-      doc.text(title, 35, 15)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(14)
+        doc.setTextColor(255, 255, 255)
+        doc.text(title, 33, 13)
 
-      // Subtitle
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'normal')
-      doc.text('WariPOS', 35, 21)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        const storeLine = [storeName, storeAddress, storePhone !== '-' ? `Telp: ${storePhone}` : ''].filter(Boolean).join(' | ')
+        doc.text(storeLine, 33, 19)
 
-      // Date & Time
-      doc.setFontSize(9)
-      const now = new Date()
-      doc.text(`Tanggal: ${now.toLocaleDateString('id-ID')}`, 35, 27)
-      doc.text(`Waktu: ${now.toLocaleTimeString('id-ID')}`, 35, 31)
+        doc.setFontSize(8)
+        doc.text(`Dicetak: ${printedAt} | Oleh: ${generatedBy}`, pageWidth - 14, 13, { align: 'right' })
+        doc.text(`${data.length.toLocaleString('id-ID')} baris data`, pageWidth - 14, 18, { align: 'right' })
+      }
 
-      // Reset text color
-      doc.setTextColor(0, 0, 0)
+      const drawFooter = (pageNo: number, totalPages: number) => {
+        doc.setDrawColor(203, 213, 225)
+        doc.setLineWidth(0.3)
+        doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(100, 116, 139)
+        doc.text('WariPOS - Sistem Kasir', 14, pageHeight - 10)
+        doc.text(`Halaman ${pageNo} dari ${totalPages}`, pageWidth - 14, pageHeight - 10, { align: 'right' })
+      }
 
-      // Add table
       autoTable(doc, {
         head: [headers],
         body: data,
-        startY: 40,
-        styles: { 
+        startY: 32,
+        styles: {
           fontSize: 8,
           cellPadding: 3,
           lineColor: [226, 232, 240],
           lineWidth: 0.1,
         },
-        headStyles: { 
+        headStyles: {
           fillColor: [79, 70, 229],
           textColor: [255, 255, 255],
           fontStyle: 'bold',
           halign: 'center',
         },
         alternateRowStyles: {
-          fillColor: [248, 250, 252]
+          fillColor: [248, 250, 252],
         },
-        margin: { left: 14, right: 14 },
+        margin: { top: 38, left: 14, right: 14, bottom: 20 },
+        didDrawPage: () => drawHeader(),
       })
 
-      // Footer
-      const finalY = (doc as any).lastAutoTable.finalY || 40
-      if (pageHeight - finalY > 20) {
-        doc.setFontSize(8)
-        doc.setTextColor(100, 116, 139)
-        doc.text('WariPOS Developer', 14, pageHeight - 10)
-        doc.text(`Halaman 1`, pageWidth - 14, pageHeight - 10, { align: 'right' })
-        
-        // Decorative line
-        doc.setDrawColor(79, 70, 229)
-        doc.setLineWidth(0.5)
-        doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15)
+      const totalPages = doc.getNumberOfPages()
+      for (let pageNo = 1; pageNo <= totalPages; pageNo++) {
+        doc.setPage(pageNo)
+        drawFooter(pageNo, totalPages)
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
@@ -527,61 +573,81 @@ export class ExportService {
       
       const period = salesPeriodLabel(data, context)
       const generatedAt = new Date().toLocaleString('id-ID')
-      
-      // Calculate laba rugi
-      let labaKotor = 0
-      if (startDateStr && endDateStr) {
+
+      // Ringkasan kanonik: pakai hasil LaporanController bila tersedia supaya
+      // angka di XLSX = PDF = CSV = tampilan aplikasi.
+      const summary = context?.summary ?? null
+      let labaRugi: any = context?.labaRugi ?? null
+      if (!labaRugi && startDateStr && endDateStr) {
         try {
           const lr = LaporanController.getLaporanLabaRugi(startDateStr, endDateStr)
-          if (lr.success && lr.data) {
-            labaKotor = lr.data.laba_kotor
-          }
+          if (lr.success && lr.data) labaRugi = lr.data
         } catch (err) {
           console.error('Gagal mengambil laba kotor:', err)
         }
       }
-      
-      // Calculate general summary
-      const totalTransactions = data.length
-      const totalRevenue = data.reduce((sum, item) => sum + asNumber(item.yang_dibayar), 0)
-      const totalDiscounts = data.reduce((sum, item) => sum + asNumber(item.discount_amount), 0)
-      const totalTaxes = data.reduce((sum, item) => sum + asNumber(item.pajak), 0)
-      const totalQty = data.reduce((sum, item) => sum + asNumber(item.total_qty), 0)
-      const avgTransaction = totalTransactions ? totalRevenue / totalTransactions : 0
-      
-      // Aggregate: Kasir Terbaik
+
+      const totalTransactions = asNumber(summary?.total_transaksi ?? data.length)
+      const totalRevenue = asNumber(summary?.penjualan_bersih
+        ?? data.reduce((sum, item) => sum + saleNet(item), 0))
+      const totalDiscounts = asNumber(summary?.total_diskon
+        ?? data.reduce((sum, item) => sum + asNumber(item.discount_amount), 0))
+      const totalTaxes = asNumber(summary?.total_pajak
+        ?? data.reduce((sum, item) => sum + asNumber(item.pajak), 0))
+      const totalQty = asNumber(summary?.total_qty
+        ?? data.reduce((sum, item) => sum + asNumber(item.total_qty), 0))
+      const grandTotal = asNumber(summary?.grand_total
+        ?? data.reduce((sum, item) => sum + saleGrandTotal(item), 0))
+      const totalRetur = asNumber(summary?.total_retur ?? 0)
+      const netAfterReturns = asNumber(summary?.penjualan_setelah_retur ?? (totalRevenue - totalRetur))
+      const hpp = asNumber(labaRugi?.total_hpp ?? labaRugi?.total_modal ?? 0)
+      const labaKotor = asNumber(labaRugi?.laba_kotor ?? 0)
+      const marginPersen = asNumber(labaRugi?.margin_persen ?? 0)
+      const avgTransaction = asNumber(summary?.rata_rata_transaksi
+        ?? (totalTransactions ? totalRevenue / totalTransactions : 0))
+
+      // Aggregate: Kasir Terbaik (penjualan bersih per kasir)
       const cashierMap = new Map<string, { username: string, count: number, total: number }>()
       for (const item of data) {
         const cash = item.username_transaksi || 'Kasir'
         const existing = cashierMap.get(cash) ?? { username: cash, count: 0, total: 0 }
         existing.count += 1
-        existing.total += asNumber(item.yang_dibayar)
+        existing.total += saleNet(item)
         cashierMap.set(cash, existing)
       }
       const kasirTerbaik = Array.from(cashierMap.values()).sort((a, b) => b.total - a.total)
-      
-      // Aggregate: Metode Pembayaran
-      const payMap = new Map<string, { method: string, count: number, total: number }>()
+
+      // Aggregate: Metode Pembayaran (nilai yang benar-benar dibayar, termasuk pajak)
+      const payMap = new Map<string, { method: string, count: number, net: number, pajak: number, total: number }>()
       for (const item of data) {
         const pay = String(item.jenis_pembayaran || 'TUNAI').toUpperCase()
-        const existing = payMap.get(pay) ?? { method: pay, count: 0, total: 0 }
+        const existing = payMap.get(pay) ?? { method: pay, count: 0, net: 0, pajak: 0, total: 0 }
         existing.count += 1
-        existing.total += asNumber(item.yang_dibayar)
+        existing.net += saleNet(item)
+        existing.pajak += asNumber(item.pajak)
+        existing.total += saleGrandTotal(item)
         payMap.set(pay, existing)
       }
       const metodePembayaran = Array.from(payMap.values()).sort((a, b) => b.total - a.total)
       const topPaymentMethod = metodePembayaran[0]?.method || '-'
-      
-      // Retrieve Best Selling Products
-      let produkTerlaris: any[] = []
-      if (startDateStr && endDateStr) {
+
+      // Produk terlaris & detail item dari sumber yang sama
+      let produkTerlaris: any[] = Array.isArray(context?.produk) ? context?.produk ?? [] : []
+      if (!produkTerlaris.length && startDateStr && endDateStr) {
         try {
-          const pr = LaporanController.getLaporanProdukTerlaris(startDateStr, endDateStr, 100)
-          if (pr.success && pr.data) {
-            produkTerlaris = pr.data
-          }
+          const pr = LaporanController.getLaporanProdukTerlaris(startDateStr, endDateStr, 1000)
+          if (pr.success && pr.data) produkTerlaris = pr.data
         } catch (err) {
           console.error('Gagal mengambil produk terlaris:', err)
+        }
+      }
+      let detailItems: any[] = Array.isArray(context?.detailItems) ? context?.detailItems ?? [] : []
+      if (!detailItems.length && startDateStr && endDateStr) {
+        try {
+          const dr = LaporanController.getLaporanDetailItem(startDateStr, endDateStr)
+          if (dr.success && dr.data) detailItems = dr.data
+        } catch (err) {
+          console.error('Gagal mengambil detail item:', err)
         }
       }
       
@@ -624,7 +690,7 @@ export class ExportService {
       }
       
       // Reusable KPI Card helper
-      const applyKpiCard = (sheet: ExcelJS.Worksheet, r: number, c: number, lbl: string, val: string | number, color: string) => {
+      const applyKpiCard = (sheet: ExcelJS.Worksheet, r: number, c: number, lbl: string, val: string | number, color: string, numFmt?: string) => {
         sheet.mergeCells(r, c, r, c + 1)
         sheet.mergeCells(r + 1, c, r + 1, c + 1)
         
@@ -633,6 +699,7 @@ export class ExportService {
         
         cellLbl.value = lbl
         cellVal.value = val
+        if (numFmt) cellVal.numFmt = numFmt
         
         cellLbl.font = { size: 9, bold: true, color: { argb: BRAND.slateMuted } }
         cellVal.font = { size: 14, bold: true, color: { argb: color } }
@@ -666,32 +733,66 @@ export class ExportService {
       fillCell(secHeader, BRAND.slateText)
       ringkasanSheet.getRow(5).height = 24
       
+      const RP = '"Rp" #,##0'
+
       // KPIs Row 1
-      applyKpiCard(ringkasanSheet, 7, 1, 'TOTAL TRANSAKSI', totalTransactions.toLocaleString('id-ID'), BRAND.blue)
-      applyKpiCard(ringkasanSheet, 7, 3, 'TOTAL PENDAPATAN', formatIdr(totalRevenue), BRAND.green)
-      applyKpiCard(ringkasanSheet, 7, 5, 'TOTAL KEUNTUNGAN', formatIdr(labaKotor), BRAND.primary)
-      applyKpiCard(ringkasanSheet, 7, 7, 'PRODUK TERJUAL', totalQty.toLocaleString('id-ID'), BRAND.amber)
+      applyKpiCard(ringkasanSheet, 7, 1, 'TOTAL TRANSAKSI', totalTransactions, BRAND.blue, '#,##0')
+      applyKpiCard(ringkasanSheet, 7, 3, 'PENJUALAN BERSIH', totalRevenue, BRAND.green, RP)
+      applyKpiCard(ringkasanSheet, 7, 5, 'GRAND TOTAL (TERMASUK PAJAK)', grandTotal, BRAND.primary, RP)
+      applyKpiCard(ringkasanSheet, 7, 7, 'PRODUK TERJUAL', totalQty, BRAND.amber, '#,##0')
       ringkasanSheet.getRow(7).height = 18
       ringkasanSheet.getRow(8).height = 26
       
       // KPIs Row 2
-      applyKpiCard(ringkasanSheet, 10, 1, 'TOTAL DISKON', formatIdr(totalDiscounts), BRAND.red)
-      applyKpiCard(ringkasanSheet, 10, 3, 'TOTAL PAJAK', formatIdr(totalTaxes), BRAND.amber)
-      applyKpiCard(ringkasanSheet, 10, 5, 'RATA-RATA / TRANSAKSI', formatIdr(avgTransaction), BRAND.blue)
-      applyKpiCard(ringkasanSheet, 10, 7, 'METODE TERBANYAK', topPaymentMethod, BRAND.green)
+      applyKpiCard(ringkasanSheet, 10, 1, 'TOTAL DISKON', totalDiscounts, BRAND.red, RP)
+      applyKpiCard(ringkasanSheet, 10, 3, 'TOTAL PAJAK', totalTaxes, BRAND.amber, RP)
+      applyKpiCard(ringkasanSheet, 10, 5, 'RETUR DISETUJUI', totalRetur, BRAND.red, RP)
+      applyKpiCard(ringkasanSheet, 10, 7, 'RATA-RATA / TRANSAKSI', avgTransaction, BRAND.blue, RP)
       ringkasanSheet.getRow(10).height = 18
       ringkasanSheet.getRow(11).height = 26
-      
+
+      // KPIs Row 3
+      applyKpiCard(ringkasanSheet, 13, 1, 'HPP (HARGA MODAL)', hpp, BRAND.slateText, RP)
+      applyKpiCard(ringkasanSheet, 13, 3, 'LABA KOTOR', labaKotor, BRAND.green, RP)
+      applyKpiCard(ringkasanSheet, 13, 5, 'MARGIN LABA', marginPersen / 100, BRAND.primary, '0.00%')
+      applyKpiCard(ringkasanSheet, 13, 7, 'METODE TERBANYAK', topPaymentMethod, BRAND.blue)
+      ringkasanSheet.getRow(13).height = 18
+      ringkasanSheet.getRow(14).height = 26
+
+      // Definisi metrik agar laporan dapat diaudit
+      ringkasanSheet.mergeCells('A16:H16')
+      const defHeader = ringkasanSheet.getCell('A16')
+      defHeader.value = 'DEFINISI METRIK'
+      defHeader.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } }
+      defHeader.alignment = { vertical: 'middle', horizontal: 'center' }
+      fillCell(defHeader, BRAND.slateText)
+      const definitions = [
+        'Omzet kotor = jumlah subtotal item setelah diskon item, sebelum diskon invoice dan pajak.',
+        'Penjualan bersih = omzet kotor - diskon invoice. Belum termasuk pajak dan retur.',
+        'Grand total = penjualan bersih + pajak. Nilai ini yang dibayar pelanggan.',
+        'Retur = total retur berstatus APPROVED pada periode retur. Laba kotor belum memperhitungkan HPP barang retur.',
+        `Penjualan setelah retur = ${formatIdr(netAfterReturns)}.`,
+        'Skema transaksi tidak menyimpan status pembatalan; status LUNAS/KURANG BAYAR diturunkan dari pembayaran yang tercatat.',
+      ]
+      definitions.forEach((text, index) => {
+        const rowNo = 17 + index
+        ringkasanSheet.mergeCells(`A${rowNo}:H${rowNo}`)
+        const cell = ringkasanSheet.getCell(`A${rowNo}`)
+        cell.value = `• ${text}`
+        cell.font = { size: 9, color: { argb: BRAND.slateMuted } }
+        cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      })
+
       // Otorisasi / Signatures area
-      ringkasanSheet.mergeCells('A13:H13')
-      const secHeader2 = ringkasanSheet.getCell('A13')
+      ringkasanSheet.mergeCells('A23:H23')
+      const secHeader2 = ringkasanSheet.getCell('A23')
       secHeader2.value = 'LEMBAR PENGESAHAN LAPORAN'
       secHeader2.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } }
       secHeader2.alignment = { vertical: 'middle', horizontal: 'center' }
       fillCell(secHeader2, BRAND.slateText)
-      ringkasanSheet.getRow(13).height = 24
+      ringkasanSheet.getRow(23).height = 24
       
-      const sigR = 15
+      const sigR = 25
       ringkasanSheet.mergeCells(sigR, 1, sigR, 2)
       ringkasanSheet.mergeCells(sigR, 4, sigR, 5)
       ringkasanSheet.mergeCells(sigR, 7, sigR, 8)
@@ -748,7 +849,7 @@ export class ExportService {
         'TANGGAL',
         'JUMLAH TRANSAKSI',
         'QTY TERJUAL',
-        'TOTAL OMZET',
+        'TOTAL DITERIMA (PAJAK TERMASUK)',
         'PERSENTASE (%)',
         'GRAFIK DATA BAR'
       ]
@@ -766,7 +867,7 @@ export class ExportService {
           asNumber(row.transaksi),
           asNumber(row.qty),
           asNumber(row.total),
-          totalRevenue ? asNumber(row.total) / totalRevenue : 0,
+          grandTotal ? asNumber(row.total) / grandTotal : 0,
           asNumber(row.total) // dataBar target
         ])
         
@@ -792,12 +893,16 @@ export class ExportService {
         }
       })
       
+      if (analytics.daily.length > 0) {
+        chartSheet.autoFilter = { from: 'A5', to: `G${5 + analytics.daily.length}` }
+      }
+
       const cTotalRow = chartSheet.addRow([
         '',
         'TOTAL',
         analytics.daily.reduce((sum, item) => sum + asNumber(item.transaksi), 0),
         analytics.daily.reduce((sum, item) => sum + asNumber(item.qty), 0),
-        totalRevenue,
+        grandTotal,
         1.0,
         ''
       ])
@@ -904,10 +1009,11 @@ export class ExportService {
       // ==========================================
       // SHEET 2: DETAIL PENJUALAN
       // ==========================================
-      const detailSheet = workbook.addWorksheet('Detail Penjualan', {
-        views: [{ state: 'frozen', ySplit: 5 }]
+      const detailSheet = workbook.addWorksheet('Detail Transaksi', {
+        views: [{ state: 'frozen', ySplit: 5 }],
+        properties: { tabColor: { argb: BRAND.primary } },
       })
-      applyCompanyHeader(detailSheet, 'LAPORAN RAGAM TRANSAKSI PENJUALAN', 'L')
+      applyCompanyHeader(detailSheet, 'LAPORAN RAGAM TRANSAKSI PENJUALAN', 'N')
       
       const detailHeaders = [
         'NO',
@@ -920,6 +1026,8 @@ export class ExportService {
         'DISKON',
         'PAJAK',
         'GRAND TOTAL',
+        'DIBAYAR',
+        'KEMBALIAN',
         'METODE PEMBAYARAN',
         'STATUS'
       ]
@@ -929,31 +1037,41 @@ export class ExportService {
       styleHeaderRow(dHeaderRow, BRAND.primary)
       
       data.forEach((item, index) => {
+        const txDate = safeDate(item.tgl_wkt_transaksi)
+        const grandTotalRow = saleGrandTotal(item)
+        const settled = saleSettled(item)
         const row = detailSheet.addRow([
           index + 1,
           item.kd_tansaksi_jual,
-          formatDateTime(item.tgl_wkt_transaksi),
+          txDate ?? formatDateTime(item.tgl_wkt_transaksi),
           item.username_transaksi || '-',
           item.nama_customer || 'Umum',
           asNumber(item.total_qty),
           asNumber(item.sub_total),
           asNumber(item.discount_amount),
           asNumber(item.pajak),
-          asNumber(item.yang_dibayar),
+          grandTotalRow,
+          settled,
+          asNumber(item.kembalian),
           item.jenis_pembayaran || '-',
-          'Selesai'
+          settled + 0.01 >= grandTotalRow ? 'LUNAS' : 'KURANG BAYAR',
         ])
         
         row.eachCell((cell, colNum) => {
           cell.border = thinBorder()
           cell.alignment = { vertical: 'middle' }
-          if (colNum === 1 || colNum === 6 || colNum === 11 || colNum === 12) {
+          if (colNum === 1 || colNum === 6 || colNum === 13 || colNum === 14) {
             cell.alignment = { vertical: 'middle', horizontal: 'center' }
           }
-          if (colNum === 6) {
+          if (colNum === 3 && txDate) {
+            cell.numFmt = 'dd/mm/yyyy hh:mm'
+          } else if (colNum === 6) {
             cell.numFmt = '#,##0'
-          } else if (colNum === 7 || colNum === 8 || colNum === 9 || colNum === 10) {
+          } else if (colNum >= 7 && colNum <= 12) {
             cell.numFmt = '"Rp" #,##0'
+          }
+          if (colNum === 14 && String(cell.value) === 'KURANG BAYAR') {
+            cell.font = { bold: true, color: { argb: BRAND.red } }
           }
         })
         
@@ -961,20 +1079,28 @@ export class ExportService {
           row.eachCell(cell => fillCell(cell, BRAND.slateSoft))
         }
       })
-      
+
+      const firstDataRow = 6
+      const lastDataRow = firstDataRow + data.length - 1
+      if (data.length > 0) {
+        detailSheet.autoFilter = { from: 'A5', to: `N${lastDataRow}` }
+      }
+
       const totalRow = detailSheet.addRow([
         '',
         '',
         '',
         'TOTAL KESELURUHAN',
         '',
-        totalQty,
-        data.reduce((sum, item) => sum + asNumber(item.sub_total), 0),
-        totalDiscounts,
-        totalTaxes,
-        totalRevenue,
+        data.length ? { formula: `SUM(F${firstDataRow}:F${lastDataRow})` } : 0,
+        data.length ? { formula: `SUM(G${firstDataRow}:G${lastDataRow})` } : 0,
+        data.length ? { formula: `SUM(H${firstDataRow}:H${lastDataRow})` } : 0,
+        data.length ? { formula: `SUM(I${firstDataRow}:I${lastDataRow})` } : 0,
+        data.length ? { formula: `SUM(J${firstDataRow}:J${lastDataRow})` } : 0,
+        data.length ? { formula: `SUM(K${firstDataRow}:K${lastDataRow})` } : 0,
+        data.length ? { formula: `SUM(L${firstDataRow}:L${lastDataRow})` } : 0,
         '',
-        ''
+        '',
       ])
       
       totalRow.eachCell((cell, colNum) => {
@@ -986,47 +1112,129 @@ export class ExportService {
         if (colNum === 6) {
           cell.numFmt = '#,##0'
           cell.alignment = { vertical: 'middle', horizontal: 'center' }
-        } else if (colNum === 7 || colNum === 8 || colNum === 9 || colNum === 10) {
+        } else if (colNum >= 7 && colNum <= 12) {
           cell.numFmt = '"Rp" #,##0'
         }
       })
       autofitColumnWidths(detailSheet, 10, 32)
-      
+
       // ==========================================
-      // SHEET 3: PRODUK TERLARIS
+      // SHEET 3: DETAIL ITEM
+      // ==========================================
+      const itemSheet = workbook.addWorksheet('Detail Item', {
+        views: [{ state: 'frozen', ySplit: 5 }],
+        properties: { tabColor: { argb: BRAND.amber } },
+      })
+      applyCompanyHeader(itemSheet, 'RINCIAN ITEM TERJUAL', 'L')
+
+      const itemHeaders = [
+        'NO', 'NOMOR INVOICE', 'TANGGAL', 'KASIR', 'KODE BARANG', 'NAMA BARANG',
+        'QTY', 'HARGA SATUAN', 'DISKON (%)', 'DISKON (Rp)', 'TOTAL PENJUALAN', 'HARGA MODAL',
+      ]
+      const iHeaderRow = itemSheet.getRow(5)
+      iHeaderRow.values = itemHeaders
+      styleHeaderRow(iHeaderRow, BRAND.primaryDark)
+
+      detailItems.forEach((item, index) => {
+        const itemDate = safeDate(item.tgl_wkt_transaksi)
+        const row = itemSheet.addRow([
+          index + 1,
+          item.kd_tansaksi_jual ?? '',
+          itemDate ?? formatDateTime(item.tgl_wkt_transaksi),
+          item.username_transaksi ?? '-',
+          item.kd_barang ?? '',
+          item.nama_barang ?? '-',
+          asNumber(item.qty),
+          asNumber(item.harga_jual),
+          asNumber(item.disc_persen) / 100,
+          asNumber(item.diskon_item),
+          asNumber(item.total_harga_jual),
+          asNumber(item.harga_modal),
+        ])
+        row.eachCell((cell, colNum) => {
+          cell.border = thinBorder()
+          cell.alignment = { vertical: 'middle' }
+          if (colNum === 1 || colNum === 5 || colNum === 7 || colNum === 9) {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' }
+          }
+          if (colNum === 3 && itemDate) {
+            cell.numFmt = 'dd/mm/yyyy hh:mm'
+          } else if (colNum === 7) {
+            cell.numFmt = '#,##0'
+          } else if (colNum === 9) {
+            cell.numFmt = '0.00%'
+          } else if (colNum === 8 || colNum === 10 || colNum === 11 || colNum === 12) {
+            cell.numFmt = '"Rp" #,##0'
+          }
+        })
+        if (index % 2 === 1) row.eachCell(cell => fillCell(cell, BRAND.slateSoft))
+      })
+
+      const firstItemRow = 6
+      const lastItemRow = firstItemRow + detailItems.length - 1
+      if (detailItems.length > 0) {
+        itemSheet.autoFilter = { from: 'A5', to: `L${lastItemRow}` }
+      }
+      const itemTotalRow = itemSheet.addRow([
+        '', '', '', 'TOTAL ITEM', '', '',
+        detailItems.length ? { formula: `SUM(G${firstItemRow}:G${lastItemRow})` } : 0,
+        '', '',
+        detailItems.length ? { formula: `SUM(J${firstItemRow}:J${lastItemRow})` } : 0,
+        detailItems.length ? { formula: `SUM(K${firstItemRow}:K${lastItemRow})` } : 0,
+        detailItems.length ? { formula: `SUM(L${firstItemRow}:L${lastItemRow})` } : 0,
+      ])
+      itemTotalRow.eachCell((cell, colNum) => {
+        cell.font = { bold: true, color: { argb: BRAND.slateText } }
+        fillCell(cell, BRAND.pinkSoft)
+        cell.border = thinBorder()
+        if (colNum === 7) cell.numFmt = '#,##0'
+        if (colNum === 10 || colNum === 11 || colNum === 12) cell.numFmt = '"Rp" #,##0'
+      })
+      autofitColumnWidths(itemSheet, 10, 34)
+
+      // ==========================================
+      // SHEET 4: PRODUK TERLARIS
       // ==========================================
       const produkSheet = workbook.addWorksheet('Produk Terlaris', {
-        views: [{ state: 'frozen', ySplit: 5 }]
+        views: [{ state: 'frozen', ySplit: 5 }],
+        properties: { tabColor: { argb: BRAND.green } },
       })
-      applyCompanyHeader(produkSheet, 'LAPORAN PENJUALAN PRODUK TERLARIS', 'F')
+      applyCompanyHeader(produkSheet, 'LAPORAN PENJUALAN PRODUK TERLARIS', 'I')
       
-      const produkHeaders = ['NO', 'KODE PRODUK', 'NAMA PRODUK', 'QTY TERJUAL', 'TOTAL PENDAPATAN', 'KONTRIBUSI (%)']
+      const produkHeaders = [
+        'NO', 'KODE PRODUK', 'NAMA PRODUK', 'QTY TERJUAL', 'QTY RETUR', 'QTY BERSIH',
+        'OMZET KOTOR', 'NILAI RETUR', 'OMZET BERSIH',
+      ]
       const pHeaderRow = produkSheet.getRow(5)
       pHeaderRow.values = produkHeaders
       styleHeaderRow(pHeaderRow, BRAND.primary)
-      
+
+      const produkOmzetTotal = produkTerlaris.reduce(
+        (sum, item) => sum + asNumber(item.net_penjualan ?? item.total_penjualan), 0
+      )
       produkTerlaris.forEach((item, index) => {
         const row = produkSheet.addRow([
           index + 1,
           item.kd_barang,
           item.nama_barang || '-',
           asNumber(item.total_qty),
+          asNumber(item.qty_retur),
+          asNumber(item.net_qty ?? item.total_qty),
           asNumber(item.total_penjualan),
-          totalRevenue ? asNumber(item.total_penjualan) / totalRevenue : 0
+          asNumber(item.nilai_retur),
+          asNumber(item.net_penjualan ?? item.total_penjualan),
         ])
         
         row.eachCell((cell, colNum) => {
           cell.border = thinBorder()
           cell.alignment = { vertical: 'middle' }
-          if (colNum === 1 || colNum === 2 || colNum === 4 || colNum === 6) {
+          if (colNum === 1 || colNum === 2) {
             cell.alignment = { vertical: 'middle', horizontal: 'center' }
           }
-          if (colNum === 4) {
+          if (colNum >= 4 && colNum <= 6) {
             cell.numFmt = '#,##0'
-          } else if (colNum === 5) {
+          } else if (colNum >= 7 && colNum <= 9) {
             cell.numFmt = '"Rp" #,##0'
-          } else if (colNum === 6) {
-            cell.numFmt = '0.0%'
           }
         })
         
@@ -1034,14 +1242,27 @@ export class ExportService {
           row.eachCell(cell => fillCell(cell, BRAND.slateSoft))
         }
       })
+
+      const firstProdukRow = 6
+      const lastProdukRow = firstProdukRow + produkTerlaris.length - 1
+      if (produkTerlaris.length > 0) {
+        produkSheet.autoFilter = { from: 'A5', to: `I${lastProdukRow}` }
+      }
+      if (!produkTerlaris.length) {
+        const emptyRow = produkSheet.addRow(['', '', 'Tidak ada penjualan pada periode ini', '', '', '', '', '', ''])
+        emptyRow.getCell(3).font = { italic: true, color: { argb: BRAND.slateMuted } }
+      }
       
       const pTotalRow = produkSheet.addRow([
         '',
         '',
         'TOTAL',
-        produkTerlaris.reduce((sum, item) => sum + asNumber(item.total_qty), 0),
-        produkTerlaris.reduce((sum, item) => sum + asNumber(item.total_penjualan), 0),
-        1.0
+        produkTerlaris.length ? { formula: `SUM(D${firstProdukRow}:D${lastProdukRow})` } : 0,
+        produkTerlaris.length ? { formula: `SUM(E${firstProdukRow}:E${lastProdukRow})` } : 0,
+        produkTerlaris.length ? { formula: `SUM(F${firstProdukRow}:F${lastProdukRow})` } : 0,
+        produkTerlaris.length ? { formula: `SUM(G${firstProdukRow}:G${lastProdukRow})` } : 0,
+        produkTerlaris.length ? { formula: `SUM(H${firstProdukRow}:H${lastProdukRow})` } : 0,
+        produkTerlaris.length ? { formula: `SUM(I${firstProdukRow}:I${lastProdukRow})` } : 0,
       ])
       
       pTotalRow.eachCell((cell, colNum) => {
@@ -1049,13 +1270,23 @@ export class ExportService {
         fillCell(cell, BRAND.pinkSoft)
         cell.border = thinBorder()
         cell.alignment = { vertical: 'middle' }
-        if (colNum === 4 || colNum === 6) {
-          cell.numFmt = colNum === 4 ? '#,##0' : '0.0%'
+        if (colNum >= 4 && colNum <= 6) {
+          cell.numFmt = '#,##0'
           cell.alignment = { vertical: 'middle', horizontal: 'center' }
-        } else if (colNum === 5) {
+        } else if (colNum >= 7 && colNum <= 9) {
           cell.numFmt = '"Rp" #,##0'
         }
       })
+      // Kontribusi omzet bersih per produk (dihitung dari total omzet produk)
+      if (produkOmzetTotal > 0) {
+        const contribRow = produkSheet.addRow(['', '', 'KONTRIBUSI OMZET BERSIH', '', '', '', '', '', ''])
+        contribRow.getCell(3).font = { bold: true, size: 9, color: { argb: BRAND.slateMuted } }
+        produkTerlaris.slice(0, 10).forEach((item, index) => {
+          const share = asNumber(item.net_penjualan ?? item.total_penjualan) / produkOmzetTotal
+          produkSheet.addRow(['', item.kd_barang, item.nama_barang || '-', '', '', '', '', '', share])
+            .getCell(9).numFmt = '0.00%'
+        })
+      }
       
       // Add Product Sales Chart next to table
       if (produkTerlaris.length > 0) {
@@ -1116,7 +1347,7 @@ export class ExportService {
       const kasirSheet = workbook.addWorksheet('Kasir Terbaik', {
         views: [{ state: 'frozen', ySplit: 5 }]
       })
-      applyCompanyHeader(kasirSheet, 'LAPORAN KASIR TERJEMPOL', 'E')
+      applyCompanyHeader(kasirSheet, 'LAPORAN KINERJA KASIR', 'E')
       
       const kasirHeaders = ['NO', 'USERNAME KASIR', 'JUMLAH TRANSAKSI', 'TOTAL PENJUALAN', 'RATA-RATA TRANSAKSI']
       const kHeaderRow = kasirSheet.getRow(5)
@@ -1229,6 +1460,13 @@ export class ExportService {
         }
       }
       
+      if (kasirTerbaik.length > 0) {
+        kasirSheet.autoFilter = { from: 'A5', to: `E${5 + kasirTerbaik.length}` }
+      } else {
+        kasirSheet.addRow(['', '', 'Tidak ada transaksi pada periode ini', '', '']).getCell(3).font = {
+          italic: true, color: { argb: BRAND.slateMuted },
+        }
+      }
       autofitColumnWidths(kasirSheet, 10, 32)
       
       // ==========================================
@@ -1237,9 +1475,11 @@ export class ExportService {
       const metodeSheet = workbook.addWorksheet('Metode Pembayaran', {
         views: [{ state: 'frozen', ySplit: 5 }]
       })
-      applyCompanyHeader(metodeSheet, 'KONTRIBUSI METODE PEMBAYARAN', 'E')
+      applyCompanyHeader(metodeSheet, 'KONTRIBUSI METODE PEMBAYARAN', 'G')
       
-      const metodeHeaders = ['NO', 'METODE PEMBAYARAN', 'JUMLAH TRANSAKSI', 'TOTAL NOMINAL', 'PERSENTASE KONTRIBUSI']
+      const metodeHeaders = [
+        'NO', 'METODE PEMBAYARAN', 'JUMLAH TRANSAKSI', 'PENJUALAN BERSIH', 'PAJAK', 'TOTAL DITERIMA', 'PERSENTASE',
+      ]
       const mHeaderRow = metodeSheet.getRow(5)
       mHeaderRow.values = metodeHeaders
       styleHeaderRow(mHeaderRow, BRAND.primary)
@@ -1249,21 +1489,23 @@ export class ExportService {
           index + 1,
           item.method,
           asNumber(item.count),
+          asNumber(item.net),
+          asNumber(item.pajak),
           asNumber(item.total),
-          totalRevenue ? asNumber(item.total) / totalRevenue : 0
+          grandTotal ? asNumber(item.total) / grandTotal : 0,
         ])
         
         row.eachCell((cell, colNum) => {
           cell.border = thinBorder()
           cell.alignment = { vertical: 'middle' }
-          if (colNum === 1 || colNum === 3 || colNum === 5) {
+          if (colNum === 1 || colNum === 3 || colNum === 7) {
             cell.alignment = { vertical: 'middle', horizontal: 'center' }
           }
           if (colNum === 3) {
             cell.numFmt = '#,##0'
-          } else if (colNum === 4) {
+          } else if (colNum >= 4 && colNum <= 6) {
             cell.numFmt = '"Rp" #,##0'
-          } else if (colNum === 5) {
+          } else if (colNum === 7) {
             cell.numFmt = '0.0%'
           }
         })
@@ -1277,6 +1519,8 @@ export class ExportService {
         '',
         'TOTAL',
         metodePembayaran.reduce((sum, item) => sum + asNumber(item.count), 0),
+        metodePembayaran.reduce((sum, item) => sum + asNumber(item.net), 0),
+        metodePembayaran.reduce((sum, item) => sum + asNumber(item.pajak), 0),
         metodePembayaran.reduce((sum, item) => sum + asNumber(item.total), 0),
         1.0
       ])
@@ -1286,10 +1530,10 @@ export class ExportService {
         fillCell(cell, BRAND.pinkSoft)
         cell.border = thinBorder()
         cell.alignment = { vertical: 'middle' }
-        if (colNum === 3 || colNum === 5) {
+        if (colNum === 3 || colNum === 7) {
           cell.numFmt = colNum === 3 ? '#,##0' : '0.0%'
           cell.alignment = { vertical: 'middle', horizontal: 'center' }
-        } else if (colNum === 4) {
+        } else if (colNum >= 4 && colNum <= 6) {
           cell.numFmt = '"Rp" #,##0'
         }
       })
@@ -1337,6 +1581,13 @@ export class ExportService {
         }
       }
       
+      if (metodePembayaran.length > 0) {
+        metodeSheet.autoFilter = { from: 'A5', to: `G${5 + metodePembayaran.length}` }
+      } else {
+        metodeSheet.addRow(['', 'Tidak ada data pembayaran', '', '', '', '', '']).getCell(2).font = {
+          italic: true, color: { argb: BRAND.slateMuted },
+        }
+      }
       autofitColumnWidths(metodeSheet, 10, 32)
       
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
@@ -1374,35 +1625,56 @@ export class ExportService {
       
       const period = salesPeriodLabel(data, context)
       const printedAt = new Date().toLocaleString('id-ID')
-      
-      // Calculate laba rugi
-      let labaKotor = 0
-      if (startDateStr && endDateStr) {
+
+      // Angka ringkasan kanonik (sama dengan UI, XLSX, dan CSV)
+      const summary = context?.summary ?? null
+      let labaRugi: any = context?.labaRugi ?? null
+      if (!labaRugi && startDateStr && endDateStr) {
         try {
           const lr = LaporanController.getLaporanLabaRugi(startDateStr, endDateStr)
-          if (lr.success && lr.data) {
-            labaKotor = lr.data.laba_kotor
-          }
+          if (lr.success && lr.data) labaRugi = lr.data
         } catch (err) {
           console.error(err)
         }
       }
-      
-      const totalTransactions = data.length
-      const totalRevenue = data.reduce((sum, item) => sum + asNumber(item.yang_dibayar), 0)
-      const totalDiscounts = data.reduce((sum, item) => sum + asNumber(item.discount_amount), 0)
-      const totalTaxes = data.reduce((sum, item) => sum + asNumber(item.pajak), 0)
-      const totalQty = data.reduce((sum, item) => sum + asNumber(item.total_qty), 0)
-      const avgTransaction = totalTransactions ? totalRevenue / totalTransactions : 0
-      
-      // Find top payment method
+
+      const totalTransactions = asNumber(summary?.total_transaksi ?? data.length)
+      const totalRevenue = asNumber(summary?.penjualan_bersih
+        ?? data.reduce((sum, item) => sum + saleNet(item), 0))
+      const totalDiscounts = asNumber(summary?.total_diskon
+        ?? data.reduce((sum, item) => sum + asNumber(item.discount_amount), 0))
+      const totalTaxes = asNumber(summary?.total_pajak
+        ?? data.reduce((sum, item) => sum + asNumber(item.pajak), 0))
+      const totalQty = asNumber(summary?.total_qty
+        ?? data.reduce((sum, item) => sum + asNumber(item.total_qty), 0))
+      const grandTotal = asNumber(summary?.grand_total
+        ?? data.reduce((sum, item) => sum + saleGrandTotal(item), 0))
+      const totalRetur = asNumber(summary?.total_retur ?? 0)
+      const netAfterReturns = asNumber(summary?.penjualan_setelah_retur ?? (totalRevenue - totalRetur))
+      const hpp = asNumber(labaRugi?.total_hpp ?? labaRugi?.total_modal ?? 0)
+      const labaKotor = asNumber(labaRugi?.laba_kotor ?? 0)
+      const marginPersen = asNumber(labaRugi?.margin_persen ?? 0)
+      const avgTransaction = asNumber(summary?.rata_rata_transaksi
+        ?? (totalTransactions ? totalRevenue / totalTransactions : 0))
+
+      // Metode pembayaran terbanyak berdasarkan nilai transaksi
       const payMap = new Map<string, number>()
       for (const item of data) {
         const m = String(item.jenis_pembayaran || 'TUNAI').toUpperCase()
-        payMap.set(m, (payMap.get(m) || 0) + 1)
+        payMap.set(m, (payMap.get(m) || 0) + saleGrandTotal(item))
       }
       const sortedPay = Array.from(payMap.entries()).sort((a, b) => b[1] - a[1])
       const topPaymentMethod = sortedPay[0]?.[0] || 'TUNAI'
+
+      let produkTerlaris: any[] = Array.isArray(context?.produk) ? context?.produk ?? [] : []
+      if (!produkTerlaris.length && startDateStr && endDateStr) {
+        try {
+          const pr = LaporanController.getLaporanProdukTerlaris(startDateStr, endDateStr, 1000)
+          if (pr.success && pr.data) produkTerlaris = pr.data
+        } catch (err) {
+          console.error(err)
+        }
+      }
       
       const doc = new jsPDF({
         orientation: 'landscape',
@@ -1460,7 +1732,7 @@ export class ExportService {
         d.setFont('helvetica', 'bold')
         d.setFontSize(14)
         d.setTextColor(219, 39, 119)
-        d.text('LAPORAN PENJUALAN HARIAN', pageWidth - 15, logoY + 4, { align: 'right' })
+        d.text('LAPORAN PENJUALAN', pageWidth - 15, logoY + 4, { align: 'right' })
         
         d.setFont('helvetica', 'normal')
         d.setFontSize(8)
@@ -1495,13 +1767,17 @@ export class ExportService {
       
       const cards = [
         { label: 'TOTAL TRANSAKSI', value: totalTransactions.toLocaleString('id-ID'), color: [37, 99, 235] },
-        { label: 'TOTAL PENDAPATAN', value: formatIdr(totalRevenue), color: [5, 150, 105] },
-        { label: 'TOTAL KEUNTUNGAN', value: formatIdr(labaKotor), color: [219, 39, 119] },
+        { label: 'PENJUALAN BERSIH', value: formatIdr(totalRevenue), color: [5, 150, 105] },
+        { label: 'GRAND TOTAL (PAJAK TERMASUK)', value: formatIdr(grandTotal), color: [219, 39, 119] },
         { label: 'PRODUK TERJUAL', value: totalQty.toLocaleString('id-ID'), color: [217, 119, 6] },
         { label: 'TOTAL DISKON', value: formatIdr(totalDiscounts), color: [220, 38, 38] },
         { label: 'TOTAL PAJAK', value: formatIdr(totalTaxes), color: [217, 119, 6] },
+        { label: 'RETUR DISETUJUI', value: formatIdr(totalRetur), color: [220, 38, 38] },
         { label: 'RATA-RATA / TRANSAKSI', value: formatIdr(avgTransaction), color: [37, 99, 235] },
-        { label: 'METODE TERBANYAK', value: topPaymentMethod, color: [5, 150, 105] }
+        { label: 'HPP (HARGA MODAL)', value: formatIdr(hpp), color: [100, 116, 139] },
+        { label: 'LABA KOTOR', value: formatIdr(labaKotor), color: [5, 150, 105] },
+        { label: 'MARGIN LABA', value: `${marginPersen.toFixed(2)}%`, color: [219, 39, 119] },
+        { label: 'METODE TERBANYAK', value: topPaymentMethod, color: [37, 99, 235] }
       ]
       
       // Render KPI cards on first page
@@ -1542,24 +1818,36 @@ export class ExportService {
         'Diskon',
         'Pajak',
         'Grand Total',
+        'Dibayar',
+        'Kembali',
         'Metode',
         'Status'
       ]
-      
-      const body = data.map((item, idx) => [
-        idx + 1,
-        item.kd_tansaksi_jual,
-        formatDateTime(item.tgl_wkt_transaksi),
-        item.username_transaksi || '-',
-        item.nama_customer || 'Umum',
-        asNumber(item.total_qty).toLocaleString('id-ID'),
-        formatIdr(item.sub_total),
-        formatIdr(item.discount_amount ?? 0),
-        formatIdr(item.pajak),
-        formatIdr(item.yang_dibayar),
-        item.jenis_pembayaran || '-',
-        'Selesai'
-      ])
+
+      const body: any[] = data.map((item, idx) => {
+        const grandTotalRow = saleGrandTotal(item)
+        const settled = saleSettled(item)
+        return [
+          idx + 1,
+          item.kd_tansaksi_jual,
+          formatDateTime(item.tgl_wkt_transaksi),
+          item.username_transaksi || '-',
+          item.nama_customer || 'Umum',
+          asNumber(item.total_qty).toLocaleString('id-ID'),
+          formatIdr(item.sub_total),
+          formatIdr(item.discount_amount ?? 0),
+          formatIdr(item.pajak),
+          formatIdr(grandTotalRow),
+          formatIdr(settled),
+          formatIdr(item.kembalian ?? 0),
+          item.jenis_pembayaran || '-',
+          settled + 0.01 >= grandTotalRow ? 'LUNAS' : 'KURANG BAYAR',
+        ]
+      })
+
+      if (!data.length) {
+        body.push([{ content: 'Tidak ada transaksi pada periode ini', colSpan: 14, styles: { halign: 'center', fontStyle: 'italic', textColor: [148, 163, 184] } }])
+      }
       
       const foot = [[
         '',
@@ -1571,7 +1859,9 @@ export class ExportService {
         formatIdr(data.reduce((sum, item) => sum + asNumber(item.sub_total), 0)),
         formatIdr(totalDiscounts),
         formatIdr(totalTaxes),
-        formatIdr(totalRevenue),
+        formatIdr(grandTotal),
+        formatIdr(data.reduce((sum, item) => sum + saleSettled(item), 0)),
+        formatIdr(data.reduce((sum, item) => sum + asNumber(item.kembalian), 0)),
         '',
         ''
       ]]
@@ -1580,10 +1870,11 @@ export class ExportService {
         head: [headers],
         body,
         foot,
-        startY: 68,
+        startY: 86,
+        showHead: 'everyPage',
         styles: {
-          fontSize: 7,
-          cellPadding: 1.8,
+          fontSize: 6.8,
+          cellPadding: 1.6,
           lineColor: [226, 232, 240],
           lineWidth: 0.1,
           overflow: 'linebreak'
@@ -1593,35 +1884,112 @@ export class ExportService {
           textColor: [255, 255, 255],
           fontStyle: 'bold',
           halign: 'center',
-          fontSize: 7
+          fontSize: 6.8
         },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         footStyles: {
           fillColor: [252, 231, 243],
           textColor: [51, 65, 85],
           fontStyle: 'bold',
-          fontSize: 7.2
+          fontSize: 6.6
         },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 8 },
-          1: { cellWidth: 32 },
-          2: { cellWidth: 32 },
-          3: { cellWidth: 20 },
-          4: { cellWidth: 25 },
-          5: { halign: 'center', cellWidth: 10 },
-          6: { halign: 'right', cellWidth: 28 },
-          7: { halign: 'right', cellWidth: 20 },
-          8: { halign: 'right', cellWidth: 20 },
-          9: { halign: 'right', fontStyle: 'bold', cellWidth: 28 },
-          10: { halign: 'center', cellWidth: 24 },
-          11: { halign: 'center', cellWidth: 18 }
+          0: { halign: 'center' },
+          1: { halign: 'left' },
+          2: { halign: 'left' },
+          3: { halign: 'left' },
+          4: { halign: 'left' },
+          5: { halign: 'center' },
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right' },
+          9: { halign: 'right', fontStyle: 'bold' },
+          10: { halign: 'right' },
+          11: { halign: 'right' },
+          12: { halign: 'center' },
+          13: { halign: 'center' }
+        },
+        didParseCell: (cellData: any) => {
+          if (cellData.section !== 'body') return
+          if (cellData.column.index === 13 && cellData.cell.raw === 'KURANG BAYAR') {
+            cellData.cell.styles.textColor = [220, 38, 38]
+            cellData.cell.styles.fontStyle = 'bold'
+          }
         },
         margin: { left: 15, right: 15, top: 32, bottom: 20 }
       })
       
-      // Signature Section
       const finalY = (doc as any).lastAutoTable.finalY || 120
-      let sigY = finalY + 15
+
+      // Definisi metrik & catatan agar laporan dapat diaudit
+      const notes = [
+        'Omzet kotor = jumlah subtotal item setelah diskon item, sebelum diskon invoice dan pajak.',
+        'Penjualan bersih = omzet kotor - diskon invoice (belum termasuk pajak dan retur).',
+        `Grand total = penjualan bersih + pajak = ${formatIdr(grandTotal)}.`,
+        `Penjualan setelah retur = ${formatIdr(netAfterReturns)}. Retur dihitung dari retur APPROVED pada periode ini.`,
+        'HPP dan laba kotor dihitung dari harga modal item. HPP barang retur belum tersedia pada data retur.',
+        'Tidak ada status pembatalan pada skema penjualan; status LUNAS/KURANG BAYAR diturunkan dari pembayaran tercatat.',
+      ]
+      let cursorY = finalY + 7
+      if (cursorY + notes.length * 4 > pageHeight - 30) {
+        doc.addPage()
+        cursorY = 38
+      }
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.8)
+      doc.setTextColor(100, 116, 139)
+      notes.forEach((note, index) => {
+        doc.text(`- ${note}`, 15, cursorY + index * 4)
+      })
+
+      // Analisis produk terlaris (halaman terpisah)
+      const produkTop = produkTerlaris.slice(0, 15)
+      if (produkTop.length) {
+        doc.addPage()
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.setTextColor(51, 65, 85)
+        doc.text('PRODUK TERLARIS', 15, 38)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(100, 116, 139)
+        doc.text('Diurutkan berdasarkan qty bersih setelah retur pada periode laporan', 15, 43)
+
+        autoTable(doc, {
+          head: [['No', 'Kode', 'Nama Produk', 'Qty Terjual', 'Qty Retur', 'Qty Bersih', 'Omzet Kotor', 'Nilai Retur', 'Omzet Bersih']],
+          body: produkTop.map((item: any, idx: number) => [
+            idx + 1,
+            item.kd_barang ?? '-',
+            item.nama_barang ?? '-',
+            asNumber(item.total_qty).toLocaleString('id-ID'),
+            asNumber(item.qty_retur).toLocaleString('id-ID'),
+            asNumber(item.net_qty ?? item.total_qty).toLocaleString('id-ID'),
+            formatIdr(item.total_penjualan),
+            formatIdr(item.nilai_retur),
+            formatIdr(item.net_penjualan ?? item.total_penjualan),
+          ]),
+          startY: 47,
+          showHead: 'everyPage',
+          styles: { fontSize: 7, cellPadding: 2, lineColor: [226, 232, 240], lineWidth: 0.1, overflow: 'linebreak' },
+          headStyles: { fillColor: [219, 39, 119], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 7 },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          columnStyles: {
+            0: { halign: 'center' },
+            1: { halign: 'left' },
+            2: { halign: 'left' },
+            3: { halign: 'center' },
+            4: { halign: 'center' },
+            5: { halign: 'center' },
+            6: { halign: 'right' },
+            7: { halign: 'right' },
+            8: { halign: 'right', fontStyle: 'bold' },
+          },
+          margin: { left: 15, right: 15, top: 32, bottom: 20 },
+        })
+      }
+
+      // Signature Section
+      let sigY = ((doc as any).lastAutoTable?.finalY || cursorY) + 15
       
       // If remaining height is too small for signature block, add page
       if (sigY > pageHeight - 45) {
@@ -1680,296 +2048,809 @@ export class ExportService {
   // Export Laporan Stok to Excel with Chart
   static async exportLaporanStokExcel(data: any[], customPath?: string) {
     try {
-      const workbook = new ExcelJS.Workbook()
-      const worksheet = workbook.addWorksheet('Stok Barang')
+      const items = Array.isArray(data) ? data : []
+      const menipis = items.filter(item => asNumber(item.stok) <= asNumber(item.stok_minimum)).length
+      const aman = items.length - menipis
+      const today = new Date().toISOString().slice(0, 10)
 
-      // Add headers
-      worksheet.columns = [
-        { header: 'Kode Barang', key: 'kode', width: 15 },
-        { header: 'Nama Barang', key: 'nama', width: 30 },
-        { header: 'Stok', key: 'stok', width: 12 },
-        { header: 'Stok Minimum', key: 'min', width: 15 },
-        { header: 'Status', key: 'status', width: 12 },
-      ]
-
-      // Style header
-      worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF4F46E5' }
-      }
-
-      // Add data with conditional formatting
-      data.forEach((item) => {
-        const status = (item.stok || 0) <= (item.stok_minimum || 0) ? 'MENIPIS' : 'AMAN'
-        const row = worksheet.addRow({
-          kode: item.kd_barang,
-          nama: item.nama_barang,
-          stok: item.stok,
-          min: item.stok_minimum,
-          status: status,
-        })
-
-        // Color code status
-        if (status === 'MENIPIS') {
-          row.getCell('status').fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFECACA' }
-          }
-          row.getCell('status').font = { color: { argb: 'FFDC2626' }, bold: true }
-        } else {
-          row.getCell('status').fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFD1FAE5' }
-          }
-          row.getCell('status').font = { color: { argb: 'FF059669' }, bold: true }
-        }
+      return this.writeReportExcel({
+        filenamePrefix: 'laporan_stok',
+        sheetName: 'Persediaan',
+        title: 'LAPORAN PERSEDIAAN',
+        subtitle: `Per ${formatLongDate(today)}`,
+        metrics: [
+          { label: 'TOTAL ITEM', value: items.length, numFmt: '#,##0' },
+          { label: 'STOK MENIPIS', value: menipis, numFmt: '#,##0' },
+          { label: 'STOK AMAN', value: aman, numFmt: '#,##0' },
+          { label: 'PERSENTASE MENIPIS', value: items.length ? menipis / items.length : 0, numFmt: '0.00%' },
+        ],
+        headers: ['NO', 'KODE BARANG', 'NAMA BARANG', 'STOK', 'STOK MINIMUM', 'STATUS'],
+        rows: items.map((item, index) => [
+          index + 1,
+          item.kd_barang ?? '',
+          item.nama_barang ?? '',
+          asNumber(item.stok),
+          asNumber(item.stok_minimum),
+          asNumber(item.stok) <= asNumber(item.stok_minimum) ? 'MENIPIS' : 'AMAN',
+        ]),
+        numFmts: { 4: '#,##0', 5: '#,##0' },
+        customPath,
       })
-
-      // Add summary sheet with gorgeous styling and Doughnut Chart
-      const summarySheet = workbook.addWorksheet('Ringkasan', {
-        views: [{ showGridLines: true }]
-      })
-      const menipis = data.filter(d => (d.stok || 0) <= (d.stok_minimum || 0)).length
-      const aman = data.length - menipis
-
-      summarySheet.addRow(['Status', 'Jumlah'])
-      summarySheet.addRow(['Stok Menipis', menipis])
-      summarySheet.addRow(['Stok Aman', aman])
-      
-      // Styling summary sheet
-      summarySheet.getRow(1).height = 24
-      summarySheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 }
-      summarySheet.getRow(1).eachCell(cell => {
-        fillCell(cell, 'FF4F46E5') // Indigo
-        cell.alignment = { vertical: 'middle', horizontal: 'center' }
-        cell.border = thinBorder('FF4338CA')
-      })
-
-      const rowMenipis = summarySheet.getRow(2)
-      rowMenipis.height = 20
-      rowMenipis.getCell(1).border = thinBorder()
-      rowMenipis.getCell(1).font = { bold: true, color: { argb: 'FFDC2626' } } // Red
-      rowMenipis.getCell(2).border = thinBorder()
-      rowMenipis.getCell(2).numFmt = '#,##0'
-      rowMenipis.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' }
-
-      const rowAman = summarySheet.getRow(3)
-      rowAman.height = 20
-      rowAman.getCell(1).border = thinBorder()
-      rowAman.getCell(1).font = { bold: true, color: { argb: 'FF059669' } } // Emerald
-      rowAman.getCell(2).border = thinBorder()
-      rowAman.getCell(2).numFmt = '#,##0'
-      rowAman.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' }
-
-      summarySheet.columns = [{ width: 22 }, { width: 16 }]
-
-      // Add Doughnut Chart
-      if (data.length > 0) {
-        const stokChartConfig = {
-          type: 'doughnut',
-          data: {
-            labels: ['Stok Menipis', 'Stok Aman'],
-            datasets: [{
-              data: [menipis, aman],
-              backgroundColor: ['#DC2626', '#059669'], // red and green
-              borderWidth: 1
-            }]
-          },
-          options: {
-            responsive: true,
-            title: {
-              display: true,
-              text: 'PERSENTASE KETERSEDIAAN STOK BARANG',
-              fontSize: 12,
-              fontColor: '#1E293B'
-            },
-            legend: {
-              position: 'bottom',
-              labels: { fontSize: 10 }
-            }
-          }
-        }
-        const stokChartBuffer = await getChartBuffer(stokChartConfig)
-        if (stokChartBuffer) {
-          try {
-            const imageId = workbook.addImage({
-              buffer: stokChartBuffer as any,
-              extension: 'png',
-            })
-            summarySheet.addImage(imageId, {
-              tl: { col: 3, row: 0 }, // Column D (index 3), Row 1 (index 0)
-              ext: { width: 420, height: 280 }
-            })
-          } catch (imgErr) {
-            console.error('Error inserting stock chart:', imgErr)
-          }
-        }
-      }
-
-      // Save file
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      const filepath = exportPath(`laporan_stok_${timestamp}.xlsx`, customPath)
-
-      await workbook.xlsx.writeFile(filepath)
-
-      return {
-        success: true,
-        message: 'Export berhasil disimpan dengan grafik',
-        data: { filepath, filename: path.basename(filepath) },
-      }
     } catch (error) {
-      return {
-        success: false,
-        message: 'Gagal export: ' + (error as Error).message,
-      }
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
     }
   }
 
-  // Export Laporan Stok to PDF
   static exportLaporanStokPDF(data: any[], customPath?: string) {
     try {
-      const doc = new jsPDF({
+      const items = Array.isArray(data) ? data : []
+      const menipis = items.filter(item => asNumber(item.stok) <= asNumber(item.stok_minimum)).length
+      const aman = items.length - menipis
+      const today = new Date().toISOString().slice(0, 10)
+
+      return this.writeReportPDF({
+        filenamePrefix: 'laporan_stok',
+        title: 'LAPORAN PERSEDIAAN',
+        subtitle: `Per ${formatLongDate(today)}`,
+        metrics: [
+          { label: 'TOTAL ITEM', value: items.length.toLocaleString('id-ID') },
+          { label: 'STOK MENIPIS', value: menipis.toLocaleString('id-ID') },
+          { label: 'STOK AMAN', value: aman.toLocaleString('id-ID') },
+          { label: 'PERSENTASE MENIPIS', value: `${items.length ? ((menipis / items.length) * 100).toFixed(2) : '0.00'}%` },
+        ],
+        headers: ['No', 'Kode', 'Nama Barang', 'Stok', 'Minimum', 'Status'],
+        rows: items.map((item, index) => [
+          index + 1,
+          item.kd_barang ?? '-',
+          item.nama_barang ?? '-',
+          asNumber(item.stok).toLocaleString('id-ID'),
+          asNumber(item.stok_minimum).toLocaleString('id-ID'),
+          asNumber(item.stok) <= asNumber(item.stok_minimum) ? 'MENIPIS' : 'AMAN',
+        ]),
         orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      })
-
-      const pageWidth = doc.internal.pageSize.getWidth()
-      const pageHeight = doc.internal.pageSize.getHeight()
-
-      // Header background
-      doc.setFillColor(16, 185, 129) // Emerald
-      doc.rect(0, 0, pageWidth, 40, 'F')
-      doc.setFillColor(5, 150, 105)
-      doc.rect(0, 30, pageWidth, 10, 'F')
-
-      // Logo
-      doc.setFillColor(255, 255, 255)
-      doc.circle(20, 20, 10, 'F')
-      doc.setFontSize(14)
-      doc.setTextColor(16, 185, 129)
-      doc.text('', 16, 23)
-
-      // Title
-      doc.setFontSize(20)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(255, 255, 255)
-      doc.text('LAPORAN STOK BARANG', 38, 18)
-
-      doc.setFontSize(11)
-      doc.setFont('helvetica', 'normal')
-      doc.text('WariPOS', 38, 25)
-
-      const now = new Date()
-      doc.setFontSize(9)
-      doc.text(`Dicetak: ${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID')}`, 38, 32)
-
-      // Summary
-      const menipis = data.filter(d => (d.stok || 0) <= (d.stok_minimum || 0)).length
-      const aman = data.length - menipis
-      
-      doc.setFillColor(255, 255, 255)
-      doc.roundedRect(pageWidth - 70, 8, 60, 24, 3, 3, 'F')
-      doc.setTextColor(16, 185, 129)
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'bold')
-      doc.text('STATUS STOK', pageWidth - 65, 14)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
-      doc.setTextColor(220, 38, 38)
-      doc.text(` Menipis: ${menipis} item`, pageWidth - 65, 19)
-      doc.setTextColor(16, 185, 129)
-      doc.text(` Aman: ${aman} item`, pageWidth - 65, 24)
-      doc.setTextColor(100, 116, 139)
-      doc.text(`Total: ${data.length} item`, pageWidth - 65, 29)
-
-      doc.setTextColor(0, 0, 0)
-
-      // Table
-      const headers = ['No', 'Kode', 'Nama Barang', 'Stok', 'Min', 'Status']
-      const body = data.map((item, idx) => {
-        const status = (item.stok || 0) <= (item.stok_minimum || 0) ? 'MENIPIS ' : 'AMAN '
-        return [
-          idx + 1,
-          item.kd_barang,
-          item.nama_barang,
-          item.stok || 0,
-          item.stok_minimum || 0,
-          status,
-        ]
-      })
-
-      autoTable(doc, {
-        head: [headers],
-        body: body,
-        startY: 45,
-        styles: { 
-          fontSize: 8,
-          cellPadding: 2.5,
-          lineColor: [226, 232, 240],
-          lineWidth: 0.1,
-        },
-        headStyles: { 
-          fillColor: [16, 185, 129],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          halign: 'center',
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252]
-        },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
+          0: { halign: 'center' },
           3: { halign: 'center' },
           4: { halign: 'center' },
           5: { halign: 'center', fontStyle: 'bold' },
         },
-        didParseCell: function(data: any) {
-          if (data.section === 'body' && data.column.index === 5) {
-            const cellValue = data.cell.raw as string
-            if (cellValue.includes('MENIPIS')) {
-              data.cell.styles.textColor = [220, 38, 38]
-              data.cell.styles.fillColor = [254, 226, 226]
-            } else {
-              data.cell.styles.textColor = [16, 185, 129]
-              data.cell.styles.fillColor = [209, 250, 229]
-            }
-          }
+        customPath,
+      })
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  // ==========================================
+  // CSV EXPORTS
+  // ==========================================
+
+  static exportLaporanPenjualanCSV(data: any[], customPath?: string, context?: SalesExportContext) {
+    try {
+      const rows = (Array.isArray(data) ? data : []).map(item => [
+        item.kd_tansaksi_jual ?? '',
+        csvDateOnly(item.tgl_wkt_transaksi),
+        csvTimeOnly(item.tgl_wkt_transaksi),
+        item.username_transaksi ?? '',
+        item.nama_customer ?? 'Umum',
+        String(item.jenis_pembayaran ?? '').toUpperCase(),
+        asNumber(item.total_qty),
+        asNumber(item.sub_total),
+        asNumber(item.discount_amount),
+        asNumber(item.pajak),
+        saleGrandTotal(item),
+        saleSettled(item),
+        asNumber(item.kembalian),
+        saleSettled(item) + 0.01 >= saleGrandTotal(item) ? 'LUNAS' : 'KURANG BAYAR',
+      ])
+
+      const headers = [
+        'nomor_invoice', 'tanggal', 'waktu', 'kasir', 'pelanggan', 'metode_pembayaran',
+        'jumlah_item', 'subtotal', 'diskon', 'pajak', 'grand_total', 'dibayar',
+        'kembalian', 'status_pembayaran',
+      ]
+
+      const period = periodFromContext(context) || new Date().toISOString().slice(0, 10)
+      return saveCsv(`laporan_penjualan_${period}.csv`, buildCsv(headers, rows), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanDetailItemCSV(items: any[], customPath?: string, context?: SalesExportContext) {
+    try {
+      const rows = (Array.isArray(items) ? items : []).map(item => [
+        item.kd_tansaksi_jual ?? '',
+        csvDateOnly(item.tgl_wkt_transaksi),
+        item.username_transaksi ?? '',
+        item.kd_barang ?? '',
+        item.nama_barang ?? '',
+        asNumber(item.qty),
+        asNumber(item.harga_jual),
+        asNumber(item.disc_persen),
+        asNumber(item.diskon_item),
+        asNumber(item.total_harga_jual),
+        asNumber(item.harga_modal),
+      ])
+
+      const headers = [
+        'nomor_invoice', 'tanggal', 'kasir', 'kode_barang', 'nama_barang', 'qty',
+        'harga_satuan', 'diskon_persen', 'diskon_item', 'total_penjualan', 'harga_modal',
+      ]
+
+      const period = periodFromContext(context) || new Date().toISOString().slice(0, 10)
+      return saveCsv(`laporan_detail_item_${period}.csv`, buildCsv(headers, rows), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanPembayaranCSV(rows: any[], customPath?: string, context?: SalesExportContext) {
+    try {
+      const body = (Array.isArray(rows) ? rows : []).map(item => [
+        String(item.metode_pembayaran ?? item.jenis_pembayaran ?? '').toUpperCase(),
+        asNumber(item.jumlah_transaksi),
+        asNumber(item.penjualan_bersih),
+        asNumber(item.pajak),
+        asNumber(item.total_dibayar),
+      ])
+      const headers = ['metode_pembayaran', 'jumlah_transaksi', 'penjualan_bersih', 'pajak', 'total_dibayar']
+      const period = periodFromContext(context) || new Date().toISOString().slice(0, 10)
+      return saveCsv(`laporan_pembayaran_${period}.csv`, buildCsv(headers, body), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanProdukCSV(produk: any[], customPath?: string, context?: SalesExportContext) {
+    try {
+      const rows = (Array.isArray(produk) ? produk : []).map(item => [
+        item.kd_barang ?? '',
+        item.nama_barang ?? '',
+        asNumber(item.total_qty),
+        asNumber(item.qty_retur),
+        asNumber(item.net_qty ?? asNumber(item.total_qty)),
+        asNumber(item.total_penjualan),
+        asNumber(item.nilai_retur),
+        asNumber(item.net_penjualan ?? asNumber(item.total_penjualan)),
+      ])
+      const headers = [
+        'kode_barang', 'nama_barang', 'qty_terjual', 'qty_retur', 'qty_bersih',
+        'omzet_kotor', 'nilai_retur', 'omzet_bersih',
+      ]
+      const period = periodFromContext(context) || new Date().toISOString().slice(0, 10)
+      return saveCsv(`laporan_produk_terlaris_${period}.csv`, buildCsv(headers, rows), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanLabaRugiCSV(data: any, customPath?: string, context?: SalesExportContext) {
+    try {
+      const metrics: Array<[string, number, string]> = [
+        ['total_transaksi', asNumber(data?.total_transaksi), 'Jumlah transaksi pada periode'],
+        ['total_hpp', asNumber(data?.total_hpp ?? data?.total_modal), 'Harga pokok penjualan dari detail item'],
+        ['total_diskon', asNumber(data?.total_diskon), 'Diskon invoice/promo'],
+        ['total_retur', asNumber(data?.total_return), 'Retur APPROVED pada periode'],
+        ['penjualan_bersih', asNumber(data?.total_penjualan), 'Penjualan setelah diskon, sebelum retur dan pajak'],
+        ['penjualan_setelah_retur', asNumber(data?.penjualan_setelah_retur ?? data?.total_penjualan), 'Penjualan bersih setelah retur'],
+        ['laba_kotor', asNumber(data?.laba_kotor), 'Penjualan bersih sebelum retur dikurangi HPP'],
+        ['laba_setelah_retur', asNumber(data?.laba_setelah_retur ?? data?.laba_kotor), 'Penjualan setelah retur dikurangi HPP'],
+        ['total_pengeluaran', asNumber(data?.total_pengeluaran), 'Pengeluaran kas tercatat pada periode'],
+        ['laba_bersih_operasional', asNumber(data?.laba_bersih_operasional ?? data?.laba_setelah_retur), 'Laba setelah retur dikurangi pengeluaran kas tercatat'],
+        ['margin_persen', asNumber(data?.margin_persen), 'Laba kotor / penjualan bersih'],
+      ]
+      const rows = metrics.map(([metrik, nilai, keterangan]) => [metrik, nilai, keterangan])
+      const period = periodFromContext(context) || new Date().toISOString().slice(0, 10)
+      return saveCsv(`laporan_laba_rugi_${period}.csv`, buildCsv(['metrik', 'nilai', 'keterangan'], rows), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanStokCSV(data: any[], customPath?: string) {
+    try {
+      const rows = (Array.isArray(data) ? data : []).map(item => {
+        const stok = asNumber(item.stok)
+        const minimum = asNumber(item.stok_minimum)
+        return [
+          item.kd_barang ?? '',
+          item.nama_barang ?? '',
+          stok,
+          minimum,
+          stok <= minimum ? 'MENIPIS' : 'AMAN',
+        ]
+      })
+      const headers = ['kode_barang', 'nama_barang', 'stok', 'stok_minimum', 'status']
+      const date = new Date().toISOString().slice(0, 10)
+      return saveCsv(`laporan_stok_${date}.csv`, buildCsv(headers, rows), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanCustomerCSV(customers: any[], customPath?: string) {
+    try {
+      // Data kontak tidak diikutkan: tidak diperlukan untuk laporan kinerja
+      // pelanggan dan mengurangi risiko penyebaran data pribadi.
+      const rows = (Array.isArray(customers) ? customers : []).map(item => [
+        item.kd_customer ?? '',
+        item.nama_customer ?? '',
+        asNumber(item.poin),
+        asNumber(item.total_belanja),
+        item.status ?? '',
+        item.tgl_daftar ?? '',
+      ])
+      const headers = [
+        'kode_customer', 'nama_customer', 'poin', 'total_belanja', 'status', 'tanggal_daftar',
+      ]
+      const date = new Date().toISOString().slice(0, 10)
+      return saveCsv(`laporan_customer_${date}.csv`, buildCsv(headers, rows), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  // Generic CSV export untuk data tabular lain (arus kas, pajak, dsb).
+  static exportToCSV(data: any[], filename: string, customPath?: string) {
+    try {
+      const rows = Array.isArray(data) ? data : []
+      const keys = rows.length > 0
+        ? (Array.isArray(rows[0])
+          ? rows[0].map((_: unknown, index: number) => `kolom_${index + 1}`)
+          : Object.keys(rows[0]))
+        : ['keterangan']
+      const body = rows.map(item => Array.isArray(item) ? item : keys.map(key => item[key]))
+      const safeName = String(filename || 'export').replace(/[^\w-]+/g, '_')
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      return saveCsv(`${safeName}_${timestamp}.csv`, buildCsv(keys, body), customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export CSV: ' + (error as Error).message }
+    }
+  }
+
+  // ==========================================
+  // LAPORAN PRODUK TERLARIS
+  // ==========================================
+
+  static async exportLaporanProdukExcel(produk: any[], customPath?: string, context?: SalesExportContext) {
+    try {
+      const period = salesPeriodLabel([], context)
+      const totalQty = produk.reduce((sum, item) => sum + asNumber(item.net_qty ?? item.total_qty), 0)
+      const totalOmzet = produk.reduce((sum, item) => sum + asNumber(item.net_penjualan ?? item.total_penjualan), 0)
+      const totalRetur = produk.reduce((sum, item) => sum + asNumber(item.nilai_retur), 0)
+      const unallocatedRetur = Math.max(0, asNumber(context?.summary?.total_retur) - totalRetur)
+
+      const headers = [
+        'NO', 'KODE PRODUK', 'NAMA PRODUK', 'QTY TERJUAL', 'QTY RETUR', 'QTY BERSIH',
+        'OMZET KOTOR', 'NILAI RETUR', 'OMZET BERSIH',
+      ]
+      const rows = produk.map((item, index) => [
+        index + 1,
+        item.kd_barang ?? '',
+        item.nama_barang ?? '-',
+        asNumber(item.total_qty),
+        asNumber(item.qty_retur),
+        asNumber(item.net_qty ?? item.total_qty),
+        asNumber(item.total_penjualan),
+        asNumber(item.nilai_retur),
+        asNumber(item.net_penjualan ?? item.total_penjualan),
+      ])
+
+      return this.writeReportExcel({
+        filenamePrefix: 'laporan_produk_terlaris',
+        sheetName: 'Produk Terlaris',
+        title: 'LAPORAN PRODUK TERLARIS',
+        subtitle: period,
+        metrics: [
+          { label: 'JUMLAH PRODUK', value: produk.length, numFmt: '#,##0' },
+          { label: 'QTY BERSIH TERJUAL', value: totalQty, numFmt: '#,##0' },
+          { label: 'OMZET BERSIH', value: totalOmzet, numFmt: '"Rp" #,##0' },
+          { label: 'NILAI RETUR', value: totalRetur, numFmt: '"Rp" #,##0' },
+          { label: 'RETUR TANPA DETAIL ITEM', value: unallocatedRetur, numFmt: '"Rp" #,##0' },
+        ],
+        headers,
+        rows,
+        numFmts: { 4: '#,##0', 5: '#,##0', 6: '#,##0', 7: '"Rp" #,##0', 8: '"Rp" #,##0', 9: '"Rp" #,##0' },
+        sumColumns: [4, 5, 6, 7, 8, 9],
+        customPath,
+      })
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanProdukPDF(produk: any[], customPath?: string, context?: SalesExportContext) {
+    try {
+      const period = salesPeriodLabel([], context)
+      const totalQty = produk.reduce((sum, item) => sum + asNumber(item.net_qty ?? item.total_qty), 0)
+      const totalOmzet = produk.reduce((sum, item) => sum + asNumber(item.net_penjualan ?? item.total_penjualan), 0)
+      const totalRetur = produk.reduce((sum, item) => sum + asNumber(item.nilai_retur), 0)
+      const unallocatedRetur = Math.max(0, asNumber(context?.summary?.total_retur) - totalRetur)
+
+      const headers = ['No', 'Kode', 'Nama Produk', 'Qty Terjual', 'Qty Retur', 'Qty Bersih', 'Omzet Kotor', 'Nilai Retur', 'Omzet Bersih']
+      const rows = produk.map((item, index) => [
+        index + 1,
+        item.kd_barang ?? '-',
+        item.nama_barang ?? '-',
+        asNumber(item.total_qty).toLocaleString('id-ID'),
+        asNumber(item.qty_retur).toLocaleString('id-ID'),
+        asNumber(item.net_qty ?? item.total_qty).toLocaleString('id-ID'),
+        formatIdr(item.total_penjualan),
+        formatIdr(item.nilai_retur),
+        formatIdr(item.net_penjualan ?? item.total_penjualan),
+      ])
+
+      return this.writeReportPDF({
+        filenamePrefix: 'laporan_produk_terlaris',
+        title: 'LAPORAN PRODUK TERLARIS',
+        subtitle: period,
+        metrics: [
+          { label: 'JUMLAH PRODUK', value: produk.length.toLocaleString('id-ID') },
+          { label: 'QTY BERSIH', value: totalQty.toLocaleString('id-ID') },
+          { label: 'NILAI RETUR', value: formatIdr(totalRetur) },
+          { label: 'OMZET BERSIH', value: formatIdr(totalOmzet) },
+          { label: 'RETUR TANPA DETAIL ITEM', value: formatIdr(unallocatedRetur) },
+        ],
+        headers,
+        rows,
+        orientation: 'landscape',
+        columnStyles: {
+          0: { halign: 'center' },
+          1: { halign: 'left' },
+          2: { halign: 'left' },
+          3: { halign: 'center' },
+          4: { halign: 'center' },
+          5: { halign: 'center' },
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right', fontStyle: 'bold' },
         },
-        margin: { left: 14, right: 14 },
+        foot: [[
+          '', '', 'TOTAL',
+          produk.reduce((sum, item) => sum + asNumber(item.total_qty), 0).toLocaleString('id-ID'),
+          produk.reduce((sum, item) => sum + asNumber(item.qty_retur), 0).toLocaleString('id-ID'),
+          totalQty.toLocaleString('id-ID'),
+          formatIdr(produk.reduce((sum, item) => sum + asNumber(item.total_penjualan), 0)),
+          formatIdr(totalRetur),
+          formatIdr(totalOmzet),
+        ]],
+        customPath,
+      })
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  // ==========================================
+  // LAPORAN LABA RUGI
+  // ==========================================
+
+  static async exportLaporanLabaRugiExcel(data: any, customPath?: string, context?: SalesExportContext) {
+    try {
+      const period = salesPeriodLabel([], context)
+      const rows = [
+        ['Pendapatan penjualan (setelah diskon)', asNumber(data?.total_penjualan)],
+        ['Retur penjualan (APPROVED)', -asNumber(data?.total_return)],
+        ['Penjualan bersih setelah retur', asNumber(data?.penjualan_setelah_retur ?? data?.total_penjualan)],
+        ['Harga pokok penjualan (HPP)', -asNumber(data?.total_hpp ?? data?.total_modal)],
+        ['Laba kotor', asNumber(data?.laba_kotor)],
+        ['Laba setelah retur', asNumber(data?.laba_setelah_retur ?? data?.laba_kotor)],
+        ['Pengeluaran kas tercatat', -asNumber(data?.total_pengeluaran)],
+        ['Laba bersih operasional', asNumber(data?.laba_bersih_operasional ?? data?.laba_setelah_retur)],
+        ['Margin laba (%)', asNumber(data?.margin_persen) / 100],
+      ]
+
+      return this.writeReportExcel({
+        filenamePrefix: 'laporan_laba_rugi',
+        sheetName: 'Laba Rugi',
+        title: 'LAPORAN LABA RUGI',
+        subtitle: period,
+        metrics: [
+          { label: 'TOTAL TRANSAKSI', value: asNumber(data?.total_transaksi), numFmt: '#,##0' },
+          { label: 'TOTAL DISKON', value: asNumber(data?.total_diskon), numFmt: '"Rp" #,##0' },
+          { label: 'TOTAL RETUR', value: asNumber(data?.total_return), numFmt: '"Rp" #,##0' },
+          { label: 'MARGIN LABA', value: asNumber(data?.margin_persen) / 100, numFmt: '0.00%' },
+        ],
+        headers: ['KOMPONEN', 'NILAI', 'KETERANGAN'],
+        rows: rows.map(([label, value], index) => [
+          label,
+          index === rows.length - 1 ? asNumber(value) : asNumber(value),
+          index === 8 ? 'Persentase laba kotor terhadap penjualan setelah diskon' : '',
+        ]),
+        numFmts: { 2: '"Rp" #,##0' },
+        rowNumFmts: { 9: '0.00%' },
+        sumColumns: [],
+        customPath,
+      })
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanLabaRugiPDF(data: any, customPath?: string, context?: SalesExportContext) {
+    try {
+      const period = salesPeriodLabel([], context)
+      const rows = [
+        ['Pendapatan penjualan (setelah diskon)', formatIdr(data?.total_penjualan), 'Omzet kotor - diskon invoice'],
+        ['Retur penjualan (APPROVED)', `-${formatIdr(data?.total_return)}`, 'Retur pada periode laporan'],
+        ['Penjualan bersih setelah retur', formatIdr(data?.penjualan_setelah_retur ?? data?.total_penjualan), ''],
+        ['Harga pokok penjualan (HPP)', `-${formatIdr(data?.total_hpp ?? data?.total_modal)}`, 'Dari harga modal detail item'],
+        ['Laba kotor', formatIdr(data?.laba_kotor), 'Pendapatan setelah diskon - HPP'],
+        ['Laba setelah retur', formatIdr(data?.laba_setelah_retur ?? data?.laba_kotor), 'HPP barang retur belum tersedia'],
+        ['Pengeluaran kas tercatat', `-${formatIdr(data?.total_pengeluaran)}`, 'Dari kas keluar pada periode'],
+        ['Laba bersih operasional', formatIdr(data?.laba_bersih_operasional ?? data?.laba_setelah_retur), 'Laba setelah retur - pengeluaran kas'],
+        ['Margin laba', `${asNumber(data?.margin_persen).toFixed(2)}%`, 'Laba kotor / pendapatan setelah diskon'],
+      ]
+
+      return this.writeReportPDF({
+        filenamePrefix: 'laporan_laba_rugi',
+        title: 'LAPORAN LABA RUGI',
+        subtitle: period,
+        metrics: [
+          { label: 'TOTAL TRANSAKSI', value: asNumber(data?.total_transaksi).toLocaleString('id-ID') },
+          { label: 'TOTAL DISKON', value: formatIdr(data?.total_diskon) },
+          { label: 'TOTAL RETUR', value: formatIdr(data?.total_return) },
+          { label: 'LABA KOTOR', value: formatIdr(data?.laba_kotor) },
+        ],
+        headers: ['Komponen', 'Nilai', 'Keterangan'],
+        rows,
+        orientation: 'portrait',
+        columnStyles: {
+          0: { halign: 'left' },
+          1: { halign: 'right', fontStyle: 'bold' },
+          2: { halign: 'left', textColor: [100, 116, 139] },
+        },
+        customPath,
+      })
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  // ==========================================
+  // LAPORAN CUSTOMER
+  // ==========================================
+
+  static async exportLaporanCustomerExcel(customers: any[], customPath?: string) {
+    try {
+      const date = new Date().toISOString().slice(0, 10)
+      const totalBelanja = customers.reduce((sum, item) => sum + asNumber(item.total_belanja), 0)
+      const totalPoin = customers.reduce((sum, item) => sum + asNumber(item.poin), 0)
+      const aktif = customers.filter(item => String(item.status ?? '').toLowerCase() === 'aktif').length
+
+      return this.writeReportExcel({
+        filenamePrefix: 'laporan_customer',
+        sheetName: 'Customer',
+        title: 'LAPORAN CUSTOMER',
+        subtitle: `Per ${formatLongDate(date)}`,
+        metrics: [
+          { label: 'TOTAL CUSTOMER', value: customers.length, numFmt: '#,##0' },
+          { label: 'CUSTOMER AKTIF', value: aktif, numFmt: '#,##0' },
+          { label: 'TOTAL POIN', value: totalPoin, numFmt: '#,##0' },
+          { label: 'TOTAL BELANJA', value: totalBelanja, numFmt: '"Rp" #,##0' },
+        ],
+        headers: ['NO', 'KODE CUSTOMER', 'NAMA CUSTOMER', 'POIN', 'TOTAL BELANJA', 'STATUS'],
+        rows: customers.map((item, index) => [
+          index + 1,
+          item.kd_customer ?? '',
+          item.nama_customer ?? '',
+          asNumber(item.poin),
+          asNumber(item.total_belanja),
+          item.status ?? '',
+        ]),
+        numFmts: { 4: '#,##0', 5: '"Rp" #,##0' },
+        sumColumns: [4, 5],
+        customPath,
+      })
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  static exportLaporanCustomerPDF(customers: any[], customPath?: string) {
+    try {
+      const date = new Date().toISOString().slice(0, 10)
+      const totalBelanja = customers.reduce((sum, item) => sum + asNumber(item.total_belanja), 0)
+      const totalPoin = customers.reduce((sum, item) => sum + asNumber(item.poin), 0)
+      const aktif = customers.filter(item => String(item.status ?? '').toLowerCase() === 'aktif').length
+
+      return this.writeReportPDF({
+        filenamePrefix: 'laporan_customer',
+        title: 'LAPORAN CUSTOMER',
+        subtitle: `Per ${formatLongDate(date)}`,
+        metrics: [
+          { label: 'TOTAL CUSTOMER', value: customers.length.toLocaleString('id-ID') },
+          { label: 'CUSTOMER AKTIF', value: aktif.toLocaleString('id-ID') },
+          { label: 'TOTAL POIN', value: totalPoin.toLocaleString('id-ID') },
+          { label: 'TOTAL BELANJA', value: formatIdr(totalBelanja) },
+        ],
+        headers: ['No', 'Kode', 'Nama Customer', 'Poin', 'Total Belanja', 'Status'],
+        rows: customers.map((item, index) => [
+          index + 1,
+          item.kd_customer ?? '-',
+          item.nama_customer ?? '-',
+          asNumber(item.poin).toLocaleString('id-ID'),
+          formatIdr(item.total_belanja),
+          item.status ?? '-',
+        ]),
+        orientation: 'portrait',
+        columnStyles: {
+          0: { halign: 'center' },
+          1: { halign: 'left' },
+          2: { halign: 'left' },
+          3: { halign: 'center' },
+          4: { halign: 'right' },
+          5: { halign: 'center' },
+        },
+        customPath,
+      })
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  // ==========================================
+  // SHARED REPORT BUILDERS (PDF & XLSX)
+  // ==========================================
+
+  private static writeReportPDF(opts: {
+    filenamePrefix: string
+    title: string
+    subtitle: string
+    metrics: Array<{ label: string; value: string }>
+    headers: string[]
+    rows: any[][]
+    orientation?: 'portrait' | 'landscape'
+    columnStyles?: Record<number, any>
+    foot?: any[][]
+    customPath?: string
+  }) {
+    try {
+      const storeInfo = IdentitasModel.get()
+      const user = demoSession.getUsername() || 'Administrator'
+      const printedAt = new Date().toLocaleString('id-ID')
+      const doc = new jsPDF({ orientation: opts.orientation ?? 'portrait', unit: 'mm', format: 'a4' })
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+
+      const storeName = storeInfo?.namatoko || 'WariPOS'
+      const storeAddress = storeInfo?.alamattoko || '-'
+      const storePhone = storeInfo?.nomortelptoko || '-'
+      const storeEmail = storeInfo?.alamatemailowner || '-'
+
+      const drawHeader = (d: any) => {
+        d.setFillColor(219, 39, 119)
+        d.rect(0, 0, pageWidth, 3, 'F')
+        d.setFont('helvetica', 'bold')
+        d.setFontSize(12)
+        d.setTextColor(51, 65, 85)
+        d.text(storeName, 15, 13)
+        d.setFont('helvetica', 'normal')
+        d.setFontSize(8)
+        d.setTextColor(100, 116, 139)
+        d.text(storeAddress, 15, 17)
+        d.text(`Telp: ${storePhone}   |   Email: ${storeEmail}`, 15, 21)
+
+        d.setFont('helvetica', 'bold')
+        d.setFontSize(13)
+        d.setTextColor(219, 39, 119)
+        d.text(opts.title, pageWidth - 15, 13, { align: 'right' })
+        d.setFont('helvetica', 'normal')
+        d.setFontSize(8)
+        d.setTextColor(100, 116, 139)
+        d.text(`Periode: ${opts.subtitle}`, pageWidth - 15, 17, { align: 'right' })
+        d.text(`Dicetak: ${printedAt}   |   Oleh: ${user}`, pageWidth - 15, 21, { align: 'right' })
+
+        d.setDrawColor(226, 232, 240)
+        d.setLineWidth(0.3)
+        d.line(15, 25, pageWidth - 15, 25)
+      }
+
+      drawHeader(doc)
+
+      // KPI cards
+      const perRow = 3
+      const gap = 4
+      const cardW = (pageWidth - 30 - gap * (perRow - 1)) / perRow
+      const cardH = 13
+      opts.metrics.forEach((metric, index) => {
+        const row = Math.floor(index / perRow)
+        const col = index % perRow
+        const x = 15 + col * (cardW + gap)
+        const y = 31 + row * (cardH + 3)
+        doc.setFillColor(248, 250, 252)
+        doc.roundedRect(x, y, cardW, cardH, 1.5, 1.5, 'F')
+        doc.setDrawColor(226, 232, 240)
+        doc.setLineWidth(0.2)
+        doc.roundedRect(x, y, cardW, cardH, 1.5, 1.5, 'S')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.5)
+        doc.setTextColor(100, 116, 139)
+        doc.text(metric.label, x + 3, y + 4.5)
+        doc.setFontSize(9.5)
+        doc.setTextColor(219, 39, 119)
+        doc.text(metric.value, x + 3, y + 10.2)
       })
 
-      // Footer
-      doc.setDrawColor(16, 185, 129)
-      doc.setLineWidth(0.5)
-      doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15)
-      
+      const metricRows = Math.ceil(opts.metrics.length / perRow)
+      const startY = 31 + metricRows * (cardH + 3) + 6
+
+      autoTable(doc, {
+        head: [opts.headers],
+        body: opts.rows.length ? opts.rows : [[{
+          content: 'Tidak ada data pada periode ini',
+          colSpan: opts.headers.length,
+          styles: { halign: 'center', fontStyle: 'italic', textColor: [148, 163, 184] },
+        }]],
+        foot: opts.foot,
+        startY,
+        showHead: 'everyPage',
+        styles: { fontSize: 7, cellPadding: 2, lineColor: [226, 232, 240], lineWidth: 0.1, overflow: 'linebreak' },
+        headStyles: { fillColor: [219, 39, 119], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        footStyles: { fillColor: [252, 231, 243], textColor: [51, 65, 85], fontStyle: 'bold' },
+        columnStyles: opts.columnStyles,
+        margin: { left: 15, right: 15, top: 30, bottom: 20 },
+      })
+
+      const finalY = (doc as any).lastAutoTable?.finalY || 100
+      let sigY = finalY + 15
+      if (sigY > pageHeight - 42) {
+        doc.addPage()
+        sigY = 40
+      }
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
-      doc.setTextColor(100, 116, 139)
-      doc.text('WariPOS Developer', 14, pageHeight - 8)
-      doc.text('Inventory Management System', pageWidth / 2, pageHeight - 8, { align: 'center' })
-      doc.text(`Halaman 1`, pageWidth - 14, pageHeight - 8, { align: 'right' })
+      doc.setTextColor(51, 65, 85)
+      doc.text('Dibuat Oleh,', 15 + (pageWidth - 30) / 4, sigY, { align: 'center' })
+      doc.text('Disetujui Oleh,', 15 + (pageWidth - 30) * 3 / 4, sigY, { align: 'center' })
+      doc.setFont('helvetica', 'bold')
+      doc.text(demoSession.getUsername() || 'Administrator', 15 + (pageWidth - 30) / 4, sigY + 18, { align: 'center' })
+      doc.text('( ___________________ )', 15 + (pageWidth - 30) * 3 / 4, sigY + 18, { align: 'center' })
+
+      const pageCount = doc.internal.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        drawHeader(doc)
+        doc.setDrawColor(226, 232, 240)
+        doc.setLineWidth(0.3)
+        doc.line(15, pageHeight - 15, pageWidth - 15, pageHeight - 15)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.5)
+        doc.setTextColor(148, 163, 184)
+        doc.text(`WariPOS - ${opts.title}`, 15, pageHeight - 10)
+        doc.text(`Halaman ${i} dari ${pageCount}`, pageWidth - 15, pageHeight - 10, { align: 'right' })
+      }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      const filepath = exportPath(`laporan_stok_${timestamp}.pdf`, customPath)
-
-      const pdfBuffer = doc.output('arraybuffer')
-      fs.writeFileSync(filepath, Buffer.from(pdfBuffer))
-
-      return {
-        success: true,
-        message: 'Export berhasil disimpan',
-        data: { filepath, filename: path.basename(filepath) },
-      }
+      const filepath = exportPath(`${opts.filenamePrefix}_${timestamp}.pdf`, opts.customPath)
+      fs.writeFileSync(filepath, Buffer.from(doc.output('arraybuffer')))
+      return { success: true, message: 'Export PDF berhasil disimpan', data: { filepath, filename: path.basename(filepath) } }
     } catch (error) {
-      return {
-        success: false,
-        message: 'Gagal export: ' + (error as Error).message,
+      return { success: false, message: 'Gagal export PDF: ' + (error as Error).message }
+    }
+  }
+
+  private static async writeReportExcel(opts: {
+    filenamePrefix: string
+    sheetName: string
+    title: string
+    subtitle: string
+    metrics: Array<{ label: string; value: string | number; numFmt?: string }>
+    headers: string[]
+    rows: any[][]
+    numFmts?: Record<number, string>
+    rowNumFmts?: Record<number, string>
+    sumColumns?: number[]
+    customPath?: string
+  }) {
+    try {
+      const storeInfo = IdentitasModel.get()
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'WariPOS'
+      workbook.created = new Date()
+
+      const lastCol = columnLetter(opts.headers.length)
+      const sheet = workbook.addWorksheet(opts.sheetName.slice(0, 31), {
+        views: [{ state: 'frozen', ySplit: 0, showGridLines: false }],
+        properties: { tabColor: { argb: BRAND.primary } },
+      })
+      sheet.columns = opts.headers.map((header, index) => ({ width: Math.min(Math.max(header.length + 6, 14), 40) }))
+
+      // Branded header
+      sheet.mergeCells(`A1:${lastCol}1`)
+      const titleCell = sheet.getCell('A1')
+      titleCell.value = (storeInfo?.namatoko || 'WariPOS').toUpperCase()
+      titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } }
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' }
+      fillCell(titleCell, BRAND.primaryDark)
+      sheet.getRow(1).height = 28
+
+      sheet.mergeCells(`A2:${lastCol}2`)
+      const infoCell = sheet.getCell('A2')
+      infoCell.value = `${storeInfo?.alamattoko || '-'} | Telp: ${storeInfo?.nomortelptoko || '-'} | Email: ${storeInfo?.alamatemailowner || '-'}`
+      infoCell.font = { size: 9, color: { argb: 'FFFFFFFF' }, italic: true }
+      infoCell.alignment = { vertical: 'middle', horizontal: 'center' }
+      fillCell(infoCell, BRAND.primary)
+
+      sheet.mergeCells(`A3:${lastCol}3`)
+      const subtitleCell = sheet.getCell('A3')
+      subtitleCell.value = `${opts.title}  |  Periode: ${opts.subtitle}  |  Dicetak: ${new Date().toLocaleString('id-ID')}`
+      subtitleCell.font = { bold: true, size: 10, color: { argb: BRAND.slateText } }
+      subtitleCell.alignment = { vertical: 'middle', horizontal: 'center' }
+      fillCell(subtitleCell, 'FFF1F5F9')
+      sheet.getRow(3).height = 22
+
+      // Ringkasan
+      sheet.mergeCells(`A5:${lastCol}5`)
+      const summaryHeader = sheet.getCell('A5')
+      summaryHeader.value = 'RINGKASAN'
+      summaryHeader.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } }
+      summaryHeader.alignment = { vertical: 'middle', horizontal: 'center' }
+      fillCell(summaryHeader, BRAND.slateText)
+
+      opts.metrics.forEach((metric, index) => {
+        const rowNo = 6 + index
+        sheet.getCell(rowNo, 1).value = metric.label
+        sheet.getCell(rowNo, 2).value = metric.value
+        if (metric.numFmt) sheet.getCell(rowNo, 2).numFmt = metric.numFmt
+        sheet.getCell(rowNo, 1).font = { size: 9, color: { argb: BRAND.slateMuted } }
+        sheet.getCell(rowNo, 2).font = { size: 10, bold: true, color: { argb: BRAND.slateText } }
+        sheet.getCell(rowNo, 2).alignment = { horizontal: 'right' }
+      })
+
+      const headerRowNo = 6 + opts.metrics.length + 1
+      const headerRow = sheet.getRow(headerRowNo)
+      headerRow.values = opts.headers
+      styleHeaderRow(headerRow, BRAND.primary)
+      sheet.views = [{ state: 'frozen', ySplit: headerRowNo, showGridLines: false }]
+
+      opts.rows.forEach((values, index) => {
+        const row = sheet.addRow(values)
+        row.eachCell((cell, col) => {
+          cell.border = thinBorder()
+          cell.alignment = { vertical: 'middle' }
+          const fmt = opts.numFmts?.[col]
+          if (fmt) cell.numFmt = fmt
+          const rowFmt = opts.rowNumFmts?.[index + 1]
+          if (rowFmt && col === 2) cell.numFmt = rowFmt
+        })
+        if (index % 2 === 1) row.eachCell(cell => fillCell(cell, BRAND.slateSoft))
+      })
+
+      const firstRow = headerRowNo + 1
+      const lastRow = headerRowNo + opts.rows.length
+      if (opts.rows.length > 0) {
+        sheet.autoFilter = { from: `A${headerRowNo}`, to: `${lastCol}${lastRow}` }
       }
+
+      if (opts.sumColumns?.length) {
+        const totalValues: any[] = new Array(opts.headers.length).fill('')
+        totalValues[0] = 'TOTAL'
+        if (opts.headers.length > 2) totalValues[1] = ''
+        opts.sumColumns.forEach(col => {
+          totalValues[col - 1] = opts.rows.length
+            ? { formula: `SUM(${columnLetter(col)}${firstRow}:${columnLetter(col)}${lastRow})` }
+            : 0
+        })
+        const totalRow = sheet.addRow(totalValues)
+        totalRow.eachCell((cell, col) => {
+          cell.font = { bold: true, color: { argb: BRAND.slateText } }
+          fillCell(cell, BRAND.pinkSoft)
+          cell.border = thinBorder()
+          cell.alignment = { vertical: 'middle' }
+          const fmt = opts.numFmts?.[col]
+          if (fmt) cell.numFmt = fmt
+        })
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filepath = exportPath(`${opts.filenamePrefix}_${timestamp}.xlsx`, opts.customPath)
+      await workbook.xlsx.writeFile(filepath)
+      return { success: true, message: 'Export Excel berhasil disimpan', data: { filepath, filename: path.basename(filepath) } }
+    } catch (error) {
+      return { success: false, message: 'Gagal export Excel: ' + (error as Error).message }
     }
   }
 }

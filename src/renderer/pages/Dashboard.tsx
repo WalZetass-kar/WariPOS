@@ -937,7 +937,7 @@ export default function Dashboard() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`min-h-[44px] sm:min-h-[38px] flex items-center justify-center gap-2 px-4 rounded-lg text-sm transition-colors ${
                   active
-                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold shadow-sm'
+                    ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 font-bold shadow-sm'
                     : 'text-slate-600 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >

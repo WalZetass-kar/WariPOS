@@ -383,7 +383,7 @@ export default function WhatsApp() {
               onClick={() => setActiveTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 isActive
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                  ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 font-bold shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >

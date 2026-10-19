@@ -172,11 +172,11 @@ export default function CustomerDisplayPage() {
             onClick={() => setActiveTab('customer')}
             className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'customer'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm font-bold'
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
             }`}
           >
-            <Monitor size={15} className={activeTab === 'customer' ? 'text-red-600' : ''} />
+            <Monitor size={15} className={activeTab === 'customer' ? 'text-primary-600 dark:text-primary-400' : ''} />
             <span>1. Layar Pelanggan</span>
           </button>
 
@@ -185,7 +185,7 @@ export default function CustomerDisplayPage() {
             onClick={() => setActiveTab('queue')}
             className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'queue'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm font-bold'
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
             }`}
           >
@@ -198,7 +198,7 @@ export default function CustomerDisplayPage() {
             onClick={() => setActiveTab('controller')}
             className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'controller'
-                ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
+                ? 'bg-primary-600 text-white shadow-md shadow-primary-600/30'
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
             }`}
           >

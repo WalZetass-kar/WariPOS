@@ -103,6 +103,29 @@ export async function mobileExportToExcel(
   )
 }
 
+export async function mobileExportToCSV(
+  rows: Record<string, any>[],
+  fileName = 'export'
+) {
+  const clean = Array.isArray(rows) ? rows : []
+  const keys = clean.length > 0 ? Object.keys(clean[0]) : ['keterangan']
+  const escape = (value: unknown): string => {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+    let text = String(value)
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+  }
+  const lines = [keys.map(escape).join(',')]
+  for (const row of clean) {
+    lines.push(keys.map(key => escape(row[key])).join(','))
+  }
+  const csv = '\uFEFF' + lines.join('\r\n') + '\r\n'
+  const fullName = fileName.endsWith('.csv') ? fileName : `${fileName}.csv`
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  return saveMobileExport(blob, fullName, 'text/csv')
+}
+
 export async function mobileExportToPDF(
   title: string,
   headers: string[],

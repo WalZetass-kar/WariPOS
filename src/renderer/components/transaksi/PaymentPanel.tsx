@@ -63,7 +63,7 @@ export default function PaymentPanel({
           <button
             type="button"
             onClick={onRemovePromo}
-            className="px-3 h-9 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
+            className="px-3 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 transition-colors"
           >
             <X size={14} />
           </button>
@@ -72,7 +72,7 @@ export default function PaymentPanel({
             type="button"
             onClick={onApplyPromo}
             disabled={promoLoading || !promoCode.trim()}
-            className="px-3.5 h-9 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50 transition-colors shadow-sm"
+            className="px-3.5 h-9 rounded-xl bg-primary-600 text-white text-xs font-bold hover:bg-primary-700 disabled:opacity-50 transition-colors shadow-sm"
           >
             {promoLoading ? '...' : 'Gunakan'}
           </button>
@@ -102,7 +102,7 @@ export default function PaymentPanel({
                 onClick={() => onChangePajakPersen && onChangePajakPersen(r)}
                 className={`px-2 py-0.5 rounded-md transition-all ${
                   pajakPersen === r
-                    ? 'bg-red-600 text-white shadow-xs'
+                    ? 'bg-primary-600 text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
@@ -118,7 +118,7 @@ export default function PaymentPanel({
 
       <div className="flex justify-between text-base font-black border-t border-slate-100 dark:border-slate-800 pt-2.5">
         <span className="text-slate-900 dark:text-white">TOTAL BAYAR</span>
-        <span className="text-red-600 dark:text-red-400">{formatRupiah(totalBayar)}</span>
+        <span className="text-primary-600 dark:text-primary-400">{formatRupiah(totalBayar)}</span>
       </div>
 
       <div className="grid grid-cols-3 gap-1.5 pt-1">
@@ -129,7 +129,7 @@ export default function PaymentPanel({
             onClick={() => onChangeJenisBayar(j)}
             className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${
               jenisBayar === j
-                ? 'bg-red-600 text-white border-red-600 shadow-sm shadow-red-600/20'
+                ? 'bg-primary-600 text-white border-primary-600 shadow-sm shadow-primary-600/20'
                 : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
             }`}
           >
@@ -183,7 +183,7 @@ export default function PaymentPanel({
       )}
 
       <Button
-        className="w-full h-13 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-md shadow-red-600/20 border-0 active:scale-[0.98] transition-all disabled:opacity-50"
+        className="w-full h-13 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-sm shadow-md shadow-primary-600/20 border-0 active:scale-[0.98] transition-all disabled:opacity-50"
         loading={loading}
         disabled={loading || (jenisBayar === 'QRIS' ? !qrisCanPay : (!cart.length || !bayar || (jenisBayar === 'TUNAI' && kembalian < 0)))}
         onClick={onHandleBayar}

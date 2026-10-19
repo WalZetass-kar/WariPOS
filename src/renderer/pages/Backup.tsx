@@ -44,9 +44,10 @@ export default function BackupPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Backup | null>(null);
-  const [modal, setModal] = useState<"restore" | "delete" | "import" | null>(
+  const [modal, setModal] = useState<"restore" | "delete" | "import" | "create" | null>(
     null,
   );
+  const [backupType, setBackupType] = useState<"database" | "full">("database");
   const [actionLoading, setActionLoading] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [storageUsage, setStorageUsage] = useState({ usage: 0, quota: 0, percent: 0 });
@@ -65,18 +66,25 @@ export default function BackupPage() {
 
   const handleCreate = async () => {
     if (guardPremiumFeature('backup_restore', 'Backup Database')) return;
+    setModal("create");
+  };
+
+  const handleConfirmCreate = async () => {
     const permission = await ensureStoragePermission();
     if (!permission.granted) return toast(permission.message ?? "Izin penyimpanan ditolak", "error");
     setCreating(true);
-    toast("Membuat backup...", "info");
-    const r = await api(
-      "backup:create",
-      user?.nama_pengguna ?? "system",
-      "Manual backup",
-    );
+    setModal(null);
+    
+    const isFullBackup = backupType === "full";
+    toast(isFullBackup ? "Membuat full backup (ZIP)..." : "Membuat backup database...", "info");
+    
+    const r = isFullBackup 
+      ? await api("backup:createZip", user?.nama_pengguna ?? "system", "Manual full backup")
+      : await api("backup:create", user?.nama_pengguna ?? "system", "Manual backup");
+    
     setCreating(false);
     if (r.success) {
-      toast("Backup berhasil dibuat");
+      toast(isFullBackup ? "Full backup berhasil dibuat" : "Backup berhasil dibuat");
       load();
     } else toast(r.message as string, "error");
   };
@@ -85,8 +93,14 @@ export default function BackupPage() {
     if (!selected) return;
     if (guardPremiumFeature('backup_restore', 'Restore Database')) return;
     setActionLoading(true);
-    toast("Merestore database...", "info");
-    const r = await api("backup:restore", selected.kd_backup);
+    
+    const isZipBackup = selected.nama_file.endsWith('.zip');
+    toast(isZipBackup ? "Merestore full backup..." : "Merestore database...", "info");
+    
+    const r = isZipBackup
+      ? await api("backup:restoreZip", selected.kd_backup)
+      : await api("backup:restore", selected.kd_backup);
+    
     setActionLoading(false);
     if (r.success) {
       toast("Restore berhasil. Aplikasi akan restart...");
@@ -276,13 +290,20 @@ export default function BackupPage() {
               >
                 {/* File Information */}
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                    <Database size={18} />
+                  <div className={`w-10 h-10 rounded-xl ${b.nama_file.endsWith('.zip') ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'} flex items-center justify-center shrink-0 mt-0.5 shadow-xs`}>
+                    {b.nama_file.endsWith('.zip') ? <HardDrive size={18} /> : <Database size={18} />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm font-mono font-bold text-slate-800 dark:text-slate-100 break-all leading-snug">
-                      {b.nama_file}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-xs sm:text-sm font-mono font-bold text-slate-800 dark:text-slate-100 break-all leading-snug">
+                        {b.nama_file}
+                      </p>
+                      {b.nama_file.endsWith('.zip') && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-semibold shrink-0">
+                          FULL
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                       <span className="inline-flex items-center gap-1 shrink-0">
                         <Clock size={12} className="text-slate-400" />
@@ -349,6 +370,110 @@ export default function BackupPage() {
       </Card>
 
       {/* Restore Modal */}
+      {/* Modal: Create Backup Type */}
+      <Modal
+        open={modal === "create"}
+        onClose={() => setModal(null)}
+        title="Pilih Tipe Backup"
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setModal(null)}
+              className="w-full sm:w-auto"
+            >
+              Batal
+            </Button>
+            <Button
+              loading={creating}
+              onClick={handleConfirmCreate}
+              className="w-full sm:w-auto"
+            >
+              Buat Backup
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Pilih tipe backup yang ingin dibuat:
+          </p>
+
+          {/* Database Only Option */}
+          <label
+            className={`block p-4 rounded-xl border-2 cursor-pointer transition ${
+              backupType === "database"
+                ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
+                : "border-slate-200 dark:border-slate-700 hover:border-primary-300"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="backupType"
+                value="database"
+                checked={backupType === "database"}
+                onChange={(e) => setBackupType(e.target.value as "database" | "full")}
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Database size={18} className="text-primary-600" />
+                  <h4 className="font-semibold text-slate-800 dark:text-white">
+                    Database Only (.db)
+                  </h4>
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Backup hanya file database SQLite. Lebih cepat dan ukuran kecil.
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                  ⚠️ Tidak termasuk foto produk dan file uploads
+                </p>
+              </div>
+            </div>
+          </label>
+
+          {/* Full Backup (ZIP) Option */}
+          <label
+            className={`block p-4 rounded-xl border-2 cursor-pointer transition ${
+              backupType === "full"
+                ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
+                : "border-slate-200 dark:border-slate-700 hover:border-primary-300"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="backupType"
+                value="full"
+                checked={backupType === "full"}
+                onChange={(e) => setBackupType(e.target.value as "database" | "full")}
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <HardDrive size={18} className="text-emerald-600" />
+                  <h4 className="font-semibold text-slate-800 dark:text-white">
+                    Full Backup (.zip)
+                  </h4>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-semibold">
+                    Rekomendasi
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Backup lengkap: database + foto produk + QRIS + semua file uploads.
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                  ✓ Backup komplit, aman untuk restore ke perangkat lain
+                </p>
+              </div>
+            </div>
+          </label>
+        </div>
+      </Modal>
+
+      {/* Modal: Restore Database */}
       <Modal
         open={modal === "restore"}
         onClose={() => setModal(null)}

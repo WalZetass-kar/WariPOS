@@ -99,7 +99,7 @@ export default function LicenseRevenuePage() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148,163,184,0.15)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${Number(v) / 1000000}jt`} />
-                  <Tooltip formatter={(value: number) => money(value)} contentStyle={{ borderRadius: 12, border: '1px solid rgba(148,163,184,0.2)', fontSize: 12 }} />
+                  <Tooltip formatter={(value) => typeof value === 'number' ? money(value) : String(value || '')} contentStyle={{ borderRadius: 12, border: '1px solid rgba(148,163,184,0.2)', fontSize: 12 }} />
                   <Bar dataKey="total" fill="var(--color-primary-500, #2563eb)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

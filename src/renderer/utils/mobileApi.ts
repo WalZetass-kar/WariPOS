@@ -35,6 +35,7 @@ import { getKnownPlanDefaults } from '../../shared/planDefaults'
 import {
   mobileExportToExcel,
   mobileExportToPDF,
+  mobileExportToCSV,
   mobileExportPenjualanExcel,
   mobileExportPenjualanPDF,
   mobileExportStokExcel,
@@ -6375,6 +6376,13 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const data = (args[0] || []) as Record<string, any>[]
       const fileName = String(args[1] ?? 'export_data')
       const res = await mobileExportToExcel(data, fileName)
+      return res.success ? ok(res as T, res.message) : fail(res.message)
+    }
+
+    case 'export:toCSV': {
+      const data = (args[0] || []) as Record<string, any>[]
+      const fileName = String(args[1] ?? 'export_data')
+      const res = await mobileExportToCSV(data, fileName)
       return res.success ? ok(res as T, res.message) : fail(res.message)
     }
 

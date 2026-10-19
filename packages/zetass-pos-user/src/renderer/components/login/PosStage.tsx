@@ -2,7 +2,11 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Printer, Barcode, QrCode, Monitor, PackageCheck } from 'lucide-react'
 import posImage from '../../assets/pos-showcase-3d.png'
+import posImageDark from '../../assets/pos-showcase-3d-dark.png'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
+import BrandLockup from './BrandLockup'
+
+export { BrandLockup }
 
 interface FloatingBadgeProps {
   icon: React.ReactNode
@@ -37,7 +41,7 @@ function FloatingBadge({ icon, label, sub, className = '', delay = 0, still = fa
       whileHover={{ scale: 1.05, y: -2 }}
       className={`absolute z-10 flex items-center gap-2.5 px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 shadow-lg shadow-slate-900/5 dark:shadow-black/25 select-none transition-shadow hover:shadow-xl ${className}`}
     >
-      <div className="flex items-center justify-center w-7 h-7 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-100 dark:border-red-900/60 text-red-600 dark:text-red-400 shrink-0">
+      <div className="flex items-center justify-center w-7 h-7 rounded-xl bg-primary-50 dark:bg-primary-950/60 border border-primary-100 dark:border-primary-900/60 text-primary-600 dark:text-primary-400 shrink-0">
         {icon}
       </div>
       <div className="flex flex-col">
@@ -59,12 +63,12 @@ export default function PosStage() {
 
   return (
     <div className="relative w-full aspect-[4/3] max-w-full flex items-center justify-center select-none">
-      {/* Soft warm studio background glow to anchor the hardware */}
+      {/* Soft dynamic studio background glow themed to active theme tokens */}
       <div
-        className="absolute inset-0 rounded-3xl -z-10 pointer-events-none opacity-90 dark:opacity-15"
+        className="absolute inset-0 rounded-3xl -z-10 pointer-events-none opacity-80 dark:opacity-25 transition-opacity"
         style={{
           background:
-            'radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.95) 0%, rgba(246, 244, 238, 0.6) 60%, transparent 80%)',
+            'radial-gradient(ellipse at 50% 50%, rgba(var(--glass-shadow-rgb), 0.12) 0%, rgba(var(--glass-shadow-rgb), 0.03) 50%, transparent 75%)',
         }}
         aria-hidden="true"
       />
@@ -79,7 +83,16 @@ export default function PosStage() {
         <img
           src={posImage}
           alt="Showcase Perangkat Kasir WariPOS 3D"
-          className="w-full h-full object-contain drop-shadow-2xl select-none pointer-events-none"
+          className="w-full h-full object-contain drop-shadow-2xl select-none pointer-events-none dark:hidden"
+          loading="eager"
+          decoding="async"
+        />
+        {/* Varian tanpa latar studio terang agar menyatu dengan panel gelap */}
+        <img
+          src={posImageDark}
+          alt=""
+          aria-hidden="true"
+          className="hidden dark:block w-full h-full object-contain select-none pointer-events-none"
           loading="eager"
           decoding="async"
         />

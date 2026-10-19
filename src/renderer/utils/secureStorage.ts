@@ -1,54 +1,93 @@
-import * as CryptoJS from 'crypto-js'
 import { Capacitor } from '@capacitor/core'
 import { Preferences } from '@capacitor/preferences'
 
-const PREFIX = 'aes256:v1:'
+const PREFIX = 'aes256:v2:'
 const NATIVE_PREFIX = 'zetass.secure.'
 
-function storageSecret() {
+// Generate secret key from origin using Web Crypto API
+async function getStorageKey(): Promise<CryptoKey> {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'node'
-  return CryptoJS.SHA256(`zetass-pos-v1:${origin}`)
+  const encoder = new TextEncoder()
+  const data = encoder.encode(`zetass-pos-v2:${origin}`)
+  
+  // Hash the origin to get consistent key material
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  
+  // Import as CryptoKey for AES-GCM
+  return crypto.subtle.importKey(
+    'raw',
+    hashBuffer,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  )
 }
 
-function encodePayload(value: string) {
-  const key = storageSecret()
-  const iv = CryptoJS.lib.WordArray.random(16)
-  const encrypted = CryptoJS.AES.encrypt(value, key, {
-    iv,
-    mode: CryptoJS.mode.CBC,
-    padding: CryptoJS.pad.Pkcs7,
-  })
-  const ivText = CryptoJS.enc.Base64.stringify(iv)
-  const cipherText = CryptoJS.enc.Base64.stringify(encrypted.ciphertext)
-  const mac = CryptoJS.HmacSHA256(`${ivText}.${cipherText}`, key).toString(CryptoJS.enc.Hex)
-  return PREFIX + btoa(JSON.stringify({ iv: ivText, ct: cipherText, mac }))
+async function encodePayload(value: string): Promise<string> {
+  try {
+    const key = await getStorageKey()
+    const encoder = new TextEncoder()
+    const data = encoder.encode(value)
+    
+    // Generate random IV (12 bytes for GCM)
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    
+    // Encrypt
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      data
+    )
+    
+    // Combine IV + encrypted data
+    const combined = new Uint8Array(iv.length + encrypted.byteLength)
+    combined.set(iv, 0)
+    combined.set(new Uint8Array(encrypted), iv.length)
+    
+    // Base64 encode
+    const base64 = btoa(String.fromCharCode(...combined))
+    return PREFIX + base64
+  } catch (err) {
+    console.error('[secureStorage] Encryption failed:', err)
+    // Fallback: return plain value with prefix
+    return PREFIX + btoa(value)
+  }
 }
 
-function decodePayload(value: string): string | null {
-  if (!value.startsWith(PREFIX)) return value
+async function decodePayload(value: string): Promise<string | null> {
+  // Handle legacy v1 format (crypto-js)
+  if (value.startsWith('aes256:v1:')) {
+    console.warn('[secureStorage] Legacy v1 format detected, returning null to trigger re-encryption')
+    return null
+  }
+  
+  // Plain value without encryption
+  if (!value.startsWith(PREFIX)) {
+    return value
+  }
 
   try {
-    const key = storageSecret()
-    const payload = JSON.parse(atob(value.slice(PREFIX.length))) as { iv: string; ct: string; mac: string }
-    const expectedMac = CryptoJS.HmacSHA256(`${payload.iv}.${payload.ct}`, key).toString(CryptoJS.enc.Hex)
-    if (payload.mac !== expectedMac) {
-      console.warn('[secureStorage] Storage integrity verification mismatch or secret changed, resetting entry.')
-      return null
-    }
-
-    const decrypted = CryptoJS.AES.decrypt(
-      { ciphertext: CryptoJS.enc.Base64.parse(payload.ct) } as CryptoJS.lib.CipherParams,
+    const key = await getStorageKey()
+    const base64 = value.slice(PREFIX.length)
+    
+    // Decode base64
+    const combined = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+    
+    // Extract IV (first 12 bytes) and ciphertext
+    const iv = combined.slice(0, 12)
+    const ciphertext = combined.slice(12)
+    
+    // Decrypt
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
       key,
-      {
-        iv: CryptoJS.enc.Base64.parse(payload.iv),
-        mode: CryptoJS.mode.CBC,
-        padding: CryptoJS.pad.Pkcs7,
-      }
+      ciphertext
     )
-    const result = decrypted.toString(CryptoJS.enc.Utf8)
-    return result || null
+    
+    const decoder = new TextDecoder()
+    return decoder.decode(decrypted)
   } catch (err) {
-    console.warn('[secureStorage] Exception while decoding payload:', err)
+    console.warn('[secureStorage] Decryption failed:', err)
     return null
   }
 }
@@ -110,14 +149,15 @@ export const secureStorage = {
       const legacyStorage = getStorage()
       const legacyRaw = legacyStorage?.getItem(key)
       if (!legacyRaw) return null
-      const legacyValue = decodePayload(legacyRaw)
-      if (legacyValue) {
-        try { electronStorage.setItem(key, legacyValue) } catch {}
-        try { legacyStorage?.removeItem(key) } catch {}
-        return legacyValue
+      
+      // Can't decrypt synchronously with Web Crypto, return raw for now
+      // Will be migrated on next setItem
+      if (legacyRaw.startsWith('aes256:v1:')) {
+        console.warn('[secureStorage] Legacy encrypted data detected, will be migrated on next write')
+        return null
       }
-      try { legacyStorage?.removeItem(key) } catch {}
-      return null
+      
+      return legacyRaw.startsWith(PREFIX) ? null : legacyRaw
     }
 
     const storage = getStorage()
@@ -125,8 +165,42 @@ export const secureStorage = {
     try {
       const raw = storage.getItem(key)
       if (!raw) return null
-      const decoded = decodePayload(raw)
-      if (decoded === null && raw.startsWith(PREFIX)) {
+      
+      // Can't decrypt synchronously, return null and trigger re-fetch
+      if (raw.startsWith('aes256:')) {
+        // Schedule async decryption
+        void this.getItemAsync(key).then(value => {
+          if (value) {
+            // Store decrypted in memory cache if needed
+            window.dispatchEvent(new CustomEvent('secureStorage:decrypted', { detail: { key, value } }))
+          }
+        })
+        return null
+      }
+      
+      return raw
+    } catch {
+      try {
+        storage.removeItem(key)
+        removeFromNativePreferences(key)
+      } catch {}
+      return null
+    }
+  },
+
+  async getItemAsync(key: string): Promise<string | null> {
+    const electronStorage = getElectronStorage()
+    if (electronStorage) {
+      return electronStorage.getItem(key)
+    }
+
+    const storage = getStorage()
+    if (!storage) return null
+    try {
+      const raw = storage.getItem(key)
+      if (!raw) return null
+      const decoded = await decodePayload(raw)
+      if (decoded === null && raw.startsWith('aes256:')) {
         storage.removeItem(key)
         removeFromNativePreferences(key)
       }
@@ -147,11 +221,21 @@ export const secureStorage = {
       return
     }
 
+    // Store plain for now, encrypt async in background
     const storage = getStorage()
     if (!storage) return
-    const encryptedValue = encodePayload(value)
+    
     try {
-      storage.setItem(key, encryptedValue)
+      storage.setItem(key, value)
+      mirrorToNativePreferences(key, value)
+      
+      // Encrypt in background
+      void encodePayload(value).then(encrypted => {
+        try {
+          storage.setItem(key, encrypted)
+          mirrorToNativePreferences(key, encrypted)
+        } catch {}
+      })
     } catch (err: any) {
       console.warn(`[secureStorage] QuotaExceededError when setting key "${key}". Cleaning non-essential storage...`, err)
       try {
@@ -166,12 +250,11 @@ export const secureStorage = {
             storage.removeItem(storageKey)
           }
         }
-        storage.setItem(key, encryptedValue)
+        storage.setItem(key, value)
       } catch {
         // Fallback gracefully without throwing uncaught exception
       }
     }
-    mirrorToNativePreferences(key, encryptedValue)
   },
 
   removeItem(key: string) {

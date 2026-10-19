@@ -9,8 +9,11 @@
     <script>
       (function() {
         try {
-          var mode = localStorage.getItem('waripos_theme_mode') || localStorage.getItem('theme-mode') || 'system';
-          var isDark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var mode = localStorage.getItem('theme') || localStorage.getItem('waripos_theme_mode') || localStorage.getItem('theme-mode') || 'system';
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var currentHour = new Date().getHours();
+          var autoDark = currentHour >= 18 || currentHour < 6;
+          var isDark = mode === 'dark' || (mode === 'system' && prefersDark) || (mode === 'auto' && autoDark);
           if (isDark) {
             document.documentElement.classList.add('dark');
           } else {

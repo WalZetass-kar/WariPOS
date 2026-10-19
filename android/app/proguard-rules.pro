@@ -23,3 +23,9 @@
 # Capacitor plugins are accessed reflectively by the bridge.
 -keep class com.getcapacitor.** { *; }
 -keep class com.getcapacitor.community.database.sqlite.** { *; }
+-keep class ee.forgr.** { *; }
+-keep class com.capgo.** { *; }
+-keep class com.dtr.fastbarcode.** { *; }
+-keep class * extends com.getcapacitor.Plugin { *; }
+-keep public class * extends com.getcapacitor.Plugin
+-dontwarn com.google.errorprone.annotations.**

@@ -125,7 +125,7 @@ export default function LicenseDashboardPage() {
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${Number(v) / 1000}k`} />
                   <Tooltip
-                    formatter={(value: number) => money(value)}
+                    formatter={(value) => typeof value === 'number' ? money(value) : String(value || '')}
                     contentStyle={{ borderRadius: 12, border: '1px solid rgba(148,163,184,0.2)', fontSize: 12 }}
                   />
                   <Bar dataKey="total" fill="var(--color-primary-500, #0f766e)" radius={[6, 6, 0, 0]} />

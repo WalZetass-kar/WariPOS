@@ -461,12 +461,12 @@ export default function Login() {
       <div className="flex-1 lg:grid lg:grid-cols-[1.12fr_0.88fr] xl:grid-cols-[1.18fr_0.82fr] w-full min-h-screen">
         
         {/* ─── LEFT BRAND PANEL ─── */}
-        <div className="hidden lg:flex flex-col justify-between bg-[#f6f4ee] dark:bg-slate-900/70 px-8 py-6 lg:px-10 lg:py-8 xl:px-14 xl:py-10 border-r border-slate-200/90 dark:border-slate-800 transition-colors duration-200 overflow-y-auto">
+        <div className="hidden lg:flex flex-col justify-between bg-slate-100/70 dark:bg-slate-900 px-8 py-6 lg:px-10 lg:py-8 xl:px-14 xl:py-10 border-r border-slate-200/90 dark:border-slate-800 transition-colors duration-200 overflow-y-auto">
           <LoginShowcase />
         </div>
 
         {/* ─── RIGHT LOGIN CARD PANEL ─── */}
-        <div className="flex flex-col justify-between items-center px-4 py-6 sm:px-8 sm:py-8 lg:p-10 xl:p-12 bg-slate-50 dark:bg-slate-950 min-h-screen transition-colors duration-200 overflow-y-auto">
+        <div className="flex flex-col justify-between items-center px-4 py-6 sm:px-8 sm:py-8 lg:p-10 xl:p-12 bg-white dark:bg-slate-950 min-h-screen transition-colors duration-200 overflow-y-auto">
 
           {/* Compact brand header: only below lg, where the showcase panel is hidden */}
           <div className="w-full max-w-md mb-6 lg:hidden">
@@ -478,14 +478,14 @@ export default function Login() {
 
           {/* Main Card Container */}
           <div className={`w-full transition-all duration-300 my-auto ${showRegisterForm ? 'max-w-lg' : 'max-w-md'}`}>
-            <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl shadow-slate-200/60 dark:shadow-none transition-colors duration-200 border-t-4 border-t-red-600 relative overflow-hidden">
+            <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-xl shadow-slate-200/60 dark:shadow-none transition-colors duration-200 border-t-4 border-t-primary-600 relative overflow-hidden">
               
               {/* Card Header with Centered Logo & Retail Badge */}
               <div className="mb-5 sm:mb-6 text-center flex flex-col items-center">
                 <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-2.5 border border-slate-200 dark:border-slate-700/80 shadow-sm flex items-center justify-center mb-2.5">
                   <img src={appLogo} alt="WariPOS" className="w-9 h-9 object-contain drop-shadow-sm" />
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border border-red-200/60 dark:border-red-900/60 mb-2">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-50 text-primary-700 dark:bg-primary-950/60 dark:text-primary-300 border border-primary-200/60 dark:border-primary-900/60 mb-2">
                   <span>POS Kasir &amp; Manajemen Toko</span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
@@ -608,9 +608,9 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setLoginMode('password'); setError('') }}
-                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 ${
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
                         loginMode === 'password'
-                          ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
@@ -621,9 +621,9 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setLoginMode('pin'); setError('') }}
-                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 ${
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
                         loginMode === 'pin'
-                          ? 'bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >

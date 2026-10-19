@@ -615,7 +615,11 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'backup:getAll', () => BackupController.getAll())
   handle(ipcMain, 'backup:create', (username: string, keterangan?: string) => 
     BackupController.create(username, keterangan))
+  handle(ipcMain, 'backup:createZip', async (username: string, keterangan?: string) => 
+    await BackupController.createZip(username, keterangan))
   handle(ipcMain, 'backup:restore', (kd: number) => BackupController.restore(kd))
+  handle(ipcMain, 'backup:restoreZip', async (kd: number) => 
+    await BackupController.restoreZip(kd))
   handle(ipcMain, 'backup:delete', (kd: number) => BackupController.delete(kd))
   handle(ipcMain, 'backup:download', (kd: number) => BackupController.download(kd))
   handle(ipcMain, 'backup:import', (base64Data: string, fileName: string) => BackupController.import(base64Data, fileName))
@@ -646,12 +650,45 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     ActivityLogController.deleteOldLogs(days))
 
   // ─── EXPORT ────────────────────────────────────────────────────────
+  // Penjualan: seluruh format memakai satu bundel data dari LaporanController.
   handle(ipcMain, 'export:penjualanExcel', (startDate: string, endDate: string, customPath?: string) => 
     ExportController.exportPenjualanExcel(startDate, endDate, consumeApprovedSavePath(customPath)))
   handle(ipcMain, 'export:penjualanPDF', (startDate: string, endDate: string, customPath?: string) => 
     ExportController.exportPenjualanPDF(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:penjualanCSV', (startDate: string, endDate: string, customPath?: string) => 
+    ExportController.exportPenjualanCSV(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:detailItemCSV', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportDetailItemCSV(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:pembayaranCSV', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportPembayaranCSV(startDate, endDate, consumeApprovedSavePath(customPath)))
+
+  // Produk terlaris
+  handle(ipcMain, 'export:produkExcel', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportProdukExcel(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:produkPDF', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportProdukPDF(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:produkCSV', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportProdukCSV(startDate, endDate, consumeApprovedSavePath(customPath)))
+
+  // Laba rugi
+  handle(ipcMain, 'export:labaRugiExcel', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportLabaRugiExcel(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:labaRugiPDF', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportLabaRugiPDF(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:labaRugiCSV', (startDate: string, endDate: string, customPath?: string) =>
+    ExportController.exportLabaRugiCSV(startDate, endDate, consumeApprovedSavePath(customPath)))
+
+  // Persediaan
   handle(ipcMain, 'export:stokExcel', (customPath?: string) => ExportController.exportStokExcel(consumeApprovedSavePath(customPath)))
   handle(ipcMain, 'export:stokPDF', (customPath?: string) => ExportController.exportStokPDF(consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:stokCSV', (customPath?: string) => ExportController.exportStokCSV(consumeApprovedSavePath(customPath)))
+
+  // Customer
+  handle(ipcMain, 'export:customerExcel', (customPath?: string) => ExportController.exportCustomerExcel(consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:customerPDF', (customPath?: string) => ExportController.exportCustomerPDF(consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:customerCSV', (customPath?: string) => ExportController.exportCustomerCSV(consumeApprovedSavePath(customPath)))
+
+  // Generic
   handle(ipcMain, 'export:cashFlowExcel', (data: any[], startDate: string, endDate: string, customPath?: string) =>
     ExportController.exportCashFlowExcel(data, startDate, endDate, consumeApprovedSavePath(customPath)))
   handle(ipcMain, 'export:priceListPDF', (products: any[], categoryName: string, customPath?: string) =>
@@ -662,6 +699,14 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     ExportController.exportToExcel(data, filename, sheetName, consumeApprovedSavePath(customPath)))
   handle(ipcMain, 'export:toPDF', (title: string, headers: string[], data: any[][], filename: string, orientation?: 'portrait' | 'landscape', customPath?: string) => 
     ExportController.exportToPDF(title, headers, data, filename, orientation, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:toCSV', (data: any[], filename: string, customPath?: string) =>
+    ExportController.exportToCSV(data, filename, consumeApprovedSavePath(customPath)))
+
+  // Laporan tambahan
+  handle(ipcMain, 'laporan:penjualanDetail', (startDate: string, endDate: string) =>
+    LaporanController.getLaporanDetailItem(startDate, endDate))
+  handle(ipcMain, 'laporan:pembayaran', (startDate: string, endDate: string) =>
+    LaporanController.getLaporanPembayaran(startDate, endDate))
 
   // ─── INDUSTRY INTEGRATIONS ─────────────────────────────────────────
   handle(ipcMain, 'integrations:get', () => IndustrySettingsController.get())

@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { toDataURL } from 'qrcode'
 import {
   Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle,
   Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2,
   Code2, ExternalLink, MessageCircle, ChevronLeft, Search, Monitor, Shield, HardDrive,
   Info, User, Fingerprint, PackagePlus, Trash2, UtensilsCrossed, LogOut,
-  Type, Sliders, ArrowUpRight,
+  Type, Sliders, ArrowUpRight, Clock,
 } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -90,7 +91,10 @@ const CATEGORIES: CategoryDef[] = [
 ]
 
 export default function Settings() {
-  const { color, mode, setColor, setMode, fontSize, setFontSize, borderRadius, setBorderRadius, isDark } = useTheme()
+  const { 
+    color, mode, setColor, setMode, fontSize, setFontSize, borderRadius, setBorderRadius, isDark, isThemeTransitioning,
+    autoScheduleEnabled, autoScheduleStart, autoScheduleEnd, setAutoSchedule 
+  } = useTheme()
   const [customColor, setCustomColor] = useState(color.startsWith('#') ? color : '#ec4899')
   const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
@@ -759,6 +763,11 @@ export default function Settings() {
               setFontSize={setFontSize}
               borderRadius={borderRadius}
               setBorderRadius={setBorderRadius}
+              isThemeTransitioning={isThemeTransitioning}
+              autoScheduleEnabled={autoScheduleEnabled}
+              autoScheduleStart={autoScheduleStart}
+              autoScheduleEnd={autoScheduleEnd}
+              setAutoSchedule={setAutoSchedule}
             />
           )}
           {activeCategory === 'akun' && (
@@ -952,6 +961,11 @@ function TampilanSettings({
   setFontSize,
   borderRadius,
   setBorderRadius,
+  isThemeTransitioning,
+  autoScheduleEnabled,
+  autoScheduleStart,
+  autoScheduleEnd,
+  setAutoSchedule,
 }: {
   color: string
   mode: ThemeMode
@@ -963,6 +977,11 @@ function TampilanSettings({
   setFontSize: (v: FontSize) => void
   borderRadius: BorderRadius
   setBorderRadius: (v: BorderRadius) => void
+  isThemeTransitioning: boolean
+  autoScheduleEnabled: boolean
+  autoScheduleStart: number
+  autoScheduleEnd: number
+  setAutoSchedule: (enabled: boolean, start?: number, end?: number) => void
 }) {
   const { isDark } = useTheme()
   const activeColorObj = COLORS.find(c => c.key === color)
@@ -976,26 +995,57 @@ function TampilanSettings({
         <p className="text-xs text-slate-500 dark:text-slate-400 px-1 mb-2.5">
           Pilih tema pencahayaan antarmuka atau biarkan otomatis menyesuaikan preferensi sistem operasi perangkat Anda.
         </p>
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-4 gap-2.5">
           {([
             { id: 'light' as const, label: 'Mode Terang', icon: <Sun size={18} /> },
             { id: 'dark' as const, label: 'Mode Gelap', icon: <Moon size={18} /> },
-            { id: 'system' as const, label: 'Sistem Otomatis', icon: <Monitor size={18} /> },
+            { id: 'system' as const, label: 'Sistem', icon: <Monitor size={18} /> },
+            { id: 'auto' as const, label: 'Auto Jadwal', icon: <Clock size={18} /> },
           ]).map(m => (
             <button
               key={m.id}
+              type="button"
               onClick={() => setMode(m.id)}
+              disabled={isThemeTransitioning}
+              aria-pressed={mode === m.id}
               className={`flex flex-col sm:flex-row items-center justify-center gap-2 px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
                 mode === m.id
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
-              }`}
+              } disabled:cursor-wait disabled:opacity-60`}
             >
               {m.icon}
-              <span>{m.label}</span>
+              <span className="hidden sm:inline">{m.label}</span>
+              <span className="sm:hidden text-xs">{m.label.split(' ')[0]}</span>
             </button>
           ))}
         </div>
+        
+        {/* Auto Schedule Settings */}
+        {mode === 'auto' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-3 p-4 rounded-xl bg-gradient-to-br from-primary-50 to-primary-100/50 dark:from-primary-950/30 dark:to-primary-900/20 border border-primary-200 dark:border-primary-800"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Clock size={16} className="text-primary-600 dark:text-primary-400" />
+              <p className="text-sm font-semibold text-primary-900 dark:text-primary-100">
+                Jadwal Mode Gelap Otomatis
+              </p>
+            </div>
+            <p className="text-xs text-primary-700 dark:text-primary-300 mb-3">
+              Mode gelap akan aktif otomatis pada jam yang ditentukan. Default: 18:00 (mulai gelap) - 06:00 (kembali terang).
+            </p>
+            <div className="mt-3 pt-3 border-t border-primary-200 dark:border-primary-800">
+              <p className="text-xs text-primary-600 dark:text-primary-400 flex items-center gap-1.5">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span>
+                Saat ini: {isDark ? 'Mode Gelap Aktif' : 'Mode Terang Aktif'} • Auto-switch setiap jam
+              </p>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* 2. Tema Warna */}

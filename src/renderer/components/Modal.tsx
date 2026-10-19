@@ -77,7 +77,7 @@ export default function Modal({
         <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 bg-slate-50/70 dark:bg-slate-900/90 border-b border-slate-100 dark:border-slate-800/80 shrink-0">
           <div className="flex items-center gap-3 min-w-0 pr-2">
             {icon && (
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/40 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-primary-50 dark:bg-primary-950/40 border border-primary-100 dark:border-primary-900/40 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0 shadow-xs">
                 {icon}
               </div>
             )}

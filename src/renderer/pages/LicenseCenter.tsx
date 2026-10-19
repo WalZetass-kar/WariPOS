@@ -198,7 +198,7 @@ export default function LicenseCenter() {
                 onClick={() => setTab(grp.tabs[0])}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                   isGroupActive
-                    ? 'bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 shadow-sm border border-slate-200 dark:border-slate-700'
+                    ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 shadow-sm border border-slate-200 dark:border-slate-700'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
@@ -222,7 +222,7 @@ export default function LicenseCenter() {
                 onClick={() => setTab(item.id)}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                   isTabActive
-                    ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                    ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/20'
                     : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'
                 }`}
               >
@@ -233,7 +233,7 @@ export default function LicenseCenter() {
           })}
 
           <div className="hidden lg:flex items-center gap-1.5 ml-auto text-[11px] text-slate-400 font-medium px-2 shrink-0">
-            <ActiveIcon size={13} className="text-red-600" />
+            <ActiveIcon size={13} className="text-primary-600 dark:text-primary-400" />
             <span className="truncate">{activeTabDef.hint}</span>
           </div>
         </div>

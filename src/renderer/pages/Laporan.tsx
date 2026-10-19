@@ -8,6 +8,7 @@ import {
   BarChart2,
   FileSpreadsheet,
   FileText,
+  FileDown,
   Calendar,
   Filter,
   ArrowUpRight,
@@ -61,8 +62,15 @@ import { reportToSheetsPayload, reportToTsv } from '../../shared/googleSheetsExp
 interface LabaRugi {
   total_transaksi: number
   total_penjualan: number
+  total_diskon?: number
+  total_return?: number
+  total_hpp?: number
   total_modal: number
   laba_kotor: number
+  penjualan_setelah_retur?: number
+  laba_setelah_retur?: number
+  total_pengeluaran?: number
+  laba_bersih_operasional?: number
   margin_persen: number
 }
 
@@ -129,6 +137,11 @@ function numberTooltip(value: unknown, name: unknown) {
 
 function chartAxisStyle() {
   return { fontSize: 11, fill: '#94a3b8' }
+}
+
+/** Grand total transaksi = subtotal + pajak - diskon (bukan uang diterima). */
+function grandTotalOf(item: any) {
+  return Number(item?.sub_total ?? 0) + Number(item?.pajak ?? 0) - Number(item?.discount_amount ?? 0)
 }
 
 export default function Laporan() {
@@ -218,9 +231,118 @@ export default function Laporan() {
     load()
   }, [tab, dateRange.start, dateRange.end])
 
-  const handleExport = async (format: 'excel' | 'pdf') => {
-    const featureKey = format === 'excel' ? 'export_excel' : 'export_pdf'
-    if (guardPremiumFeature(featureKey, `Export ${format.toUpperCase()}`)) return
+  /** Baris CSV untuk mode Android (mobileApi tidak memiliki agregasi server). */
+  const buildCsvExportRows = (): { data: Record<string, any>[]; filename: string } | null => {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const period = `${dateRange.start}_sampai_${dateRange.end}`
+
+    if (tab === 'penjualan') {
+      const list = penjualanData?.transaksi ?? []
+      if (!list.length) return null
+      return {
+        filename: `laporan_penjualan_${period}`,
+        data: list.map(t => {
+          const tx = t as any
+          const grandTotal = Number(t.sub_total ?? 0) + Number(tx.pajak ?? 0) - Number(tx.discount_amount ?? 0)
+          const settled = Math.max(0, Number(t.yang_dibayar ?? 0) - Number(tx.kembalian ?? 0))
+          return {
+            nomor_invoice: t.kd_tansaksi_jual ?? '',
+            tanggal: String(t.tgl_wkt_transaksi ?? '').replace('T', ' ').slice(0, 10),
+            waktu: String(t.tgl_wkt_transaksi ?? '').replace('T', ' ').slice(11, 19),
+            kasir: t.username_transaksi ?? '',
+            pelanggan: tx.nama_customer ?? 'Umum',
+            metode_pembayaran: t.jenis_pembayaran ?? '',
+            jumlah_item: Number(t.total_qty ?? 0),
+            subtotal: Number(t.sub_total ?? 0),
+            diskon: Number(tx.discount_amount ?? 0),
+            pajak: Number(tx.pajak ?? 0),
+            grand_total: grandTotal,
+            dibayar: settled,
+            kembalian: Number(tx.kembalian ?? 0),
+            status_pembayaran: settled + 0.01 >= grandTotal ? 'LUNAS' : 'KURANG BAYAR',
+          }
+        }),
+      }
+    }
+
+    if (tab === 'stok') {
+      const items = stokData?.all ?? []
+      if (!items.length) return null
+      return {
+        filename: `laporan_stok_${stamp}`,
+        data: items.map(item => ({
+          kode_barang: item.kd_barang ?? '',
+          nama_barang: item.nama_barang ?? '',
+          stok: Number(item.stok ?? 0),
+          stok_minimum: Number(item.stok_minimum ?? 0),
+          status: Number(item.stok ?? 0) <= Number(item.stok_minimum ?? 0) ? 'MENIPIS' : 'AMAN',
+        })),
+      }
+    }
+
+    if (tab === 'produk') {
+      if (!produkData.length) return null
+      return {
+        filename: `laporan_produk_terlaris_${period}`,
+        data: produkData.map(item => {
+          const p = item as any
+          return {
+            kode_barang: p.kd_barang ?? '',
+            nama_barang: p.nama_barang ?? '',
+            qty_terjual: Number(p.total_qty ?? 0),
+            qty_retur: Number(p.qty_retur ?? 0),
+            qty_bersih: Number(p.net_qty ?? p.total_qty ?? 0),
+            omzet_kotor: Number(p.total_penjualan ?? 0),
+            nilai_retur: Number(p.nilai_retur ?? 0),
+            omzet_bersih: Number(p.net_penjualan ?? p.total_penjualan ?? 0),
+          }
+        }),
+      }
+    }
+
+    if (tab === 'laba-rugi') {
+      if (!labaRugiData) return null
+      const lr = labaRugiData as any
+      return {
+        filename: `laporan_laba_rugi_${period}`,
+        data: [
+          { metrik: 'total_transaksi', nilai: Number(lr.total_transaksi ?? 0), keterangan: 'Jumlah transaksi' },
+          { metrik: 'total_hpp', nilai: Number(lr.total_hpp ?? lr.total_modal ?? 0), keterangan: 'Harga pokok penjualan' },
+          { metrik: 'total_diskon', nilai: Number(lr.total_diskon ?? 0), keterangan: 'Diskon invoice' },
+          { metrik: 'total_retur', nilai: Number(lr.total_return ?? 0), keterangan: 'Retur disetujui' },
+          { metrik: 'penjualan_bersih', nilai: Number(lr.total_penjualan ?? 0), keterangan: 'Setelah diskon, sebelum retur' },
+          { metrik: 'penjualan_setelah_retur', nilai: Number(lr.penjualan_setelah_retur ?? lr.total_penjualan ?? 0), keterangan: 'Setelah retur' },
+          { metrik: 'laba_kotor', nilai: Number(lr.laba_kotor ?? 0), keterangan: 'Sebelum retur dikurangi HPP' },
+          { metrik: 'laba_setelah_retur', nilai: Number(lr.laba_setelah_retur ?? lr.laba_kotor ?? 0), keterangan: 'Setelah retur dikurangi HPP' },
+          { metrik: 'total_pengeluaran', nilai: Number(lr.total_pengeluaran ?? 0), keterangan: 'Pengeluaran kas tercatat' },
+          { metrik: 'laba_bersih_operasional', nilai: Number(lr.laba_bersih_operasional ?? lr.laba_setelah_retur ?? lr.laba_kotor ?? 0), keterangan: 'Laba setelah retur - pengeluaran kas' },
+          { metrik: 'margin_persen', nilai: Number(lr.margin_persen ?? 0), keterangan: 'Laba kotor / penjualan' },
+        ],
+      }
+    }
+
+    if (tab === 'customer') {
+      const customers = customerData?.customers ?? []
+      if (!customers.length) return null
+      return {
+        filename: `laporan_customer_${stamp}`,
+        data: customers.map(item => ({
+          kode_customer: item.kd_customer ?? '',
+          nama_customer: item.nama_customer ?? '',
+          poin: Number(item.poin ?? 0),
+          total_belanja: Number(item.total_belanja ?? 0),
+          status: item.status ?? '',
+        })),
+      }
+    }
+
+    return null
+  }
+
+  const handleExport = async (format: 'excel' | 'pdf' | 'csv') => {
+    const label = format === 'csv' ? 'CSV' : format === 'excel' ? 'Excel' : 'PDF'
+    const featureKey = format === 'pdf' ? 'export_pdf' : 'export_excel'
+    if (guardPremiumFeature(featureKey, `Export ${label}`)) return
 
     const permission = await ensureStoragePermission()
     if (!permission.granted) {
@@ -228,14 +350,14 @@ export default function Laporan() {
       return
     }
 
-    const ext = format === 'excel' ? 'xlsx' : 'pdf'
+    const ext = format === 'excel' ? 'xlsx' : format
     const defaultFilename = `laporan_${tab}_${new Date().toISOString().split('T')[0]}.${ext}`
 
     const dialogResult = await api<any>('dialog:showSaveDialog', {
-      title: `Simpan Laporan ${format.toUpperCase()}`,
+      title: `Simpan Laporan ${label}`,
       defaultPath: defaultFilename,
       filters: [
-        { name: format === 'excel' ? 'Excel Files' : 'PDF Files', extensions: [ext] },
+        { name: format === 'excel' ? 'Excel Files' : format === 'pdf' ? 'PDF Files' : 'CSV Files', extensions: [ext] },
         { name: 'All Files', extensions: ['*'] }
       ]
     })
@@ -249,38 +371,84 @@ export default function Laporan() {
     setExportLoading(key)
     let r: any
     try {
-      if (tab === 'penjualan') {
-        if (!dateRange.start || !dateRange.end) { toast('Pilih rentang tanggal', 'error'); return }
-        r = format === 'excel'
-          ? await api('export:penjualanExcel', dateRange.start, dateRange.end, savePath)
-          : await api('export:penjualanPDF', dateRange.start, dateRange.end, savePath)
-      } else if (tab === 'stok') {
-        r = format === 'excel'
-          ? await api('export:stokExcel', savePath)
-          : await api('export:stokPDF', savePath)
-      } else if (tab === 'laba-rugi' || tab === 'produk' || tab === 'customer') {
-        if (tab === 'laba-rugi' && labaRugiData) {
-          const rows = [
-            ['Total Transaksi', labaRugiData.total_transaksi],
-            ['Total Penjualan', labaRugiData.total_penjualan],
-            ['Total Modal HPP', labaRugiData.total_modal],
-            ['Laba Kotor', labaRugiData.laba_kotor],
-            ['Margin (%)', labaRugiData.margin_persen],
-          ]
-          r = format === 'excel'
-            ? await api('export:toExcel', rows.map(([k, v]) => ({ Keterangan: k, Nilai: v })), 'laporan_laba_rugi', undefined, savePath)
-            : await api('export:toPDF', 'Laporan Laba Rugi', ['Keterangan', 'Nilai'], rows, 'laporan_laba_rugi', undefined, savePath)
+      const needsDates = tab === 'penjualan' || tab === 'laba-rugi' || tab === 'produk'
+      if (needsDates && (!dateRange.start || !dateRange.end)) {
+        toast('Pilih rentang tanggal terlebih dahulu', 'error')
+        setExportLoading(null)
+        return
+      }
+
+      const isMobileWeb = !window.api?.invoke
+
+      if (isMobileWeb) {
+        // Android/mobile: tetap gunakan exporter yang tersedia di mobileApi.
+        if (format === 'csv') {
+          const payload = buildCsvExportRows()
+          if (!payload) {
+            toast('Tidak ada data untuk diexport', 'error')
+            setExportLoading(null)
+            return
+          }
+          r = await api('export:toCSV', payload.data, payload.filename)
+        } else if (tab === 'penjualan') {
+          r = await api(
+            format === 'excel' ? 'export:penjualanExcel' : 'export:penjualanPDF',
+            dateRange.start, dateRange.end, savePath
+          )
+        } else if (tab === 'stok') {
+          r = await api(format === 'excel' ? 'export:stokExcel' : 'export:stokPDF', savePath)
         } else if (tab === 'produk' && produkData.length > 0) {
           r = format === 'excel'
             ? await api('export:toExcel', produkData, 'laporan_produk_terlaris', undefined, savePath)
             : await api('export:toPDF', 'Produk Terlaris', ['Produk', 'Total Qty', 'Total Penjualan'], produkData.map(p => [p.nama_barang, p.total_qty, p.total_penjualan]), 'laporan_produk_terlaris', undefined, savePath)
+        } else if (tab === 'laba-rugi' && labaRugiData) {
+          const lr = labaRugiData as any
+          const rows = [
+            ['Total Transaksi', lr.total_transaksi],
+            ['Total Penjualan (setelah diskon)', lr.total_penjualan],
+            ['Total Diskon', lr.total_diskon ?? 0],
+            ['Total Retur', lr.total_return ?? 0],
+            ['Total HPP', lr.total_hpp ?? lr.total_modal],
+            ['Laba Kotor', lr.laba_kotor],
+            ['Margin (%)', lr.margin_persen],
+          ]
+          r = format === 'excel'
+            ? await api('export:toExcel', rows.map(([k, v]) => ({ Keterangan: k, Nilai: v })), 'laporan_laba_rugi', undefined, savePath)
+            : await api('export:toPDF', 'Laporan Laba Rugi', ['Keterangan', 'Nilai'], rows, 'laporan_laba_rugi', undefined, savePath)
         } else if (tab === 'customer' && customerData) {
           r = format === 'excel'
             ? await api('export:toExcel', customerData.customers, 'laporan_customer', undefined, savePath)
             : await api('export:toPDF', 'Laporan Customer', ['Nama', 'Poin', 'Total Belanja', 'Status'], customerData.customers.map((c: any) => [c.nama_customer, c.poin ?? 0, c.total_belanja ?? 0, c.status ?? '']), 'laporan_customer', undefined, savePath)
         } else {
-          toast('Tampilkan data terlebih dahulu', 'error'); setExportLoading(null); return
+          toast('Tampilkan data terlebih dahulu', 'error')
+          setExportLoading(null)
+          return
         }
+      } else if (tab === 'penjualan') {
+        const channel = format === 'excel'
+          ? 'export:penjualanExcel'
+          : format === 'pdf' ? 'export:penjualanPDF' : 'export:penjualanCSV'
+        r = await api(channel, dateRange.start, dateRange.end, savePath)
+      } else if (tab === 'stok') {
+        const channel = format === 'excel'
+          ? 'export:stokExcel'
+          : format === 'pdf' ? 'export:stokPDF' : 'export:stokCSV'
+        r = await api(channel, savePath)
+      } else if (tab === 'produk') {
+        const channel = format === 'excel'
+          ? 'export:produkExcel'
+          : format === 'pdf' ? 'export:produkPDF' : 'export:produkCSV'
+        r = await api(channel, dateRange.start, dateRange.end, savePath)
+      } else if (tab === 'laba-rugi') {
+        const channel = format === 'excel'
+          ? 'export:labaRugiExcel'
+          : format === 'pdf' ? 'export:labaRugiPDF' : 'export:labaRugiCSV'
+        r = await api(channel, dateRange.start, dateRange.end, savePath)
+      } else if (tab === 'customer') {
+        const channel = format === 'excel'
+          ? 'export:customerExcel'
+          : format === 'pdf' ? 'export:customerPDF' : 'export:customerCSV'
+        r = await api(channel, savePath)
       }
       if (r?.success) {
         toast(r?.message || (r?.data?.message) || `File berhasil disimpan ke ${savePath}`, 'success')
@@ -347,7 +515,7 @@ export default function Laporan() {
         t.sub_total ?? 0,
         (t as any).discount_amount ?? 0,
         (t as any).pajak ?? 0,
-        t.yang_dibayar ?? 0,
+        grandTotalOf(t),
         t.jenis_pembayaran || 'TUNAI',
       ])
       if (penjualanData.summary) {
@@ -369,14 +537,19 @@ export default function Laporan() {
       headers = ['Keterangan', 'Nilai (Rp)']
       rows = [
         ['Total Transaksi', labaRugiData.total_transaksi],
-        ['Total Penjualan', labaRugiData.total_penjualan],
-        ['Total Modal HPP', labaRugiData.total_modal],
+        ['Penjualan setelah diskon', labaRugiData.total_penjualan],
+        ['Total Diskon', labaRugiData.total_diskon ?? 0],
+        ['Retur Disetujui', labaRugiData.total_return ?? 0],
+        ['Penjualan setelah retur', labaRugiData.penjualan_setelah_retur ?? labaRugiData.total_penjualan],
+        ['Total Modal HPP', labaRugiData.total_hpp ?? labaRugiData.total_modal],
         ['Laba Kotor', labaRugiData.laba_kotor],
+        ['Laba setelah retur', labaRugiData.laba_setelah_retur ?? labaRugiData.laba_kotor],
         ['Margin Penjualan (%)', `${labaRugiData.margin_persen}%`],
       ]
       summaryCards = [
-        { label: 'Total Penjualan (Rp)', value: labaRugiData.total_penjualan },
-        { label: 'Total Modal HPP (Rp)', value: labaRugiData.total_modal },
+        { label: 'Penjualan Bersih (Rp)', value: labaRugiData.total_penjualan },
+        { label: 'Retur (Rp)', value: labaRugiData.total_return ?? 0 },
+        { label: 'Total HPP (Rp)', value: labaRugiData.total_hpp ?? labaRugiData.total_modal },
         { label: 'Laba Kotor (Rp)', value: labaRugiData.laba_kotor },
         { label: 'Margin (%)', value: `${labaRugiData.margin_persen}%` },
       ]
@@ -487,10 +660,10 @@ export default function Laporan() {
       const key = (item.tgl_wkt_transaksi ?? '').slice(0, 10) || '-'
       const existing = rows.find(row => row.key === key)
       if (existing) {
-        existing.total += Number(item.yang_dibayar ?? 0)
+        existing.total += grandTotalOf(item)
         existing.transaksi += 1
       } else {
-        rows.push({ key, tanggal: shortDate(key), total: Number(item.yang_dibayar ?? 0), transaksi: 1 })
+        rows.push({ key, tanggal: shortDate(key), total: grandTotalOf(item), transaksi: 1 })
       }
       return rows
     }, [] as Array<{ key: string; tanggal: string; total: number; transaksi: number }>).sort((a, b) => a.key.localeCompare(b.key))
@@ -608,6 +781,15 @@ export default function Laporan() {
           </button>
           <button
             type="button"
+            onClick={() => handleExport('csv')}
+            disabled={!!exportLoading}
+            className="p-2 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-colors shadow-sm active:scale-95"
+            title="Export CSV"
+          >
+            <FileDown size={17} />
+          </button>
+          <button
+            type="button"
             onClick={() => handleExport('pdf')}
             disabled={!!exportLoading}
             className="p-2 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 transition-colors shadow-sm active:scale-95"
@@ -649,6 +831,15 @@ export default function Laporan() {
             className="h-10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-bold text-xs"
           >
             Export Excel
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<FileDown size={16} />}
+            onClick={() => handleExport('csv')}
+            loading={exportLoading === `${tab}-csv`}
+            className="h-10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/60 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-bold text-xs"
+          >
+            Export CSV
           </Button>
           <Button
             variant="secondary"
@@ -798,6 +989,15 @@ export default function Laporan() {
                 </Button>
                 <Button
                   variant="secondary"
+                  icon={<FileDown size={16} />}
+                  onClick={() => handleExport('csv')}
+                  loading={exportLoading === `${tab}-csv`}
+                  className="h-10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/60 font-bold text-xs"
+                >
+                  Export CSV
+                </Button>
+                <Button
+                  variant="secondary"
                   icon={<FileText size={16} />}
                   onClick={() => handleExport('pdf')}
                   loading={exportLoading === `${tab}-pdf`}
@@ -817,21 +1017,21 @@ export default function Laporan() {
           
           {/* Hero Card: Total Omzet Penjualan */}
           <HeroKpiCard
-            title="Total Omzet Penjualan"
-            subtitle={`${penjualanData.summary.total_transaksi} Transaksi Berhasil`}
-            value={penjualanData.summary.total_penjualan}
-            badgeText="Omzet Toko"
+            title="Penjualan Bersih"
+            subtitle={`${penjualanData.summary.total_transaksi} transaksi • setelah diskon, sebelum pajak`}
+            value={penjualanData.summary.penjualan_bersih ?? penjualanData.summary.total_penjualan}
+            badgeText="Omzet Bersih"
             icon={<DollarSign size={22} />}
             gradient="emerald"
             breakdown={[
-              { label: 'Bersih', value: formatRupiah(penjualanData.summary.total_bersih ?? penjualanData.summary.total_penjualan), tone: 'text-emerald-600 dark:text-emerald-400' },
-              { label: 'Return', value: formatRupiah(penjualanData.summary.total_return ?? 0), tone: 'text-amber-600 dark:text-amber-400' },
-              { label: 'PPN', value: formatRupiah(penjualanData.summary.total_pajak), tone: 'text-violet-600 dark:text-violet-400' },
+              { label: 'Omzet Kotor', value: formatRupiah(penjualanData.summary.omzet_kotor ?? penjualanData.summary.total_penjualan), tone: 'text-emerald-600 dark:text-emerald-400' },
+              { label: 'Diskon', value: formatRupiah(penjualanData.summary.total_diskon ?? 0), tone: 'text-rose-600 dark:text-rose-400' },
+              { label: 'Setelah Retur', value: formatRupiah(penjualanData.summary.penjualan_setelah_retur ?? penjualanData.summary.total_bersih ?? 0), tone: 'text-amber-600 dark:text-amber-400' },
             ]}
           />
 
           {/* Sub KPI Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
             <ReportKpiCard
               label="Transaksi"
               value={penjualanData.summary.total_transaksi}
@@ -848,11 +1048,27 @@ export default function Laporan() {
             />
             <ReportKpiCard
               label="Penjualan Bersih"
-              value={penjualanData.summary.total_bersih ?? penjualanData.summary.total_penjualan}
+              value={penjualanData.summary.penjualan_bersih ?? penjualanData.summary.total_penjualan}
               icon={<TrendingUp size={16} className="text-emerald-600" />}
               iconBg="bg-emerald-50 dark:bg-emerald-950/40"
               currency={true}
               tone="green"
+            />
+            <ReportKpiCard
+              label="Total Diskon"
+              value={penjualanData.summary.total_diskon ?? 0}
+              icon={<Percent size={16} className="text-rose-600" />}
+              iconBg="bg-rose-50 dark:bg-rose-950/40"
+              currency={true}
+              tone="amber"
+            />
+            <ReportKpiCard
+              label="Total PPN"
+              value={penjualanData.summary.total_pajak}
+              icon={<Percent size={16} className="text-violet-600" />}
+              iconBg="bg-violet-50 dark:bg-violet-950/40"
+              currency={true}
+              tone="purple"
             />
             <ReportKpiCard
               label="Total Return"
@@ -863,10 +1079,10 @@ export default function Laporan() {
               tone="amber"
             />
             <ReportKpiCard
-              label="Total PPN"
-              value={penjualanData.summary.total_pajak}
-              icon={<Percent size={16} className="text-violet-600" />}
-              iconBg="bg-violet-50 dark:bg-violet-950/40"
+              label="Grand Total"
+              value={penjualanData.summary.grand_total ?? penjualanData.summary.total_penjualan}
+              icon={<Receipt size={16} className="text-blue-600" />}
+              iconBg="bg-blue-50 dark:bg-blue-950/40"
               currency={true}
               tone="purple"
             />
@@ -990,7 +1206,7 @@ export default function Laporan() {
                         <span>{t.total_qty} item</span>
                       </div>
                       <span className="text-sm font-black text-slate-900 dark:text-white font-mono">
-                        {formatRupiah(t.yang_dibayar)}
+                        {formatRupiah(grandTotalOf(t))}
                       </span>
                     </div>
                   </div>
@@ -1034,7 +1250,7 @@ export default function Laporan() {
                           {t.total_qty}
                         </td>
                         <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-white font-mono">
-                          {formatRupiah(t.yang_dibayar)}
+                          {formatRupiah(grandTotalOf(t))}
                         </td>
                         <td className="px-4 py-3 text-center pr-4">
                           <Badge
@@ -1062,28 +1278,30 @@ export default function Laporan() {
           {/* Hero Card: Laba Kotor */}
           <HeroKpiCard
             title="Laba Kotor Usaha"
-            subtitle={`${labaRugiData.total_transaksi} Total Transaksi Operasional`}
+            subtitle={`${labaRugiData.total_transaksi} transaksi • sebelum retur, HPP barang retur belum tersedia`}
             value={labaRugiData.laba_kotor}
             badgeText={`Margin ${labaRugiData.margin_persen}%`}
             icon={<TrendingUp size={22} />}
             gradient={labaRugiData.laba_kotor >= 0 ? 'emerald' : 'rose'}
             breakdown={[
-              { label: 'Penjualan', value: formatRupiah(labaRugiData.total_penjualan), tone: 'text-blue-600 dark:text-blue-400' },
+              { label: 'Penjualan Bersih', value: formatRupiah(labaRugiData.total_penjualan), tone: 'text-blue-600 dark:text-blue-400' },
+              { label: 'Retur', value: `- ${formatRupiah(labaRugiData.total_return ?? 0)}`, tone: 'text-rose-600 dark:text-rose-400' },
               { label: 'Modal HPP', value: `- ${formatRupiah(labaRugiData.total_modal)}`, tone: 'text-amber-600 dark:text-amber-400' },
+              { label: 'Pengeluaran Kas', value: `- ${formatRupiah(labaRugiData.total_pengeluaran ?? 0)}`, tone: 'text-slate-600 dark:text-slate-400' },
             ]}
           />
 
           {/* Sub KPI Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
             <ReportKpiCard
-              label="Total Transaksi"
+              label="Transaksi"
               value={labaRugiData.total_transaksi}
               icon={<Receipt size={16} className="text-primary-600" />}
               iconBg="bg-primary-50 dark:bg-primary-950/40"
               suffix=" Trx"
             />
             <ReportKpiCard
-              label="Penjualan (Omzet)"
+              label="Penjualan Bersih"
               value={labaRugiData.total_penjualan}
               icon={<DollarSign size={16} className="text-blue-600" />}
               iconBg="bg-blue-50 dark:bg-blue-950/40"
@@ -1091,8 +1309,24 @@ export default function Laporan() {
               tone="blue"
             />
             <ReportKpiCard
-              label="Total Modal (HPP)"
-              value={labaRugiData.total_modal}
+              label="Total Diskon"
+              value={labaRugiData.total_diskon ?? 0}
+              icon={<Percent size={16} className="text-rose-600" />}
+              iconBg="bg-rose-50 dark:bg-rose-950/40"
+              currency={true}
+              tone="amber"
+            />
+            <ReportKpiCard
+              label="Retur Disetujui"
+              value={labaRugiData.total_return ?? 0}
+              icon={<RotateCcw size={16} className="text-amber-600" />}
+              iconBg="bg-amber-50 dark:bg-amber-950/40"
+              currency={true}
+              tone="amber"
+            />
+            <ReportKpiCard
+              label="Total HPP"
+              value={labaRugiData.total_hpp ?? labaRugiData.total_modal}
               icon={<Boxes size={16} className="text-amber-600" />}
               iconBg="bg-amber-50 dark:bg-amber-950/40"
               currency={true}
@@ -1105,6 +1339,22 @@ export default function Laporan() {
               iconBg="bg-violet-50 dark:bg-violet-950/40"
               suffix="%"
               tone="purple"
+            />
+            <ReportKpiCard
+              label="Pengeluaran Kas"
+              value={labaRugiData.total_pengeluaran ?? 0}
+              icon={<ArrowDownRight size={16} className="text-rose-600" />}
+              iconBg="bg-rose-50 dark:bg-rose-950/40"
+              currency={true}
+              tone="amber"
+            />
+            <ReportKpiCard
+              label="Laba Bersih"
+              value={labaRugiData.laba_bersih_operasional ?? labaRugiData.laba_setelah_retur ?? labaRugiData.laba_kotor}
+              icon={<Award size={16} className="text-emerald-600" />}
+              iconBg="bg-emerald-50 dark:bg-emerald-950/40"
+              currency={true}
+              tone="green"
             />
           </div>
 

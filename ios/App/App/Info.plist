@@ -30,9 +30,9 @@
 		</dict>
 	</array>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.1</string>
+	<string>1.0.2</string>
 	<key>CFBundleVersion</key>
-	<string>10001</string>
+	<string>10002</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>LSRequiresIPhoneOS</key>

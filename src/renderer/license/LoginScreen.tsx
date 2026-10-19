@@ -16,7 +16,7 @@ import appLogo from '../assets/app-logo.png';
  */
 export const LoginScreen: React.FC = () => {
   const { login, register } = useLicense();
-  const { mode, toggleMode } = useTheme();
+  const { isDark, isThemeTransitioning, toggleMode } = useTheme();
   const [authMode, setAuthMode] = useState<'login' | 'demo'>('login');
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
   const [loading, setLoading] = useState(false);
@@ -47,10 +47,13 @@ export const LoginScreen: React.FC = () => {
       <button 
         type="button"
         onClick={toggleMode}
-        className="absolute top-4 right-4 z-50 p-2.5 rounded-xl bg-white/10 border border-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-all shadow-lg backdrop-blur-sm"
-        title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+        disabled={isThemeTransitioning}
+        aria-label={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}
+        aria-pressed={isDark}
+        className="absolute top-4 right-4 z-50 p-2.5 rounded-xl bg-white/10 border border-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-all shadow-lg backdrop-blur-sm disabled:cursor-wait disabled:opacity-60"
+        title={isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}
       >
-        {mode === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+        {isDark ? <Sun size={20} /> : <Moon size={20} />}
       </button>
 
       <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 dark:border dark:border-slate-800 shadow-2xl p-8">

@@ -56,6 +56,9 @@ const usePrefersReducedMotion = () => {
 
 const EASE_SETTLE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const EASE_FEED: [number, number, number, number] = [0.42, 0.05, 0.32, 1]
+/* Side and bottom insets are negative so the paper's drop shadow is not clipped once fully fed. */
+const CLIP_OPEN = 'inset(0px -48px -48px -48px)'
+const clipClosed = (h: number) => `inset(0px -48px ${h}px -48px)`
 
 /* ────────────────────────────────────────────────────────────────
    Thermal printer 3D
@@ -109,7 +112,7 @@ const ThermalPrinter3D: React.FC<ThermalPrinter3DProps> = ({ printing, reducedMo
               animate={
                 reducedMotion || !printing
                   ? undefined
-                  : { opacity: [1, 0.45, 1], scale: [1, 1.22, 1] }
+                  : { opacity: [1, 0.45, 1], transform: ['scale(1)', 'scale(1.22)', 'scale(1)'] }
               }
               transition={{ duration: 1.3, repeat: Infinity, ease: 'easeInOut' }}
             />
@@ -189,8 +192,8 @@ const RevealBlock: React.FC<{
   if (instant) return <div>{children}</div>
   return (
     <motion.div
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, transform: 'translateY(5px)' }}
+      animate={{ opacity: 1, transform: 'translateY(0px)' }}
       transition={{ duration: 0.3, ease: EASE_SETTLE, delay }}
       data-reveal={index}
     >
@@ -378,20 +381,19 @@ export default function StrukModal({
   const skipAnimation = useCallback(() => setAnimationBroken(true), [])
 
   const printerVariants: Variants = {
-    hidden: { opacity: 0, y: -20, scale: 0.95 },
+    hidden: { opacity: 0, transform: 'translateY(-20px) scale(0.95)' },
     visible: {
       opacity: 1,
-      y: 0,
-      scale: 1,
+      transform: 'translateY(0px) scale(1)',
       transition: { duration: prefersReducedMotion ? 0 : 0.5, ease: EASE_SETTLE },
     },
   }
 
   const panelVariants: Variants = {
-    hidden: { opacity: 0, y: 14 },
+    hidden: { opacity: 0, transform: 'translateY(14px)' },
     visible: {
       opacity: 1,
-      y: 0,
+      transform: 'translateY(0px)',
       transition: { duration: prefersReducedMotion ? 0 : 0.4, ease: EASE_SETTLE },
     },
   }
@@ -590,9 +592,13 @@ export default function StrukModal({
                 {measured ? (
                   <motion.div
                     className="relative overflow-hidden"
-                    style={{ boxShadow: '0 18px 30px -20px rgba(15,23,42,.5)' }}
-                    initial={{ height: staticReveal ? 'auto' : 0 }}
-                    animate={{ height: staticReveal ? 'auto' : contentHeight + PRINTER_LIP }}
+                    style={{
+                      boxShadow: '0 18px 30px -20px rgba(15,23,42,.5)',
+                      height: staticReveal ? 'auto' : contentHeight + PRINTER_LIP,
+                    }}
+                    /* clip-path instead of height: the feed runs on the compositor, no layout per frame */
+                    initial={{ clipPath: staticReveal ? CLIP_OPEN : clipClosed(contentHeight + PRINTER_LIP) }}
+                    animate={{ clipPath: CLIP_OPEN }}
                     transition={{ duration: staticReveal ? 0 : feedMs / 1000, ease: EASE_FEED }}
                     onAnimationComplete={handleFeedComplete}
                   >

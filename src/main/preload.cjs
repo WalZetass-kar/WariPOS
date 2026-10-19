@@ -139,7 +139,9 @@ const ALLOWED_CHANNELS = new Set([
   // Backup
   'backup:getAll',
   'backup:create',
+  'backup:createZip',
   'backup:restore',
+  'backup:restoreZip',
   'backup:delete',
   'backup:download',
   'backup:import',
@@ -151,6 +153,8 @@ const ALLOWED_CHANNELS = new Set([
   'laporan:stok',
   'laporan:kas',
   'laporan:customer',
+  'laporan:penjualanDetail',
+  'laporan:pembayaran',
 
   // Activity Log
   'activityLog:getAll',
@@ -164,13 +168,27 @@ const ALLOWED_CHANNELS = new Set([
   // Export
   'export:penjualanExcel',
   'export:penjualanPDF',
+  'export:penjualanCSV',
+  'export:detailItemCSV',
+  'export:pembayaranCSV',
+  'export:produkExcel',
+  'export:produkPDF',
+  'export:produkCSV',
+  'export:labaRugiExcel',
+  'export:labaRugiPDF',
+  'export:labaRugiCSV',
   'export:stokExcel',
   'export:stokPDF',
+  'export:stokCSV',
+  'export:customerExcel',
+  'export:customerPDF',
+  'export:customerCSV',
   'export:cashFlowExcel',
   'export:priceListPDF',
   'export:taxReportExcel',
   'export:toExcel',
   'export:toPDF',
+  'export:toCSV',
 
   // Industry Integrations
   'integrations:get',

@@ -215,7 +215,7 @@ export default function MobileBottomNav() {
                         strokeWidth={isActive ? 2.1 : 1.85}
                         className="transition-colors duration-200"
                       />
-                      <span className="text-[10px] leading-none mt-1 font-semibold tracking-tight truncate max-w-[58px]">
+                      <span className="text-[10px] leading-none mt-1 font-semibold tracking-tight truncate max-w-[64px]">
                         {label}
                       </span>
                     </motion.div>
@@ -270,7 +270,7 @@ export default function MobileBottomNav() {
                         strokeWidth={isActive ? 2.1 : 1.85}
                         className="transition-colors duration-200"
                       />
-                      <span className="text-[10px] leading-none mt-1 font-semibold tracking-tight truncate max-w-[58px]">
+                      <span className="text-[10px] leading-none mt-1 font-semibold tracking-tight truncate max-w-[64px]">
                         {label}
                       </span>
                     </motion.div>
