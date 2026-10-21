@@ -27,27 +27,23 @@ export class PenjualanModel {
   }
 
   static create(header: typeof penjualan.$inferInsert, details: (typeof penjualanDetail.$inferInsert)[]) {
-    try {
-      db.insert(penjualan).values(header).run()
-      for (const d of details) {
-        if (!d.kd_barang || !Number.isInteger(Number(d.qty)) || Number(d.qty) <= 0) {
-          throw new Error(`Qty transaksi tidak valid untuk barang ${d.kd_barang ?? '-'}`)
-        }
-        db.insert(penjualanDetail).values(d).run()
-        if (d.kd_barang && d.qty) {
-          // SECURITY: Use atomic UPDATE to prevent race conditions in stock levels
-          const result = db.update(barang)
-            .set({ stok: sql`${barang.stok} - ${d.qty}` })
-            .where(and(eq(barang.kd_barang, d.kd_barang), gte(barang.stok, d.qty)))
-            .run()
-          
-          if (result.changes === 0) {
-            throw new Error(`Stok tidak mencukupi untuk barang ${d.kd_barang} atau barang tidak ditemukan`)
-          }
+    db.insert(penjualan).values(header).run()
+    for (const d of details) {
+      if (!d.kd_barang || !Number.isInteger(Number(d.qty)) || Number(d.qty) <= 0) {
+        throw new Error(`Qty transaksi tidak valid untuk barang ${d.kd_barang ?? '-'}`)
+      }
+      db.insert(penjualanDetail).values(d).run()
+      if (d.kd_barang && d.qty) {
+        // SECURITY: Use atomic UPDATE to prevent race conditions in stock levels
+        const result = db.update(barang)
+          .set({ stok: sql`${barang.stok} - ${d.qty}` })
+          .where(and(eq(barang.kd_barang, d.kd_barang), gte(barang.stok, d.qty)))
+          .run()
+
+        if (result.changes === 0) {
+          throw new Error(`Stok tidak mencukupi untuk barang ${d.kd_barang} atau barang tidak ditemukan`)
         }
       }
-    } catch (error) {
-      throw error
     }
   }
 }

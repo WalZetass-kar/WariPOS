@@ -71,6 +71,15 @@ export function encryptData(text: string, key: string): string {
  * @returns Decrypted text
  */
 export function decryptData(encryptedText: string, key: string): string {
+  try {
+    return decryptDataUnsafe(encryptedText, key)
+  } catch {
+    // A wrong key or a damaged payload must not crash the caller.
+    return ''
+  }
+}
+
+function decryptDataUnsafe(encryptedText: string, key: string): string {
   if (encryptedText.startsWith('v2gcm:')) {
     const parts = encryptedText.split(':')
     if (parts.length !== 5) {

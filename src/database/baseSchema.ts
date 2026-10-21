@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS mediasoft_bank_transactions (
       tgl_rekonsiliasi TEXT,
       created_at TEXT NOT NULL
     , updated_at TEXT DEFAULT NULL, synced_at TEXT DEFAULT NULL, device_id TEXT DEFAULT NULL);
-CREATE TABLE IF NOT EXISTS mediasoft_barang (kd_barang VARCHAR (25) NOT NULL PRIMARY KEY, nama_barang VARCHAR (150), tgl_wkt_simpan DATETIME, tgl_wkt_ubah DATETIME, foto_barang VARCHAR (255), deskripsi_barang VARCHAR (255), nama_pengguna VARCHAR (50), stok INTEGER DEFAULT (0), kd_satuan INTEGER DEFAULT (0), jenis_transaksi VARCHAR (7) DEFAULT INCOME, kd_kategori_barang INTEGER DEFAULT (0), stok_minimum INTEGER DEFAULT 5, barcode TEXT, expired_date TEXT, batch_number TEXT, created_at TEXT DEFAULT NULL, updated_at TEXT DEFAULT NULL, synced_at TEXT DEFAULT NULL, device_id TEXT DEFAULT NULL);
+CREATE TABLE IF NOT EXISTS mediasoft_barang (kd_barang VARCHAR (25) NOT NULL PRIMARY KEY, nama_barang VARCHAR (150), tgl_wkt_simpan DATETIME, tgl_wkt_ubah DATETIME, foto_barang VARCHAR (255), deskripsi_barang VARCHAR (255), nama_pengguna VARCHAR (50), stok INTEGER DEFAULT (0), kd_satuan INTEGER DEFAULT (0), jenis_transaksi TEXT DEFAULT 'INCOME', kd_kategori_barang INTEGER DEFAULT (0), stok_minimum INTEGER DEFAULT 5, barcode TEXT, expired_date TEXT, batch_number TEXT, created_at TEXT DEFAULT NULL, updated_at TEXT DEFAULT NULL, synced_at TEXT DEFAULT NULL, device_id TEXT DEFAULT NULL);
 CREATE TABLE IF NOT EXISTS mediasoft_barang_batches (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       kd_barang TEXT NOT NULL,
