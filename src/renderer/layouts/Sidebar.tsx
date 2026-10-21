@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
@@ -45,6 +46,44 @@ interface MenuGroup {
   label: string
   isRestaurantOnly?: boolean
   items: MenuItem[]
+}
+
+/**
+ * Kunci terjemahan untuk label menu.
+ *
+ * Label asli dipakai sebagai nilai bawaan, jadi menu yang belum punya
+ * terjemahan tetap tampil.
+ */
+export const MENU_LABEL_KEYS: Record<string, string> = {
+  'Utama': 'nav.group.main',
+  'Inventaris & Stok': 'nav.group.inventory',
+  'Keuangan & Laporan': 'nav.group.finance',
+  'Relasi & Member': 'nav.group.relations',
+  'SDM & Karyawan': 'nav.group.hr',
+  'Operasional & F&B': 'nav.group.fnb',
+  'Alat & Sistem': 'nav.group.system',
+  'Dashboard': 'menu.dashboard',
+  'Kasir POS': 'menu.transactions',
+  'Riwayat Transaksi': 'menu.history',
+  'Katalog Produk': 'menu.products',
+  'Kategori': 'menu.categories',
+  'Satuan Unit': 'menu.units',
+  'Pembelian Stok': 'menu.purchases',
+  'Laporan Keuangan': 'menu.reports',
+  'Arus Kas & Petty Cash': 'menu.cash',
+  'Hutang / Piutang': 'menu.debts',
+  'Retur Barang': 'menu.returns',
+  'Promo & Diskon': 'menu.promos',
+  'Pelanggan & Poin': 'menu.customers',
+  'Pemasok / Supplier': 'menu.suppliers',
+  'Shift Kasir': 'menu.shifts',
+  'WhatsApp Notifikasi': 'menu.whatsapp',
+  'Kalkulator HPP': 'menu.hpp',
+  'Tutorial & Panduan': 'menu.tutorials',
+  'Kelola Pengguna': 'menu.users',
+  'Backup Database': 'menu.backup',
+  'Log Keamanan': 'menu.security',
+  'Pengaturan Sistem': 'menu.settings',
 }
 
 export const MENU_GROUPS: MenuGroup[] = [
@@ -138,6 +177,11 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }: SidebarProps) {
+  const { t } = useTranslation()
+  const translateLabel = (label: string) => {
+    const key = MENU_LABEL_KEYS[label]
+    return key ? t(key, { defaultValue: label }) : label
+  }
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { posMode, setPosMode } = useAppStore()
@@ -351,7 +395,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
                 <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
                   group.isRestaurantOnly ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400'
                 }`}>
-                  {group.label}
+                  {translateLabel(group.label)}
                 </span>
                 {group.isRestaurantOnly && (
                   <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
@@ -360,7 +404,9 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
                 )}
               </div>
               <div className="space-y-0.5">
-                {visibleItems.map(({ to, icon: Icon, label }) => (
+                {visibleItems.map(({ to, icon: Icon, label: rawLabel }) => {
+                  const label = translateLabel(rawLabel)
+                  return (
                   <NavLink
                     key={to}
                     to={to}
@@ -379,7 +425,8 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
                     <Icon size={17} className="shrink-0" />
                     <span className={`${isCollapsed ? 'lg:hidden' : ''}`}>{label}</span>
                   </NavLink>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )

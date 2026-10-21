@@ -10,8 +10,9 @@ import {
   BellRing,
   Clock
 } from 'lucide-react'
+import type {
+  QueueDisplayState} from '../utils/queueNumber';
 import {
-  QueueDisplayState,
   getQueueDisplayState,
   playChimeSound
 } from '../utils/queueNumber'

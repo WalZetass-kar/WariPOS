@@ -107,7 +107,8 @@ export default function Returns() {
     try {
       const r = await api<SaleHeader[]>('penjualan:getAll')
       if (r.success) setSales((r.data ?? []).slice(0, 100))
-    } finally {
+    } catch {
+      // The list stays empty, the error is shown by the empty state.
     }
   }
 

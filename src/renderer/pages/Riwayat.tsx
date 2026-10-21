@@ -41,7 +41,8 @@ export default function Riwayat() {
     try {
       const r = await api<{ header: Penjualan; details: PenjualanDetailItem[] }>('penjualan:getDetail', kd)
       if (r.success && r.data) setDetail(r.data)
-    } finally {
+    } catch {
+      // The modal keeps the previous detail, the error is shown by the empty state.
     }
   }
 

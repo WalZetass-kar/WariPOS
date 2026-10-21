@@ -50,7 +50,7 @@ import {
   addOrderToQueue
 } from '../utils/queueNumber'
 import { useTransaksiState } from '../components/transaksi/useTransaksiState'
-import { SalePayload, QrisStatus, QrisPayment } from '../components/transaksi/types'
+import type { SalePayload, QrisStatus, QrisPayment } from '../components/transaksi/types'
 import { generateReceiptPdf, generateReceiptXlsx, saveFileToDevice } from '../utils/receiptExporter'
 import { showStockBannerAlert, showSaleSuccessNotification } from '../utils/systemNotification'
 import { useAppStore } from '../stores'

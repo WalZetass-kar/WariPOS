@@ -7,7 +7,7 @@ import {
   Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2,
   Code2, ExternalLink, MessageCircle, ChevronLeft, Search, Monitor, Shield, HardDrive,
   Info, User, Fingerprint, PackagePlus, Trash2, UtensilsCrossed, LogOut,
-  Type, Sliders, ArrowUpRight, Clock,
+  Type, Sliders, ArrowUpRight, Clock, Languages,
 } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -15,6 +15,8 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import appLogo from '../assets/app-logo.png'
 import { useTheme, type ThemeColor, type ThemeMode, type FontSize, type BorderRadius } from '../contexts/ThemeContext'
+import { useTranslation } from 'react-i18next'
+import { setLanguage as applyLanguage } from '../i18n'
 import { useAuth } from '../contexts/AuthContext'
 import { useAppStore } from '../stores'
 import { api } from '../utils/api'
@@ -91,6 +93,8 @@ const CATEGORIES: CategoryDef[] = [
 ]
 
 export default function Settings() {
+  const { t, i18n } = useTranslation()
+  const [language, setLanguageState] = useState<'id' | 'en'>(i18n.language === 'en' ? 'en' : 'id')
   const { 
     color, mode, setColor, setMode, fontSize, setFontSize, borderRadius, setBorderRadius, isDark, isThemeTransitioning,
     autoScheduleEnabled, autoScheduleStart, autoScheduleEnd, setAutoSchedule 
@@ -631,6 +635,11 @@ export default function Settings() {
 
   const f = (k: string, v: string | number) => setIdentitas(prev => ({ ...prev, [k]: v }))
 
+  const setLanguage = async (next: 'id' | 'en') => {
+    await applyLanguage(next)
+    setLanguageState(next)
+  }
+
   const filteredCategories = useMemo(() => {
     if (!searchQuery.trim()) return CATEGORIES
     const q = searchQuery.toLowerCase()
@@ -768,6 +777,8 @@ export default function Settings() {
               autoScheduleStart={autoScheduleStart}
               autoScheduleEnd={autoScheduleEnd}
               setAutoSchedule={setAutoSchedule}
+              language={language}
+              setLanguage={setLanguage}
             />
           )}
           {activeCategory === 'akun' && (
@@ -966,6 +977,8 @@ function TampilanSettings({
   autoScheduleStart,
   autoScheduleEnd,
   setAutoSchedule,
+  language,
+  setLanguage,
 }: {
   color: string
   mode: ThemeMode
@@ -982,8 +995,11 @@ function TampilanSettings({
   autoScheduleStart: number
   autoScheduleEnd: number
   setAutoSchedule: (enabled: boolean, start?: number, end?: number) => void
+  language: 'id' | 'en'
+  setLanguage: (next: 'id' | 'en') => void
 }) {
   const { isDark } = useTheme()
+  const { t } = useTranslation()
   const activeColorObj = COLORS.find(c => c.key === color)
   const activeColorLabel = activeColorObj?.label || (color.startsWith('#') ? `Custom (${color.toUpperCase()})` : color)
 
@@ -1126,7 +1142,37 @@ function TampilanSettings({
         </div>
       </div>
 
-      {/* 3. Ukuran Font Antarmuka */}
+      {/* 3. Bahasa Aplikasi */}
+      <div>
+        <SectionTitle>Bahasa Aplikasi</SectionTitle>
+        <p className="text-xs text-slate-500 dark:text-slate-400 px-1 mb-2.5">
+          {t('settings.languageHint', { defaultValue: 'Pilihan bahasa untuk menu dan halaman pengaturan.' })}
+        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          {([
+            { id: 'id' as const, label: 'Bahasa Indonesia', desc: 'Indonesia' },
+            { id: 'en' as const, label: 'English', desc: 'International' },
+          ]).map(l => (
+            <button
+              key={l.id}
+              onClick={() => { void setLanguage(l.id) }}
+              className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all ${
+                language === l.id
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-xs mb-0.5">
+                <Languages size={14} />
+                <span>{l.label}</span>
+              </div>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">{l.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Ukuran Font Antarmuka */}
       <div>
         <SectionTitle>Ukuran Teks Antarmuka</SectionTitle>
         <p className="text-xs text-slate-500 dark:text-slate-400 px-1 mb-2.5">

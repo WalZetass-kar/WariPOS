@@ -40,6 +40,7 @@ const PrintQueue = lazy(() => import('./pages/PrintQueue'))
 const EcommerceApi = lazy(() => import('./pages/EcommerceApi'))
 const Marketplace = lazy(() => import('./pages/Marketplace'))
 const LicenseCenter = lazy(() => import('./pages/LicenseCenter'))
+const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'))
 const PaymentInvoice = lazy(() => import('./pages/PaymentInvoice'))
 const PaymentAutomation = lazy(() => import('./pages/PaymentAutomation'))
 const CustomerDisplay = lazy(() => import('./pages/CustomerDisplay'))
@@ -176,7 +177,14 @@ export default function AppRoutes() {
           }
         >
           <Route path="/" element={<Dashboard />} />
-          <Route path="/owner-dashboard" element={<Navigate to="/" replace />} />
+          <Route
+            path="/owner-dashboard"
+            element={
+              <RequireMinRole minRole="admin">
+                <OwnerDashboard />
+              </RequireMinRole>
+            }
+          />
           <Route path="/assistant" element={<Assistant />} />
           <Route path="/produk" element={<Produk />} />
           <Route path="/kategori" element={<Kategori />} />

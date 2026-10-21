@@ -120,6 +120,16 @@ WariPOS dirancang dengan prinsip **100% True Offline-First**. Operasional kasir 
 
 ---
 
+### Integrasi Google Sheets
+
+Skrip Apps Script yang jadi satu-satunya sumber kebenaran ada di `scripts/google-sheets-webapp.gs`. Skrip menerima semua aksi yang dikirim aplikasi (`test`, `append_dashboard`, `append_report`, `export_data`), memakai tab yang diminta, dan menulis dari sel A1.
+
+Langkah pemasangan:
+1. Buka https://script.google.com, buat project baru, tempel isi `scripts/google-sheets-webapp.gs`.
+2. Deploy > New deployment > Web app, Execute as Me, Who has access Anyone with the link.
+3. Opsional, isi Script Property `SPREADSHEET_ID` untuk memakai spreadsheet tertentu. Kalau kosong, script memakai spreadsheet bernama `Zetass Pos Export`.
+4. Salin Web App URL ke Settings > Integrasi & AI.
+
 ## 4. Panduan Build Multi-Platform (Desktop, Android, iOS)
 
 ### Runtime Database & Lokasi Penyimpanan
@@ -179,7 +189,7 @@ Buka project di Xcode (`ios/App/App.xcodeproj`), atur Signing & Capabilities, pi
 Pusat kendali Developer Operations WariPOS mengelola autentikasi admin, validasi lisensi cloud, monitoring perangkat, dan force update.
 
 ### Endpoint Supabase & Edge Functions
-- **Base Endpoint**: `https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license`
+- **Base Endpoint**: diambil dari environment `VITE_LICENSE_SERVER_URL`, tidak ada URL yang ditulis langsung di dalam kode
 - **Rute Layanan**:
   - `/auth/login` & `/auth/refresh`: Autentikasi pengembang dengan auto-refresh token JWT.
   - `/heartbeat`: Pembaruan status perangkat online/offline dan deteksi versi aplikasi.
@@ -220,7 +230,9 @@ Sebelum mendistribusikan aplikasi ke pengguna produksi:
 - [x] **Cleartext Traffic Disabled**: Android release memblokir traffic HTTP polos tanpa enkripsi, kecuali jika mode pairing LAN diaktifkan (`ZETASS_POS_ALLOW_LAN_HTTP=true`).
 - [x] **Certificate Pinning**: Diterapkan untuk domain endpoint Supabase utama.
 - [x] **Offline Grace Period**: Ditetapkan default 72 - 720 jam sebelum verifikasi lisensi cloud diwajibkan kembali.
-- [x] **Automated Tests**: Seluruh 172 unit tests lulus uji (`pnpm test` / `vitest`).
+- [x] **Automated Tests**: 31 berkas pengujian dengan 301 test lulus (`pnpm test`), ditambah pengujian end-to-end dengan Playwright (`pnpm test:e2e`).
+- [x] **Coverage**: Lantai cakupan dijalankan di CI (`pnpm test:coverage`), modul uang punya ambang yang lebih tinggi.
+- [x] **Dependency Audit**: `pnpm audit`, CodeQL, dan Dependabot aktif di pipeline.
 - [x] **TypeScript Verification**: Tidak ada galat tipe data (`pnpm typecheck` / `tsc`).
 
 ---
@@ -254,22 +266,26 @@ Checklist pengujian pada perangkat mobile fisik sebelum rilis:
 
 ## 10. Analisis & Panduan Refaktor Monorepo
 
-### Struktur Paket Monorepo Target
-Untuk pengembangan modular jangka panjang, repositori mendukung arsitektur *pnpm workspace*:
+### Struktur Repositori
+Aplikasi utama berada di root repositori, folder `packages/` berisi versi lama dari aplikasi terpisah yang diarsipkan dan tidak ikut build.
 ```
 WariPOS/
-├── packages/
-│   ├── shared-lib/                    # Tipe data, utilitas, schema database bersama
-│   ├── zetass-pos-user/               # Aplikasi operasional POS kasir
-│   └── zetass-pos-developer-panel/    # Aplikasi pengembang & lisensi terpisah
-├── src/                               # Monolith terpadu yang aktif saat ini (Production Core)
+├── src/                               # Aplikasi utama (Production Core)
+│   ├── renderer/                      # Halaman, komponen, hooks, contexts
+│   ├── backend/                       # Controller, model, service, middleware
+│   ├── database/                      # Skema Drizzle, DDL dasar, migrasi
+│   ├── main/                          # Proses utama Electron, IPC, sinkronisasi
+│   └── shared/                        # Tipe, validasi, RBAC, helper
+├── packages/                          # Arsip, tidak ikut build
 ├── android/                           # Proyek native Android Capacitor
 ├── ios/                               # Proyek native iOS Capacitor
+├── e2e/                               # Pengujian end-to-end Playwright
+├── tests/                             # Pengujian unit dan integrasi Vitest
 ├── docs/                              # Dokumentasi arsitektur dan teknis (berkas ini)
 └── release/                           # Output biner installer APK dan Desktop
 ```
 
 ### Panduan Pemeliharaan Kode
-- **State Management**: Gunakan Zustand store di `src/renderer/stores/` (`useCartStore` untuk keranjang kasir, `useAppStore` untuk preferensi aplikasi).
+- **State Management**: Store buatan sendiri berbasis `useSyncExternalStore` di `src/renderer/stores/` (`cartStore` untuk keranjang kasir, `appStore` untuk preferensi aplikasi).
 - **Penambahan Kanal IPC Baru**: Daftarkan nama saluran di `src/main/preload.cjs` (whitelist), buat handler di `src/main/ipcHandlers.ts`, dan sediakan adapter offline mobile di `src/renderer/utils/mobileApi.ts`.
 - **Ekspor Dokumen**: Seluruh fungsi cetak struk dan laporan terpusat di `src/backend/services/export.ts` dengan branding WariPOS.

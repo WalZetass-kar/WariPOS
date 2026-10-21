@@ -39,7 +39,18 @@ const resources = {
       'menu.units': 'Satuan',
       'menu.purchases': 'Pembelian',
       'menu.cash': 'Kas',
-      'menu.shifts': 'Shift',
+      'menu.shifts': 'Shift Kasir',
+      'nav.group.main': 'Utama',
+      'nav.group.inventory': 'Inventaris & Stok',
+      'nav.group.finance': 'Keuangan & Laporan',
+      'nav.group.relations': 'Relasi & Member',
+      'nav.group.hr': 'SDM & Karyawan',
+      'nav.group.fnb': 'Operasional & F&B',
+      'nav.group.system': 'Alat & Sistem',
+      'settings.language': 'Bahasa Aplikasi',
+      'settings.languageHint': 'Pilihan bahasa untuk menu dan halaman pengaturan.',
+      'language.indonesian': 'Bahasa Indonesia',
+      'language.english': 'English',
       'menu.debts': 'Hutang/Piutang',
       'menu.returns': 'Return',
       'menu.promos': 'Promo',
@@ -217,7 +228,18 @@ const resources = {
       'menu.units': 'Units',
       'menu.purchases': 'Purchases',
       'menu.cash': 'Cash',
-      'menu.shifts': 'Shifts',
+      'menu.shifts': 'Cashier Shifts',
+      'nav.group.main': 'Main',
+      'nav.group.inventory': 'Inventory & Stock',
+      'nav.group.finance': 'Finance & Reports',
+      'nav.group.relations': 'Customers & Members',
+      'nav.group.hr': 'Staff & Payroll',
+      'nav.group.fnb': 'Operations & F&B',
+      'nav.group.system': 'Tools & System',
+      'settings.language': 'Application Language',
+      'settings.languageHint': 'Language used for menus and the settings page.',
+      'language.indonesian': 'Bahasa Indonesia',
+      'language.english': 'English',
       'menu.debts': 'Debts',
       'menu.returns': 'Returns',
       'menu.promos': 'Promos',
@@ -360,15 +382,40 @@ const resources = {
   },
 }
 
+const STORAGE_KEY = 'waripos_language'
+
+/** Bahasa yang tersimpan di perangkat, default Bahasa Indonesia. */
+export function getStoredLanguage(): 'id' | 'en' {
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY)
+    return saved === 'en' ? 'en' : 'id'
+  } catch {
+    return 'id'
+  }
+}
+
+/** Simpan pilihan bahasa dan terapkan ke seluruh antarmuka. */
+export async function setLanguage(language: 'id' | 'en'): Promise<void> {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, language)
+  } catch {
+    // Penyimpanan penuh tidak boleh menggagalkan pergantian bahasa.
+  }
+  await i18n.changeLanguage(language)
+  document.documentElement.lang = language
+}
+
 i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: 'id',
+    lng: getStoredLanguage(),
     fallbackLng: 'id',
     interpolation: {
       escapeValue: false,
     },
   })
+
+document.documentElement.lang = getStoredLanguage()
 
 export default i18n

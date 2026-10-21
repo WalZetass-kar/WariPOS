@@ -52,7 +52,8 @@ export default function StockOpname() {
     try {
       const r = await api<any[]>('barang:getAll')
       if (r.success) setProducts(r.data ?? [])
-    } finally {
+    } catch {
+      // The list stays empty, the error is shown by the empty state.
     }
   }
 
