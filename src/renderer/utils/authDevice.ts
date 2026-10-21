@@ -11,6 +11,13 @@ export interface RendererAuthDeviceInfo {
 
 const DEVICE_ID_KEY = 'auth_device_id'
 
+/**
+ * The device id must survive an app restart. On native platforms the stored
+ * value is encrypted, so the synchronous read can miss it and a new id would
+ * be generated on every launch.
+ */
+let cachedDeviceId: string | null = null
+
 function randomId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -19,12 +26,31 @@ function randomId(): string {
 }
 
 export function getAuthDeviceId(): string {
+  if (cachedDeviceId) return cachedDeviceId
+
   const existing = secureStorage.getItem(DEVICE_ID_KEY)
-  if (existing) return existing
+  if (existing) {
+    cachedDeviceId = existing
+    return existing
+  }
 
   const next = randomId()
+  cachedDeviceId = next
   secureStorage.setItem(DEVICE_ID_KEY, next)
   return next
+}
+
+/** Read the persisted device id, decrypting it when needed. */
+export async function initAuthDeviceId(): Promise<string> {
+  if (cachedDeviceId) return cachedDeviceId
+
+  const existing = await secureStorage.getItemAsync(DEVICE_ID_KEY)
+  if (existing) {
+    cachedDeviceId = existing
+    return existing
+  }
+
+  return getAuthDeviceId()
 }
 
 export function collectAuthDeviceInfo(): RendererAuthDeviceInfo {

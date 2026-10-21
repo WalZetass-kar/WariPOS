@@ -4,10 +4,11 @@ import type { UserSession } from '../../shared/types'
 import { isDeveloperUser } from '../../shared/config/rbac'
 import { api } from '../utils/api'
 import { secureStorage } from '../utils/secureStorage'
-import { collectAuthDeviceInfo } from '../utils/authDevice'
+import { collectAuthDeviceInfo, initAuthDeviceId } from '../utils/authDevice'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { subscribeLicense, syncBuyerLicense, heartbeat as supabaseHeartbeat } from '../../shared/supabase/license'
 import { logActivity } from '../../shared/supabase/logging'
+import { getLicenseSessionErrorCode, isLicenseSessionExpiredResult } from '../../shared/licenseSession'
 
 /** Session TTL: 8 hours in milliseconds */
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000
@@ -17,6 +18,18 @@ const EXPIRY_CHECK_INTERVAL_MS = 60 * 1000
 const REMOTE_LICENSE_SYNC_INTERVAL_MS = 12 * 1000
 const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
 const LICENSE_OFFLINE_GRACE_MS = Number(import.meta.env.VITE_LICENSE_OFFLINE_GRACE_HOURS ?? 720) * 60 * 60 * 1000
+
+/** Error codes that mean the session is really gone, not just unreachable. */
+const FATAL_SESSION_CODES = new Set([
+  'SESSION_INVALID',
+  'SESSION_EXPIRED',
+  'TOKEN_EXPIRED',
+  'DEVICE_REVOKED',
+  'DEVICE_BLOCKED',
+  'BLOCKED',
+  'SUSPENDED',
+  'ACCOUNT_SUSPENDED',
+])
 
 function numericValue(value: unknown): number | null {
   const n = Number(value)
@@ -86,39 +99,50 @@ function toPublicSession(session: StoredSession): UserSession {
   }
 }
 
-function restoreSession(): StoredSession | null {
+function parseStoredSession(raw: string | null): StoredSession | null {
+  if (!raw) return null
   try {
-    const saved = secureStorage.getItem('pos_session')
-    if (!saved) return null
-    const parsed: StoredSession = JSON.parse(saved)
-    // Check session expiry
-    if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
-      secureStorage.removeItem('pos_session')
-      return null
-    }
-    if (parsed.must_change_password) {
-      secureStorage.removeItem('pos_session')
-      return null
-    }
-    const sessionExpiry = new Date(parsed.sessionExpiresAt).getTime()
-    if (!parsed.sessionToken || !parsed.sessionExpiresAt || !Number.isFinite(sessionExpiry) || Date.now() > sessionExpiry) {
-      secureStorage.removeItem('pos_session')
-      return null
-    }
+    const parsed = JSON.parse(raw) as StoredSession
+    if (!parsed || typeof parsed !== 'object') return null
     return parsed
   } catch {
-    secureStorage.removeItem('pos_session')
     return null
   }
+}
+
+/**
+ * Decide whether a session is definitively unusable.
+ *
+ * A session that cannot be read is not the same as an expired session. The
+ * caller must not log the user out when the read simply failed, otherwise a
+ * storage hiccup ends an active shift.
+ */
+function isSessionInvalid(session: StoredSession | null): boolean {
+  if (!session) return false
+  if (session.expiresAt && Date.now() > session.expiresAt) return true
+  if (session.must_change_password) return true
+  const sessionExpiry = new Date(session.sessionExpiresAt).getTime()
+  if (!session.sessionToken || !session.sessionExpiresAt || !Number.isFinite(sessionExpiry) || Date.now() > sessionExpiry) {
+    return true
+  }
+  return false
+}
+
+function readSession(): StoredSession | null {
+  return parseStoredSession(secureStorage.getItem('pos_session'))
+}
+
+async function readSessionAsync(): Promise<StoredSession | null> {
+  return parseStoredSession(await secureStorage.getItemAsync('pos_session'))
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [storageReady, setStorageReady] = useState(() => !Capacitor.isNativePlatform())
   const [user, setUser] = useState<UserSession | null>(() => {
-    const restored = restoreSession()
-    return restored ? toPublicSession(restored) : null
+    const restored = readSession()
+    return restored && !isSessionInvalid(restored) ? toPublicSession(restored) : null
   })
-  const [isRestoring, setIsRestoring] = useState(() => Boolean(restoreSession()))
+  const [isRestoring, setIsRestoring] = useState(() => Capacitor.isNativePlatform() ? true : Boolean(readSession()))
 
   const isDemo = useMemo(() => user?.hak_akses === 'demo', [user])
 
@@ -126,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const wasOnlineRef = useRef(isOnline)
 
   const logout = useCallback(() => {
-    const stored = restoreSession()
+    const stored = readSession()
     // Notify main process to clear server-side session
     try {
       api('auth:logout', {
@@ -142,12 +166,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.nama_pengguna])
 
   const refreshUser = useCallback(() => {
-    const raw = secureStorage.getItem('pos_session')
-    if (!raw) return
-    try {
-      const stored = JSON.parse(raw) as StoredSession
-      setUser(toPublicSession(stored))
-    } catch { /* ignore */ }
+    const apply = (raw: string | null) => {
+      const stored = parseStoredSession(raw)
+      if (stored) setUser(toPublicSession(stored))
+    }
+    const cached = secureStorage.getItem('pos_session')
+    if (cached) {
+      apply(cached)
+      return
+    }
+    void secureStorage.getItemAsync('pos_session').then(apply)
   }, [])
 
   const login = useCallback((u: UserSession) => {
@@ -183,17 +211,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     const initAuth = async () => {
+      let stored: StoredSession | null = null
       try {
         await secureStorage.ready(['pos_session', 'rememberMe', 'auth_device_id'])
         if (cancelled) return
         setStorageReady(true)
 
+        // Keep the device id stable across launches, the license server binds
+        // the device registration to it.
+        await initAuthDeviceId()
+        if (cancelled) return
+
         await api('auth:init').catch(() => {})
         if (cancelled) return
 
-        const stored = restoreSession()
+        stored = await readSessionAsync()
         if (!stored || !stored.sessionToken || !stored.nama_pengguna) {
-          if (stored) logout()
           if (!cancelled) setIsRestoring(false)
           return
         }
@@ -224,13 +257,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           setUser(toPublicSession(nextStored))
           secureStorage.setJSON('pos_session', nextStored)
-        } else {
+        } else if (isSessionInvalid(stored)) {
+          secureStorage.removeItem('pos_session')
           logout()
+        } else {
+          // The server is unreachable but the stored session is still valid.
+          // Keep the cashier signed in so the shift can continue offline.
+          setUser(toPublicSession(stored))
         }
       } catch {
-        if (!cancelled) logout()
+        // A failed restore must not end the session, the stored session stays valid.
+        if (!cancelled && stored && !isSessionInvalid(stored)) {
+          setUser(toPublicSession(stored))
+        }
       } finally {
-        if (!cancelled) setIsRestoring(false)
+        if (!cancelled) {
+          setIsRestoring(false)
+        }
       }
     }
 
@@ -352,7 +395,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // 2. Refresh local session from backend DB to get latest permissions, plan, expiry, and limits
-        const stored = restoreSession()
+        const stored = readSession()
         if (stored?.sessionToken) {
           const restoreRes = await api<UserSession>('auth:restoreSession', {
             username: user.nama_pengguna,
@@ -396,7 +439,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }))
             }
           } else if (!cancelled && restoreRes && !restoreRes.success) {
-            if (!isDeveloperUser(user) && user.hak_akses !== 'developer') {
+            // Only an authoritative rejection ends the session. Transport errors
+            // (timeout, offline, server hiccup) must not interrupt an active shift.
+            const code = getLicenseSessionErrorCode(restoreRes)
+            const fatal = FATAL_SESSION_CODES.has(code) || isLicenseSessionExpiredResult(restoreRes)
+            if (fatal && !isDeveloperUser(user) && user.hak_akses !== 'developer') {
+              secureStorage.removeItem('pos_session')
               logout()
             }
           }
@@ -514,12 +562,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Auto-logout when session expires
   useEffect(() => {
     if (!user) return
-    const interval = setInterval(() => {
-      const restored = restoreSession()
-      if (!restored) {
+    const check = async () => {
+      const session = await readSessionAsync()
+      // An unreadable session is not an expired session. Log out only when the
+      // stored session is confirmed to be invalid, so a storage hiccup cannot
+      // end a running shift.
+      if (!session) return
+      if (isSessionInvalid(session)) {
+        secureStorage.removeItem('pos_session')
         logout()
       }
-    }, EXPIRY_CHECK_INTERVAL_MS)
+    }
+    const interval = setInterval(() => { void check() }, EXPIRY_CHECK_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [user, logout])
 

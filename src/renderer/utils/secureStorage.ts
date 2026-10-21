@@ -4,6 +4,26 @@ import { Preferences } from '@capacitor/preferences'
 const PREFIX = 'aes256:v2:'
 const NATIVE_PREFIX = 'zetass.secure.'
 
+/**
+ * Cache plaintext for the lifetime of the renderer process.
+ *
+ * Values are encrypted with Web Crypto, which is asynchronous, so the
+ * synchronous getItem() cannot decrypt them. Without this cache every
+ * synchronous read of an encrypted key returns null, which made the session
+ * look like it had vanished on Android.
+ */
+const memoryCache = new Map<string, string>()
+
+/** Only small values are cached, the bulk mobile store stays out of memory. */
+const MAX_CACHED_VALUE_LENGTH = 256 * 1024
+
+function cacheValue(key: string, value: string) {
+  if (value.length <= MAX_CACHED_VALUE_LENGTH) {
+    memoryCache.set(key, value)
+  }
+}
+
+
 // Generate secret key from origin using Web Crypto API
 async function getStorageKey(): Promise<CryptoKey> {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'node'
@@ -121,21 +141,56 @@ function removeFromNativePreferences(key: string) {
 }
 
 export const secureStorage = {
-  async ready(keys: string[] = []): Promise<void> {
-    if (!Capacitor.isNativePlatform()) return
+  /**
+   * Decrypt the stored values into the memory cache.
+   *
+   * After an app restart the cache is empty and every stored value is
+   * ciphertext, so a synchronous read would find nothing. Hydrating the cache
+   * once at startup makes the session, the device id and the small settings
+   * readable again.
+   */
+  async hydrateCache(): Promise<void> {
     const storage = getStorage()
     if (!storage) return
 
+    const keys: string[] = []
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i)
+      if (key) keys.push(key)
+    }
+
     await Promise.all(keys.map(async key => {
       try {
-        const result = await Preferences.get({ key: nativePreferenceKey(key) })
-        if (result.value && !storage.getItem(key)) {
-          storage.setItem(key, result.value)
-        }
+        const raw = storage.getItem(key)
+        if (!raw || !raw.startsWith(PREFIX)) return
+        // Bulk payloads are read through the async path, keep them out of memory.
+        if (raw.length > MAX_CACHED_VALUE_LENGTH) return
+        const decoded = await decodePayload(raw)
+        if (decoded !== null) cacheValue(key, decoded)
       } catch {
-        // Preferences are a best-effort encrypted mirror on Android.
+        // A single unreadable entry must not stop the hydration.
       }
     }))
+  },
+
+  async ready(keys: string[] = []): Promise<void> {
+    if (Capacitor.isNativePlatform()) {
+      const storage = getStorage()
+      if (storage) {
+        await Promise.all(keys.map(async key => {
+          try {
+            const result = await Preferences.get({ key: nativePreferenceKey(key) })
+            if (result.value && !storage.getItem(key)) {
+              storage.setItem(key, result.value)
+            }
+          } catch {
+            // Preferences are a best-effort encrypted mirror on Android.
+          }
+        }))
+      }
+    }
+
+    await this.hydrateCache()
   },
 
   getItem(key: string): string | null {
@@ -160,24 +215,27 @@ export const secureStorage = {
       return legacyRaw.startsWith(PREFIX) ? null : legacyRaw
     }
 
+    const cached = memoryCache.get(key)
+    if (cached !== undefined) return cached
+
     const storage = getStorage()
     if (!storage) return null
     try {
       const raw = storage.getItem(key)
       if (!raw) return null
-      
+
       // Can't decrypt synchronously, return null and trigger re-fetch
       if (raw.startsWith('aes256:')) {
-        // Schedule async decryption
+        // Schedule async decryption, which also fills the memory cache
         void this.getItemAsync(key).then(value => {
           if (value) {
-            // Store decrypted in memory cache if needed
             window.dispatchEvent(new CustomEvent('secureStorage:decrypted', { detail: { key, value } }))
           }
         })
         return null
       }
-      
+
+      cacheValue(key, raw)
       return raw
     } catch {
       try {
@@ -191,8 +249,13 @@ export const secureStorage = {
   async getItemAsync(key: string): Promise<string | null> {
     const electronStorage = getElectronStorage()
     if (electronStorage) {
-      return electronStorage.getItem(key)
+      const value = electronStorage.getItem(key)
+      if (value) cacheValue(key, value)
+      return value
     }
+
+    const cached = memoryCache.get(key)
+    if (cached !== undefined) return cached
 
     const storage = getStorage()
     if (!storage) return null
@@ -201,15 +264,15 @@ export const secureStorage = {
       if (!raw) return null
       const decoded = await decodePayload(raw)
       if (decoded === null && raw.startsWith('aes256:')) {
-        storage.removeItem(key)
-        removeFromNativePreferences(key)
+        // Keep the stored value. A failed decrypt must not destroy data that a
+        // later read may still be able to recover.
+        console.warn(`[secureStorage] Could not decrypt "${key}", keeping the stored value`)
+        return null
       }
+      if (decoded !== null) cacheValue(key, decoded)
       return decoded
-    } catch {
-      try {
-        storage.removeItem(key)
-        removeFromNativePreferences(key)
-      } catch {}
+    } catch (err) {
+      console.warn(`[secureStorage] Read failed for "${key}":`, err)
       return null
     }
   },
@@ -218,17 +281,20 @@ export const secureStorage = {
     const electronStorage = getElectronStorage()
     if (electronStorage) {
       electronStorage.setItem(key, value)
+      cacheValue(key, value)
       return
     }
 
     // Store plain for now, encrypt async in background
     const storage = getStorage()
     if (!storage) return
-    
+
+    cacheValue(key, value)
+
     try {
       storage.setItem(key, value)
       mirrorToNativePreferences(key, value)
-      
+
       // Encrypt in background
       void encodePayload(value).then(encrypted => {
         try {
@@ -261,9 +327,11 @@ export const secureStorage = {
     const electronStorage = getElectronStorage()
     if (electronStorage) {
       electronStorage.removeItem(key)
+      memoryCache.delete(key)
       return
     }
 
+    memoryCache.delete(key)
     getStorage()?.removeItem(key)
     removeFromNativePreferences(key)
   },
