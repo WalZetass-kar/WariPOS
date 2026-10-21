@@ -1,6 +1,6 @@
 import React from 'react'
 import { UserCircle, X } from 'lucide-react'
-import { Customer } from '../../../shared/types'
+import type { Customer } from '../../../shared/types'
 
 interface CustomerSelectorProps {
   customers: Customer[]

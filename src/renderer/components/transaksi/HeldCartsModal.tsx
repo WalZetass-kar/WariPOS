@@ -2,7 +2,7 @@ import React from 'react'
 import { Pause, Trash2 } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { formatRupiah } from '../../utils/format'
-import { CartItem } from '../../../shared/types'
+import type { CartItem } from '../../../shared/types'
 
 interface HeldCartsModalProps {
   open: boolean

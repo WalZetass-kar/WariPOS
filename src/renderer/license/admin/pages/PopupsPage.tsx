@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
-import { PopupRow, listPopups, updatePopup } from '../api';
+import type { PopupRow} from '../api';
+import { listPopups, updatePopup } from '../api';
 import { Alert, Button, Field, Input, PageHeader, Textarea } from '../components';
 
 export const PopupsPage: React.FC = () => {

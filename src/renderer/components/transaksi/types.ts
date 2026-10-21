@@ -1,4 +1,4 @@
-import { CartItem } from '../../../shared/types'
+import type { CartItem } from '../../../shared/types'
 
 export interface SalePayload {
   username: string

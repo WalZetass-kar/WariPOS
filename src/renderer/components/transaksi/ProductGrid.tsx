@@ -1,6 +1,6 @@
 import React from 'react'
 import { ShoppingCart, Plus, Minus, Check } from 'lucide-react'
-import { Barang, CartItem } from '../../../shared/types'
+import type { Barang, CartItem } from '../../../shared/types'
 import { ProductGridSkeleton } from '../../components/Skeleton'
 import ProductImage from '../../components/ProductImage'
 import { formatRupiah } from '../../utils/format'

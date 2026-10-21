@@ -26,7 +26,7 @@ const FALLBACK_WA_NUMBER = SUBSCRIPTION_UPGRADE_WA_NUMBER
  *   628xxx → 628xxx (unchanged)
  */
 export function normalizePhoneNumber(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\(\)\+]/g, '')
+  let cleaned = phone.replace(/[\s\-()+]/g, '')
   // Convert local format to international
   if (cleaned.startsWith('0')) {
     cleaned = '62' + cleaned.slice(1)

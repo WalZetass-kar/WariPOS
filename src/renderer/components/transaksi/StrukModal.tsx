@@ -6,7 +6,7 @@ import Struk from '../../components/Struk'
 import { formatRupiah } from '../../utils/format'
 import { exportReceiptSoftFile } from '../../utils/receiptExporter'
 import { useToast } from '../../contexts/ToastContext'
-import { CartItem, Customer } from '../../../shared/types'
+import type { CartItem, Customer } from '../../../shared/types'
 import productClickSoundUrl from '../../assets/sounds/product-click.mp3'
 
 interface StrukModalProps {

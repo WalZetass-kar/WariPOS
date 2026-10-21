@@ -7,13 +7,14 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {
+import type {
   AccountStatus,
   FeatureMap,
   LicenseClient,
   PlanInfo,
   PopupConfig,
-  UserInfo,
+  UserInfo} from './apiClient';
+import {
   getLicenseClient,
   secureStorage,
 } from './apiClient';

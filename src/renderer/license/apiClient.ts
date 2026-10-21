@@ -7,12 +7,13 @@
  * - Auto refresh access_token + dispatch event saat fitur terkunci
  */
 
-import axios, {
+import type {
   AxiosError,
   AxiosInstance,
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from 'axios';
+import axios from 'axios';
 
 // ============================================================
 // SECURE STORAGE

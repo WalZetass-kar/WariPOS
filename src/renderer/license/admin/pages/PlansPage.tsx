@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Trash2 } from 'lucide-react';
-import { AdminPlanRow, PlanFeatureRow, deletePlan, getPlanFeatures, listPlans, setPlanFeatures, updatePlan } from '../api';
+import type { AdminPlanRow, PlanFeatureRow} from '../api';
+import { deletePlan, getPlanFeatures, listPlans, setPlanFeatures, updatePlan } from '../api';
 import { Button, Modal, PageHeader } from '../components';
 
 export const PlansPage: React.FC = () => {

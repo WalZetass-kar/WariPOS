@@ -852,8 +852,8 @@ export class AiActionEngine {
     // 3. Tambah Produk Baru
     // Contoh: "tambah produk Kopi Hitam harga 15000 modal 8000 stok 50"
     if (text.includes('tambah produk') || text.includes('buat produk') || text.includes('daftarkan produk')) {
-      const hargaMatch = text.match(/harga(?:\s+jual)?\s*[:=]?\s*(\d[\d\.]*)/i)
-      const modalMatch = text.match(/modal(?:\s+beli)?\s*[:=]?\s*(\d[\d\.]*)/i)
+      const hargaMatch = text.match(/harga(?:\s+jual)?\s*[:=]?\s*(\d[\d.]*)/i)
+      const modalMatch = text.match(/modal(?:\s+beli)?\s*[:=]?\s*(\d[\d.]*)/i)
       const stokMatch = text.match(/stok\s*[:=]?\s*(\d+)/i)
 
       // Ambil nama produk antara "tambah produk" dan "harga"

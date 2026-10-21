@@ -4,7 +4,7 @@ import Button from '../../components/Button'
 import Input from '../../components/Input'
 import QuickAmountButtons from '../../components/QuickAmountButtons'
 import { formatRupiah } from '../../utils/format'
-import { CartItem } from '../../../shared/types'
+import type { CartItem } from '../../../shared/types'
 
 interface PaymentPanelProps {
   cart: CartItem[]

@@ -11,7 +11,7 @@ const TABLE_SQL = `
 `
 
 let dbPromise: Promise<any | null> | null = null
-let pendingWrites = new Map<string, string>()
+const pendingWrites = new Map<string, string>()
 let flushTimeout: any = null
 
 async function openDb() {

@@ -2,7 +2,7 @@ import React from 'react'
 import { ShoppingCart, Pause, Play, Bluetooth, Settings, Minus, Plus, Trash2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatRupiah } from '../../utils/format'
-import { CartItem } from '../../../shared/types'
+import type { CartItem } from '../../../shared/types'
 
 interface CartPanelProps {
   cart: CartItem[]

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Plus, CheckCircle, Trash2 } from 'lucide-react';
+import type {
+  AdminPlanRow, AdminUserRow, PaymentRow} from '../api';
 import {
-  AdminPlanRow, AdminUserRow, PaymentRow,
   approvePayment, createPayment, deletePayment, listPayments, listPlans, listUsers,
 } from '../api';
 import { Alert, Badge, Button, Field, Input, Modal, PageHeader, Select, Table, Td, Th } from '../components';

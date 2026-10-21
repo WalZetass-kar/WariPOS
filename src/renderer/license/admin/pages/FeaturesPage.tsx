@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { AdminFeatureRow, createFeature, listFeatures, updateFeature } from '../api';
+import type { AdminFeatureRow} from '../api';
+import { createFeature, listFeatures, updateFeature } from '../api';
 import { Alert, Badge, Button, Field, Input, Modal, PageHeader, Select, Table, Td, Th } from '../components';
 
 export const FeaturesPage: React.FC = () => {

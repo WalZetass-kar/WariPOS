@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle2, QrCode, X } from 'lucide-react'
 import { toDataURL } from 'qrcode'
 import { formatRupiah } from '../../utils/format'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
-import { QrisPayment } from './types'
+import type { QrisPayment } from './types'
 
 interface QrisModalProps {
   open: boolean

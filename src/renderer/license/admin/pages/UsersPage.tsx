@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, Copy, KeyRound, Plus, RefreshCw, RotateCcw, Trash2, UserX } from 'lucide-react';
+import type {
+  AdminUserRow, AdminPlanRow} from '../api';
 import {
-  AdminUserRow, AdminPlanRow,
   changeUserPlan, createUser, deleteUser, listPlans, listUsers, resetUserPassword, updateUser,
 } from '../api';
 import { Alert, Badge, Button, Field, Input, Modal, PageHeader, Select, Table, Td, Th } from '../components';
