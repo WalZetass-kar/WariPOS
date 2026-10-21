@@ -8,6 +8,8 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
+  attestations: write
 
 env:
   NODE_VERSION: '20'
@@ -31,6 +33,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: npm run lint
@@ -49,13 +52,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: npm run build:desktop
+      - name: Import code signing certificate
+        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $pfx = [System.IO.Path]::GetTempFileName() + '.pfx'
+          [System.IO.File]::WriteAllBytes($pfx, [System.Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          $thumbprint = (Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq $env:WINDOWS_CERTIFICATE_SUBJECT }).Thumbprint
+          "thumbprint=$thumbprint" >> $env:GITHUB_ENV
       - name: Build Windows (NSIS + Portable + ZIP)
         run: npx electron-builder --win nsis portable zip --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       - name: List Windows artifacts
         run: dir release\
         shell: cmd
@@ -82,6 +98,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - name: Install Linux build dependencies
@@ -108,6 +125,73 @@ jobs:
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────
+  # BUILD MACOS
+  # ─────────────────────────────────────────────────────
+  build-macos:
+    name: Build macOS
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: npm run build:desktop
+      - name: Build macOS (dmg + zip)
+        run: npx electron-builder --mac dmg zip --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            release/*.dmg
+            release/*.zip
+          retention-days: 5
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────────────
+  # BUILD IOS
+  # ─────────────────────────────────────────────────────
+  build-ios:
+    name: Build iOS
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: npm run build:ios
+      - name: Compile iOS app for the simulator
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Upload iOS build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: ios/App/build
+          retention-days: 3
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────────────
   # BUILD ANDROID
   # ─────────────────────────────────────────────────────
   build-android-debug:
@@ -119,6 +203,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - uses: actions/setup-java@v4
@@ -130,7 +215,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-debug
-          path: release/ZetassPOS.apk
+          path: release/*.apk
           retention-days: 5
           if-no-files-found: warn
 
@@ -143,42 +228,53 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-      - name: Generate release keystore
-        run: node scripts/prepare-android-signing.cjs
+      - name: Restore Android release keystore
+        shell: bash
+        run: |
+          mkdir -p .keys
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > .keys/zetass-pos-release.keystore
+          {
+            echo "ZETASS_POS_RELEASE_STORE_FILE=.keys/zetass-pos-release.keystore"
+            echo "ZETASS_POS_RELEASE_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            echo "ZETASS_POS_RELEASE_KEY_ALIAS=zetass-pos"
+            echo "ZETASS_POS_RELEASE_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}"
+          } >> .keys/android-release.env
+          chmod 600 .keys/android-release.env
       - name: Build Android Release APK
         run: npm run android:release
         env:
           ZETASS_POS_ALLOW_LAN_HTTP: 'false'
       - name: Rename release APK
-        run: mv release/ZetassPOS.apk release/ZetassPOS-v${{ needs.validate.outputs.version }}-release.apk || true
+        run: mv release/WariPOS.apk release/WariPOS-v${{ needs.validate.outputs.version }}-release.apk 2>/dev/null || mv release/ZetassPOS.apk release/WariPOS-v${{ needs.validate.outputs.version }}-release.apk || true
       - name: Build Android AAB
         run: npm run android:aab
         env:
           ZETASS_POS_ALLOW_LAN_HTTP: 'false'
       - name: Rename release AAB
-        run: mv release/ZetassPOS.aab release/ZetassPOS-v${{ needs.validate.outputs.version }}-release.aab || true
+        run: mv release/WariPOS.aab release/WariPOS-v${{ needs.validate.outputs.version }}-release.aab 2>/dev/null || mv release/ZetassPOS.aab release/WariPOS-v${{ needs.validate.outputs.version }}-release.aab || true
       - name: Upload Android Release
         uses: actions/upload-artifact@v4
         with:
           name: android-release
           path: |
-            release/ZetassPOS*.apk
-            release/ZetassPOS*.aab
+            release/*.apk
+            release/*.aab
           retention-days: 5
           if-no-files-found: warn
 
   # ─────────────────────────────────────────────────────
-  # CREATE GITHUB RELEASE
+  # SOFTWARE BILL OF MATERIALS
   # ─────────────────────────────────────────────────────
-  create-release:
-    name: Create GitHub Release
-    needs: [validate, build-windows, build-linux, build-android-debug, build-android-release]
+  sbom:
+    name: SBOM
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -187,6 +283,35 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Generate CycloneDX SBOM
+        run: |
+          pnpm dlx @cyclonedx/cyclonedx-npm --output-file sbom.json --spec-version 1.6 --omit dev
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 30
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────
+  # CREATE GITHUB RELEASE
+  # ─────────────────────────────────────────────────────
+  create-release:
+    name: Create GitHub Release
+    needs: [validate, build-windows, build-linux, build-macos, build-ios, build-android-debug, build-android-release, sbom]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
 
@@ -206,19 +331,14 @@ jobs:
         run: |
           echo "=== Release Artifacts ==="
           find release-artifacts -type f | sort
-          echo "=== Release Dir ==="
-          ls -la release/ 2>/dev/null || echo "No release/ dir"
           echo "=== SHA256 Checksums ==="
-          find release-artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.apk" -o -name "*.aab" \) -exec sha256sum {} \;
+          find release-artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.dmg" -o -name "*.apk" -o -name "*.aab" \) -exec sha256sum {} \;
 
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          # Copy from artifacts
-          find release-artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.apk" -o -name "*.aab" \) -exec cp {} release-assets/ \;
-          # Copy from release/ if exists
-          find release -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.apk" -o -name "*.aab" \) -exec cp {} release-assets/ \; 2>/dev/null || true
-          echo "=== Final release assets ==="
+          find release-artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.dmg" -o -name "*.apk" -o -name "*.aab" -o -name "sbom.json" \) -exec cp {} release-assets/ \;
+          find release -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.dmg" -o -name "*.apk" -o -name "*.aab" \) -exec cp {} release-assets/ \; 2>/dev/null || true
           ls -la release-assets/
 
       - name: Read release notes
@@ -229,14 +349,14 @@ jobs:
             cat release/RELEASE_NOTES.md >> "$GITHUB_OUTPUT"
             echo "EOF" >> "$GITHUB_OUTPUT"
           else
-            echo "body=## Zetass Pos ${{ needs.validate.outputs.version }}\n\nSee [CHANGELOG.md](CHANGELOG.md) for details." >> "$GITHUB_OUTPUT"
+            echo "body=## WariPOS ${{ needs.validate.outputs.version }}\n\nSee [CHANGELOG.md](CHANGELOG.md) for details." >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate.outputs.version }}
-          name: Zetass POS ${{ needs.validate.outputs.version }}
+          name: WariPOS ${{ needs.validate.outputs.version }}
           body: ${{ steps.notes.outputs.body }}
           draft: false
           prerelease: false
@@ -244,3 +364,12 @@ jobs:
           files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest build provenance
+        run: |
+          gh attestation create \
+            --repo "$GITHUB_REPOSITORY" \
+            --subject "${{ needs.validate.outputs.version }}" \
+            release-assets/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
