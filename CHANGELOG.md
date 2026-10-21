@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.0.4] - 2026-10-21
+
+### Fixed
+
+- Sesi tidak lagi terputus sendiri di Android. Nilai sesi yang terenkripsi dibaca
+  dari cache memori, dan pembacaan yang gagal tidak lagi dianggap sesi
+  kedaluwarsa.
+- Akses developer hanya dari peran di database. Pola nama pengguna, nama lengkap,
+  dan surel yang tertulis di kode dihapus, akun lama dipromosikan sekali lewat
+  migrasi.
+- Secret JWT dan kata sandi admin server lisensi dibangkitkan acak, production
+  menolak nilai lemah, kata sandi awal tidak lagi dicetak ke log, dan akun wajib
+  mengganti kata sandi sebelum memakai endpoint lain.
+- Token admin lisensi dienkripsi saat disimpan di database.
+- Kredensial Supabase tidak lagi tertulis di dalam kode sumber, semuanya
+  dibaca dari environment build.
+- Riwayat stok tercatat dengan nama kolom yang sama dengan skema, sebelumnya
+  setiap pencatatan gagal diam-diam.
+- Metode pembayaran dikonsolidasi ke satu tabel, baris dari tabel lama disalin
+  saat aplikasi start.
+
+### Added
+
+- Sinkronisasi multi perangkat dengan antrean mutasi dan aturan konflik eksplisit.
+  Transaksi bersifat append-only, stok dikirim sebagai delta, dan perubahan
+  dengan waktu yang sama dicatat sebagai konflik untuk ditinjau.
+- 36 berkas pengujian dengan 316 test, harness database SQLite in memory dengan
+  skema aplikasi, dan 2 skenario end-to-end alur kasir memakai Playwright.
+- Pipeline CI dengan audit dependency, CodeQL, coverage, build macOS dan iOS,
+  code signing Windows, SBOM CycloneDX, dan provenance.
+- Sakelar bahasa Indonesia dan English di Pengaturan Tampilan.
+- Lint berjalan tanpa galat pada pemasangan bersih.
+
+### Changed
+
+- Satu lockfile dan satu package manager, dependensi tidak terpakai dibuang,
+  folder paket yang usang dikeluarkan dari workspace, dan komponen yang tidak
+  lagi dirutekan dihapus.
+- Google Sheets memakai satu skrip Apps Script sebagai sumber kebenaran.
+
 ## [2.0.0] - 2026-07-22
 
 ### 🛠️ Improvements
