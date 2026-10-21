@@ -90,7 +90,7 @@ Proyek WariPOS dikembangkan menggunakan bahasa pemrograman dan teknologi modern 
 | Desktop Runtime | Electron 31 | Runtime native untuk sistem operasi Windows dan Linux |
 | Mobile Engine | Capacitor 8 | Jembatan native Android untuk akses kamera scanner dan storage |
 | Database Lokal | SQLite (`better-sqlite3` & `@capacitor-community/sqlite`) | Database lokal ACID tanpa perlu instalasi server database eksternal |
-| Testing | Vitest | Rangkaian pengujian unit dan integrasi otomatis (187 tests) |
+| Testing | Vitest + Playwright | 36 berkas pengujian (316 test) plus pengujian end-to-end alur kasir |
 | Ikon & Animasi | Lucide Icons & Framer Motion | Komponen visual dan transisi antarmuka |
 
 ---
@@ -160,9 +160,29 @@ pnpm dev:mobile
 Buka browser di alamat `http://localhost:5173`. Anda dapat menekan tombol `F12` lalu memilih mode **Device Toolbar** untuk melihat simulasi layar ponsel pintar atau tablet POS.
 
 ### Menjalankan Pengujian Otomatis (Unit Tests)
-Proyek WariPOS dilengkapi rangkaian 22 test suites (187 unit tests) untuk menguji integritas kalkulasi transaksi, validasi keamanan, dan format struk:
+Proyek WariPOS dilengkapi 36 berkas pengujian (316 test) untuk menguji integritas kalkulasi transaksi, validasi keamanan, proteksi sesi, aturan konflik sinkronisasi, dan format struk:
 ```bash
 pnpm test
+```
+
+Untuk melihat laporan cakupan beserta ambang batasnya:
+
+```bash
+pnpm test:coverage
+```
+
+### Menjalankan Pengujian End-to-End (Playwright)
+
+Alur kasir dari daftar akun trial, buka shift, sampai pembayaran tunai diuji otomatis memakai build web:
+
+```bash
+pnpm test:e2e
+```
+
+Perintah ini membangun aplikasi web, menjalankan Chromium, lalu menutup peramban sendiri. Butuh satu kali unduhan browser:
+
+```bash
+pnpm exec playwright install chromium
 ```
 
 ### Pengecekan Tipe Data TypeScript

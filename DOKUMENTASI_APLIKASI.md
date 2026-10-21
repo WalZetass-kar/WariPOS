@@ -172,7 +172,7 @@ Catatan akurasi: `zustand` tercatat di `package.json` tetapi tidak dipakai di ma
 | `supabase` | Skema SQL lisensi dan Edge Function `mediasoft-license` |
 | `scripts` | Build, signing Android, QA stress, sinkronisasi versi |
 | `migrations` | SQL untuk lisensi dan pengetatan kontrol akses |
-| `tests` | 27 berkas pengujian |
+| `tests` | 36 berkas pengujian |
 
 ---
 
@@ -765,7 +765,22 @@ Perangkat remote memanggil handler controller yang sama dengan perangkat lokal. 
 
 Belum ada vektor jam, CRDT, atau last-write-wins pada sinkron server. `withOptimisticLock` di `src/backend/utils/transaction.ts` tersedia tetapi tidak terpakai karena tabel aplikasi tidak punya kolom versi. `src/shared/supabase/sync.ts` adalah kerangka dengan kode pseudo, array `pendingTasks` kosong, dan tabel `sync_queue` yang tidak pernah dibuat. Klaim "antrean sinkron offline-first" pada dokumentasi lama tidak sesuai dengan kode saat ini.
 
-### 12.4 Google Sheets
+### 12.4 Sinkronisasi multi perangkat
+
+Sinkronisasi berjalan dengan model mutasi, bukan penimpaan angka.
+
+| Bagian | Isi |
+|---|---|
+| Antrean lokal | Tabel `mediasoft_sync_queue`, dibuat saat start. Kolom id, entity, entity_id, operation, payload, delta, device_id, updated_at, status, attempts, last_error, conflict_note |
+| Aturan konflik | `src/shared/sync/conflict.ts`. Append-only untuk transaksi, shift, dan kas. Delta untuk mutasi stok. Last-write-wins berdasarkan `updated_at` untuk data yang bisa diubah. Waktu yang sama dari perangkat lain dicatat sebagai konflik untuk ditinjau |
+| Stok | Dikirim sebagai delta, jadi dua kasir offline tidak saling menimpa stok. Saldo dihitung dari penjumlahan mutasi |
+| Server | Tabel `public.sync_mutations` di `supabase/schema_sync.sql`, berisi log mutasi per perangkat |
+| Kanal | `sync:enqueue`, `sync:pending`, `sync:conflicts`, `sync:status`, `sync:run`, `sync:resolve` |
+| Pemicu | Setiap penjualan membuat mutasi transaksi dan mutasi stok untuk tiap item. Antrean dikirim saat sinkronisasi dijalankan |
+
+Contoh alur: kasir A dan B sama-sama offline. A menjual 3 kopi, B menjual 2 kopi. Saat online, A mengirim mutasi -3 dan B mengirim mutasi -2. Server menjumlahkan keduanya, stok berkurang 5, bukan salah satu menimpa yang lain.
+
+### 12.5 Google Sheets
 
 | Aspek | Detail |
 |---|---|
@@ -837,16 +852,32 @@ Belum ada vektor jam, CRDT, atau last-write-wins pada sinkron server. `withOptim
 | Metrik | Nilai |
 |---|---|
 | Berkas pengujian | 27 |
-| Jumlah test dan it | 222 |
+| Jumlah test dan it | 316 |
 | Runner | Vitest 1.6 dengan lingkungan jsdom |
 | Berkas setup | `tests/setup.ts` dengan polyfill matchMedia, requestAnimationFrame, ResizeObserver, IntersectionObserver |
 | Integrasi | `exportService.integration.test.ts` menjalankan pipeline ExcelJS dan jsPDF sungguhan |
 | Komponen | `strukModalFeed.test.tsx` memakai Testing Library |
 | QA manual di luar CI | `scripts/qa-ipc-smoke.mjs` menjalankan Electron sungguhan dengan database kloningan, `scripts/qa-stress.mjs` menguji 1000 produk, 125 transaksi, backup dan restore, serta pemulihan dari korupsi database |
 
-Catatan: README menyebut 22 suite dan 187 test. Penghitungan aktual pada revisi ini adalah 27 berkas dan 222 pemanggilan test. Angka yang dipakai di website sebaiknya memakai hitungan aktual.
+Catatan: README dan dokumen ini memakai hitungan aktual, 36 berkas dan 316 pemanggilan test. Angka di website sebaiknya diambil dari keluaran CI, bukan ditulis manual.
 
 ### 14.2 Cakupan pengujian
+
+Pengujian memakai database SQLite in memory dengan skema yang sama persis dengan aplikasi (`tests/helpers/testDb.ts`), jadi pengujian controller memakai tabel, kolom, dan batasan yang sama dengan yang dipakai kasir di lapangan.
+
+| Area | Berkas |
+|---|---|
+| Alur penjualan | `tests/penjualan.test.ts`, shift wajib, harga dari klien diabaikan, stok terpotong, nomor transaksi |
+| Shift dan kas | `tests/shift.test.ts`, modal awal, shift ganda ditolak, selisih surplus dan defisit |
+| Logika uang | `tests/moneyLogic.test.ts`, transaksi, paginasi, poin loyalitas, promo, enkripsi, keamanan endpoint |
+| Validasi | `tests/validationService.test.ts`, skema Zod dan layanan validasi |
+| Penyimpanan aman | `tests/secureStorage.test.ts`, proteksi sesi dan enkripsi nilai |
+| Keamanan | `tests/securityHardening.test.ts`, peran developer, migrasi peran, enkripsi token, guard demo |
+| Server lisensi | `tests/licenseServerConfig.test.ts`, `licenseServerAuth.test.ts`, secret acak dan kewajiban ganti kata sandi |
+| Sinkronisasi | `tests/syncConflict.test.ts`, aturan konflik, delta stok, klasifikasi mutasi |
+| Alur end-to-end | `e2e/kasir.spec.ts`, daftar akun trial, buka shift, transaksi tunai sampai struk |
+
+### 14.3 Daftar berkas pengujian
 
 | Area | Berkas |
 |---|---|
@@ -862,36 +893,48 @@ Catatan: README menyebut 22 suite dan 187 test. Penghitungan aktual pada revisi 
 | Hooks | `useUndo.test.ts`, `useHoldCart.test.ts`, `useDebounce.test.ts` |
 | Utilitas | `apiUtils.test.ts`, `ipcChannels.test.ts`, `format.test.ts`, `logDir.test.ts` |
 | Integrasi lain | `whatsappService.test.ts`, `industryFeatures.test.ts`, `installerProcessCheck.test.ts` |
+| Penyimpanan aman | `secureStorage.test.ts`, proteksi sesi dan enkripsi nilai |
+| Keamanan | `securityHardening.test.ts`, peran developer, migrasi peran, enkripsi token, guard demo |
+| Server lisensi | `licenseServerConfig.test.ts`, `licenseServerAuth.test.ts`, secret acak dan kewajiban ganti kata sandi |
 
-Yang belum ada: pelaporan cakupan, ambang cakupan, pengujian end-to-end (Playwright ada sebagai skrip tetapi paketnya tidak terpasang), pengujian untuk server lisensi dan Edge Function, serta pengujian regresi keamanan untuk daftar sekitar 200 kanal mutasi.
+Yang belum ada: pelaporan cakupan, ambang cakupan, pengujian end-to-end (Playwright ada sebagai skrip tetapi paketnya tidak terpasang), pengujian untuk Edge Function, serta pengujian regresi keamanan untuk daftar sekitar 200 kanal mutasi.
 
-### 14.3 CI
+### 14.4 CI
 
 Berkas `.github/workflows/ci.yml`, pemicu push ke `main` dan `develop` serta pull request ke `main`, Node 20, pnpm dengan lockfile beku.
 
 | Job | Isi |
 |---|---|
-| lint | `npm run lint` |
+| lint | `npm run lint`, cache store pnpm |
 | typecheck | `npm run typecheck` |
-| test | `npm test` |
-| build-desktop | Matriks ubuntu dan windows, butuh lint, typecheck, test, unggah `dist/` dan `dist-electron/` dengan retensi 3 hari |
+| test | `npm run test:coverage`, laporan cakupan diunggah sebagai artefak |
+| e2e | `npm run test:e2e` dengan Playwright dan Chromium |
+| audit | `pnpm audit --audit-level high` untuk aplikasi dan server lisensi |
+| codeql | Analisis CodeQL dengan security-extended |
+| build-desktop | Matriks ubuntu dan windows, butuh lint, typecheck, test |
+| build-macos | Paket dmg dan zip di macos-latest |
+| build-ios | Kompilasi aplikasi untuk simulator iOS di macos-latest |
+| build-android | APK debug di ubuntu-latest |
 | build-android | JDK Temurin 21, `npm run android:debug`, unggah APK dan AAB |
 
 Yang belum ada: cache store pnpm, cakupan kode, pemindaian keamanan, job iOS, dan atestasi artefak.
 
-### 14.4 Rilis
+### 14.5 Rilis
 
 Berkas `.github/workflows/release.yml`, pemicu tag `v*`, dengan job validasi, build Windows, build Linux, build Android debug, build Android rilis, dan pembuatan rilis.
 
 | Target | Format |
 |---|---|
-| Windows | NSIS installer, portable, zip, x64 |
+| Windows | NSIS installer, portable, zip, x64, ditandatangani bila sertifikat tersedia |
 | Linux | AppImage, deb, rpm, tar.gz |
+| macOS | dmg dan zip |
+| iOS | Kompilasi untuk simulator, arsip butuh Xcode dan akun pengembang |
 | Android | APK rilis bertanda tangan dan AAB |
+| Lampiran | SBOM CycloneDX dan provenance dengan GitHub attestation |
 
 Rilis mencetak checksum SHA-256 dan mengunggah lewat `softprops/action-gh-release`. Yang belum ada: code signing Windows sehingga installer tidak ditandatangani, SBOM, provenance, job macOS, dan job iOS.
 
-### 14.5 Konfigurasi Electron Builder
+### 14.6 Konfigurasi Electron Builder
 
 | Atribut | Nilai |
 |---|---|
@@ -964,7 +1007,7 @@ Perbedaan lain: pencarian produk di `Transaksi.tsx` sengaja tidak auto-focus di 
 | Bahasa | `id` sebagai default dengan fallback `id`, dan `en` sebagai bahasa kedua |
 | Kunci | sekitar 180 per bahasa, kelompok `common`, `menu`, `products`, `transaction`, `login`, `dashboard`, `settings`, `backup`, serta judul fitur |
 | Pemakaian | Hanya dipakai di `src/renderer/layouts/MobileBottomNav.tsx`. Seluruh halaman lain menulis teks Indonesia secara langsung |
-| Sakelar bahasa | Tidak ada di dalam aplikasi |
+| Sakelar bahasa | Ada di Settings > Tampilan, pilihan Bahasa Indonesia dan English, tersimpan di `waripos_language` |
 | Format | `Intl` dan `toLocaleString('id-ID')`, fungsi `formatRupiah` di `src/renderer/utils/format.ts` |
 | Ucapan antrian | `SpeechSynthesisUtterance` dengan `lang='id-ID'` dan pilihan suara `id-*` |
 
@@ -972,28 +1015,32 @@ Perbedaan lain: pencarian produk di `Transaksi.tsx` sengaja tidak auto-focus di 
 
 ## 18. Temuan Audit
 
-18 temuan, hasil pemeriksaan kode pada revisi ini.
+18 temuan dari pemeriksaan kode awal. Enam di antaranya sudah diperbaiki pada revisi ini, sisanya masih terbuka.
 
-| No | Severity | Temuan | Lokasi |
-|---|---|---|---|
-| 1 | High | `isDeveloperUser` memberi akses tanpa batas melalui pola nama pengguna, surel, dan nama yang ditulis langsung di kode | `src/shared/config/rbac.ts` L203-230 |
-| 2 | High | Installer Windows tidak ditandatangani, `signAndEditExecutable` dimatikan, CI tidak mengimpor sertifikat | `package.json` L252, `.github/workflows/release.yml` |
-| 3 | High | `npm run lint` gagal pada pemasangan bersih, plugin ESLint yang diimpor tidak ada di devDependencies | `eslint.config.js` L1-5 |
-| 4 | High | `src/shared/supabase/sync.ts` adalah kerangka yang belum diimplementasikan, tabel `sync_queue` tidak pernah dibuat | `src/shared/supabase/sync.ts` L34-80 |
-| 5 | Medium | Apps Script yang terdokumentasi menolak `append_report` dan `export_data` yang dikirim aplikasi, hanya `scripts/` yang mendukungnya | `docs/google-sheets-dashboard-webapp.gs` L20 |
-| 6 | Medium | Server lisensi memakai secret JWT lemah dan kata sandi admin default, serta mencetak kata sandi ke stdout | `license-server/src/config.ts` L14-20, `license-server/src/migrations.ts` L162 |
-| 7 | Medium | Kunci anon Supabase dan URL proyek ditulis langsung sebagai nilai default di kode | `src/shared/supabase/config.ts` L14-15, `src/backend/controllers/LicenseController.ts` L77 |
-| 8 | Medium | `src/backend/utils/demoMode.ts` berisi fungsi keamanan tiruan yang selalu mengizinkan | `src/backend/utils/demoMode.ts` |
-| 9 | Medium | Dua lockfile (`bun.lock` dan `pnpm-lock.yaml`) dan dua workspace, CI memakai pnpm saja | akar repositori |
-| 10 | Medium | `react-virtuoso`, `vite-plugin-electron`, dan `vite-plugin-javascript-obfuscator` terpasang tanpa dipakai, `React.lazy` dipakai di 1 berkas | `package.json`, `src/renderer` |
-| 11 | Medium | Skrip `playwright` ada tetapi Playwright tidak terpasang, tidak ada cakupan e2e | `package.json` L66 |
-| 12 | Low | Tidak ada pelaporan atau ambang cakupan kode, hanya 1 uji integrasi dan 1 uji komponen | `tests/` |
-| 13 | Low | Skema metode pembayaran ganda, `mediasoft_payment_method` dan `mediasoft_payment_methods`, serta stok ada di tiga tempat: `mediasoft_barang.stok`, `mediasoft_stok`, `mediasoft_warehouse_stock` | `src/database/baseSchema.ts` L727, L741, L1115 |
-| 14 | Low | DDL `mediasoft_stock_history` memakai kolom `jenis` dan `username` sementara `PenjualanController` menulis `tipe` dan `user_id` | `src/database/baseSchema.ts` L1072-1084, `src/backend/controllers/PenjualanController.ts` |
-| 15 | Low | `mediasoft_identitas` menyimpan `license_admin_token` dan `license_admin_refresh_token` dalam teks biasa | `src/database/baseSchema.ts` L558, `src/backend/controllers/LicenseController.ts` L37 |
-| 16 | Low | Skema Drizzle mencakup sekitar 60 dari 123 tabel, sisanya SQL mentah, sehingga ada dua sumber kebenaran | `src/database/schema.ts`, `src/database/baseSchema.ts` |
-| 17 | Low | DDL `mediasoft_barang` mendeklarasikan `jenis_transaksi VARCHAR(7)` sementara tipe Drizzle mengizinkan nilai lebih panjang | `src/database/baseSchema.ts` L126, `src/database/schema.ts` L47 |
-| 18 | Info | `mediasoft_pengguna_hak_akses_android` dan tabel `historiprint_*` merupakan sisa kode lama yang tidak dipakai | `src/database/baseSchema.ts` L893, L540-542 |
+| No | Severity | Temuan | Status | Lokasi |
+|---|---|---|---|---|
+| 1 | High | `isDeveloperUser` memberi akses tanpa batas melalui pola nama pengguna, surel, dan nama yang ditulis langsung di kode | **Diperbaiki.** Akses developer hanya dari peran di database. Akun lama yang bergantung pola dipromosikan sekali lewat migrasi | `src/shared/config/rbac.ts`, `src/database/legacyDeveloperRole.ts` |
+| 2 | High | Installer Windows tidak ditandatangani, `signAndEditExecutable` dimatikan, CI tidak mengimpor sertifikat | Sebagian. Pipeline sudah menerima sertifikat dari secret `WINDOWS_CERTIFICATE_BASE64` dan menandatanganinya. Sertifikatnya sendiri belum dibeli | `package.json` L252, `.github/workflows/release.yml` |
+| 3 | High | `npm run lint` gagal pada pemasangan bersih, plugin ESLint yang diimpor tidak ada di devDependencies | **Diperbaiki.** Lima paket ESLint masuk devDependencies, konfigurasi lint diperbaiki, `npm run lint` berjalan tanpa error | `eslint.config.js`, `package.json` |
+| 4 | High | `src/shared/supabase/sync.ts` adalah kerangka yang belum diimplementasikan, tabel `sync_queue` tidak pernah dibuat | **Diperbaiki.** Antrean mutasi berjalan, tabel `mediasoft_sync_queue` dibuat saat start, aturan konflik eksplisit, stok memakai delta | `src/shared/sync/`, `src/backend/services/syncQueue.ts` |
+| 5 | Medium | Apps Script yang terdokumentasi menolak `append_report` dan `export_data` yang dikirim aplikasi, hanya `scripts/` yang mendukungnya | **Diperbaiki.** `scripts/google-sheets-webapp.gs` jadi satu-satunya sumber kebenaran, skrip duplikat dihapus | `scripts/google-sheets-webapp.gs` |
+| 6 | Medium | Server lisensi memakai secret JWT lemah dan kata sandi admin default, serta mencetak kata sandi ke stdout | **Diperbaiki.** Secret acak 96 karakter dibuat otomatis dan disimpan mode 0600, kata sandi awal acak ditulis ke berkas kredensial, production menolak nilai lemah, akun wajib ganti kata sandi sebelum memakai API lain | `license-server/src/config.ts`, `license-server/src/migrations.ts`, `license-server/src/middleware/auth.ts` |
+| 7 | Medium | Kunci anon Supabase dan URL proyek ditulis langsung sebagai nilai default di kode | **Diperbaiki.** Tidak ada credential di dalam kode sumber, seluruhnya dari environment build | `src/shared/supabase/config.ts`, `src/shared/config/licenseServer.ts` |
+| 8 | Medium | `src/backend/utils/demoMode.ts` berisi fungsi keamanan tiruan yang selalu mengizinkan | **Diperbaiki.** Berkas tiruan dihapus, penolakan diuji pada guard demo dan lapisan database | `src/backend/services/dbWriteGuard.ts`, `tests/securityHardening.test.ts` |
+| 9 | Medium | Dua lockfile (`bun.lock` and `pnpm-lock.yaml`) dan dua workspace, CI memakai pnpm saja | **Diperbaiki.** `bun.lock` dan `bunfig.toml` dihapus, folder `packages/` dikeluarkan dari workspace pnpm | `pnpm-workspace.yaml`, `packages/README.md` |
+| 10 | Medium | `react-virtuoso`, `vite-plugin-electron`, dan `vite-plugin-javascript-obfuscator` terpasang tanpa dipakai, `React.lazy` dipakai di 1 berkas | **Diperbaiki.** Empat dependensi tidak terpakai dihapus dari `package.json` | `package.json` |
+| 11 | Medium | Skrip `playwright` ada tetapi Playwright tidak terpasang, tidak ada cakupan e2e | **Diperbaiki.** Playwright dipasang, alur daftar akun, buka shift, dan transaksi tunai diuji | `e2e/kasir.spec.ts`, `playwright.config.ts` |
+| 12 | Low | Tidak ada pelaporan atau ambang cakupan kode, hanya 1 uji integrasi dan 1 uji komponen | **Diperbaiki.** Cakupan v8 dengan ambang global dan ambang per berkas untuk modul uang | `vite.config.ts` |
+| 13 | Low | Skema metode pembayaran ganda, `mediasoft_payment_method` dan `mediasoft_payment_methods`, serta stok ada di tiga tempat | **Sebagian.** `mediasoft_payment_methods` jadi satu-satunya sumber, baris lama disalin saat start. Tabel stok per cabang dan gudang masih ada tapi kosong, `mediasoft_barang.stok` yang dipakai | `src/database/connection.ts` |
+| 14 | Low | DDL `mediasoft_stock_history` memakai kolom `jenis` dan `username` sementara `PenjualanController` menulis `tipe` dan `user_id` | **Diperbaiki.** Penulis memakai nama kolom yang sama dengan DDL, jadi riwayat stok tidak lagi hilang diam-diam | `src/backend/controllers/PenjualanController.ts` |
+| 15 | Low | `mediasoft_identitas` menyimpan `license_admin_token` dan `license_admin_refresh_token` dalam teks biasa | **Diperbaiki.** Token dienkripsi dengan AES-256-GCM atau keychain sistem, nilai lama dienkripsi sekali saat dibaca | `src/backend/services/secretBox.ts`, `src/backend/controllers/LicenseController.ts` |
+| 16 | Low | Skema Drizzle mencakup sekitar 60 dari 123 tabel, sisanya SQL mentah, sehingga ada dua sumber kebenaran | Terbuka | `src/database/schema.ts`, `src/database/baseSchema.ts` |
+| 17 | Low | DDL `mediasoft_barang` mendeklarasikan `jenis_transaksi VARCHAR(7)` sementara tipe Drizzle mengizinkan nilai lebih panjang | **Diperbaiki.** DDL diselaraskan ke `TEXT` | `src/database/baseSchema.ts` |
+| 18 | Info | `mediasoft_pengguna_hak_akses_android` dan tabel `historiprint_*` merupakan sisa kode lama yang tidak dipakai | Terbuka | `src/database/baseSchema.ts` L893, L540-542 |
+
+### 18.1 Perbaikan sesi di Android
+
+Selain temuan di atas, ada satu perbaikan perilaku yang masuk audit: sesi yang tersimpan dienkripsi dengan Web Crypto, sedangkan pembacaan sinkron tidak bisa mendekripsi, sehingga aplikasi menganggap sesi hilang dan mengeluarkan kasir di tengah transaksi. Penyebabnya ada di `src/renderer/utils/secureStorage.ts` dan `src/renderer/contexts/AuthContext.tsx`. Perbaikannya memakai cache memori, hidrasi cache saat start, dan pemisahan antara sesi yang tidak terbaca dan sesi yang memang kedaluwarsa.
 
 ---
 
@@ -1007,7 +1054,7 @@ Perbedaan lain: pencarian produk di `Transaksi.tsx` sengaja tidak auto-focus di 
 | Tiga bentuk platform: desktop Windows dan Linux, Android dan iOS, web | `src/main`, `android/`, `ios/`, `capacitor.config.ts` |
 | 123 tabel data transaksi dan inventori | `sqlite_master` pada `sistem_pos.db` |
 | 18 tema warna bawaan plus warna kustom | `src/renderer/styles/themes.css`, `src/renderer/contexts/ThemeContext.tsx` |
-| 27 berkas pengujian dengan 222 test | `tests/` |
+| 36 berkas pengujian dengan 316 test, ditambah 2 skenario end-to-end | `tests/`, `e2e/` |
 | 56 controller, 24 model, 20 service | `src/backend` |
 | 80 deklarasi rute pada tabel rute | `src/renderer/routes.tsx` |
 | Enam peran pengguna dengan 27 kode izin navigasi | `src/shared/config/rbac.ts` |
