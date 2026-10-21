@@ -12,13 +12,14 @@ import { supabase, isSupabaseConfigured } from '../../shared/supabase/config.js'
 import { tryCloudSignIn } from '../../shared/supabase/auth.js'
 import { isLicenseSessionExpiredResult } from '../../shared/licenseSession.js'
 import { verifyPassword, encryptPassword } from '../services/crypto.js'
+import { encryptSecret, decryptSecret, isPlainSecret } from '../services/secretBox.js'
 import { getKnownPlanDefaults } from '../../shared/planDefaults.js'
 import { isDeveloperUser } from '../../shared/config/rbac.js'
 
 type ApiResult<T = unknown> = { success: boolean; data?: T; message?: string }
 
 function getPublicLicenseUrl(): string | null {
-  return process.env.VITE_SUPABASE_URL || 'https://azhkvmkmimepmflzqqty.supabase.co'
+  return process.env.VITE_SUPABASE_URL || null
 }
 
 function getConfig(): { url: string; token: string; refreshToken?: string | null } | null {
@@ -27,22 +28,38 @@ function getConfig(): { url: string; token: string; refreshToken?: string | null
       .prepare(`SELECT license_server_url, license_admin_token, license_admin_refresh_token FROM mediasoft_identitas LIMIT 1`)
       .get() as { license_server_url?: string; license_admin_token?: string; license_admin_refresh_token?: string | null } | undefined
     if (!row?.license_server_url) return { url: getPublicLicenseUrl() || '', token: '', refreshToken: null }
-    return { url: row.license_server_url.replace(/\/$/, ''), token: row.license_admin_token || '', refreshToken: row.license_admin_refresh_token ?? null }
+
+    const token = decryptSecret(row.license_admin_token || '')
+    const refreshToken = row.license_admin_refresh_token ? decryptSecret(row.license_admin_refresh_token) : null
+
+    // Values written by an older version are still plain text, encrypt them once.
+    if (isPlainSecret(row.license_admin_token || '') || (row.license_admin_refresh_token && isPlainSecret(row.license_admin_refresh_token))) {
+      try {
+        sqlite.prepare(`UPDATE mediasoft_identitas SET license_admin_token = ?, license_admin_refresh_token = ? WHERE kode = 1`)
+          .run(encryptSecret(token), refreshToken ? encryptSecret(refreshToken) : null)
+      } catch (err: any) {
+        console.warn('[License] Gagal mengenkripsi token admin yang tersimpan:', err?.message)
+      }
+    }
+
+    return { url: row.license_server_url.replace(/\/$/, ''), token, refreshToken }
   } catch {
     return { url: getPublicLicenseUrl() || '', token: '', refreshToken: null }
   }
 }
 
 function saveConfig(url: string, token: string, refreshToken?: string | null) {
+  const encryptedToken = encryptSecret(token)
+  const encryptedRefresh = refreshToken ? encryptSecret(refreshToken) : null
   const run = sqlite.transaction(() => {
     const existing = sqlite.prepare(`SELECT kode FROM mediasoft_identitas LIMIT 1`).get() as { kode?: number } | undefined
     if (existing?.kode) {
       sqlite.prepare(`UPDATE mediasoft_identitas SET license_server_url = ?, license_admin_token = ?, license_admin_refresh_token = COALESCE(?, license_admin_refresh_token) WHERE kode = ?`)
-        .run(url, token, refreshToken ?? null, existing.kode)
+        .run(url, encryptedToken, encryptedRefresh, existing.kode)
       return
     }
     sqlite.prepare(`INSERT INTO mediasoft_identitas (kode, license_server_url, license_admin_token, license_admin_refresh_token) VALUES (1, ?, ?, ?)`)
-      .run(url, token, refreshToken ?? null)
+      .run(url, encryptedToken, encryptedRefresh)
   })
   run()
 }
@@ -75,17 +92,19 @@ async function request<T = unknown>(method: string, path: string, token: string,
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10000)
 
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4'
-  const authHeader = (token && token.trim()) ? `Bearer ${token.trim()}` : `Bearer ${anonKey}`
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || ''
+  const authHeader = (token && token.trim()) ? `Bearer ${token.trim()}` : (anonKey ? `Bearer ${anonKey}` : '')
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (anonKey) headers.apikey = anonKey
+    if (authHeader) headers.Authorization = authHeader
+
     const res = await fetch(fullUrl, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': anonKey,
-        'Authorization': authHeader,
-      },
+      headers,
       body: payload,
       signal: controller.signal,
     })
@@ -94,13 +113,14 @@ async function request<T = unknown>(method: string, path: string, token: string,
     try {
       const parsed = JSON.parse(text) as any
       if (parsed && typeof parsed === 'object' && parsed.message && typeof parsed.message === 'string' && parsed.message.toLowerCase().includes('jwt')) {
+        const retryHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (anonKey) {
+          retryHeaders.apikey = anonKey
+          retryHeaders.Authorization = `Bearer ${anonKey}`
+        }
         const retryRes = await fetch(fullUrl, {
           method,
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': anonKey,
-            'Authorization': `Bearer ${anonKey}`,
-          },
+          headers: retryHeaders,
           body: payload,
         })
         const retryText = await retryRes.text()
@@ -115,7 +135,7 @@ async function request<T = unknown>(method: string, path: string, token: string,
     }
   } catch (e: any) {
     if (e.name === 'AbortError') {
-      throw new Error(`Timeout: server tidak merespons dalam 10 detik`)
+      throw new Error(`Timeout: server tidak merespons dalam 10 detik`, { cause: e })
     }
     const causeMsg = (e.cause && typeof e.cause === 'object' ? (e.cause as any).message : null) || e.message
     let hostname = ''
@@ -123,7 +143,7 @@ async function request<T = unknown>(method: string, path: string, token: string,
     const localHint = ['localhost', '127.0.0.1', '::1'].includes(hostname)
       ? '. Untuk dev lokal, jalankan: npm --prefix license-server run dev'
       : ''
-    throw new Error(`Tidak dapat terhubung ke ${hostname}${localHint} — ${causeMsg}`)
+    throw new Error(`Tidak dapat terhubung ke ${hostname}${localHint} — ${causeMsg}`, { cause: e })
   } finally {
     clearTimeout(timeout)
   }

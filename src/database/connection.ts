@@ -6,6 +6,8 @@ import fs from 'fs'
 import { app } from 'electron'
 import * as schema from './schema.js'
 import { BASE_SCHEMA_SQL, BASE_SEED_SQL } from './baseSchema.js'
+import { migrateLegacyDeveloperRoles } from './legacyDeveloperRole.js'
+import { ensureSyncQueueTable } from './syncQueueSchema.js'
 
 function copyBundledDatabaseIfNeeded(targetPath: string) {
   if (fs.existsSync(targetPath)) return
@@ -109,7 +111,7 @@ function runMigrations() {
           const message = err instanceof Error ? err.message : String(err)
           console.error(' Failed to add password_hash_type column:', message)
           console.error('Please close all database connections and restart the app')
-          throw new Error('Database migration failed: password_hash_type column is required but could not be added')
+          throw new Error('Database migration failed: password_hash_type column is required but could not be added', { cause: err })
         }
       }
     } else {
@@ -668,6 +670,64 @@ runMigrations()
   }
   if (!names.includes('license_admin_refresh_token')) {
     sqlite.exec(`ALTER TABLE mediasoft_identitas ADD COLUMN license_admin_refresh_token TEXT`)
+  }
+})()
+
+// Promote the accounts that used to rely on the identity pattern to the
+// developer role, so the access is decided by the database from now on.
+;(function promoteLegacyDeveloperRoles() {
+  migrateLegacyDeveloperRoles(sqlite)
+})()
+
+// Antrean mutasi untuk sinkronisasi antar perangkat.
+;(function createSyncQueueTable() {
+  ensureSyncQueueTable(sqlite)
+})()
+
+// Konsolidasi skema yang sebelumnya ganda.
+// Tabel mediasoft_payment_method (tunggal) adalah sisa versi lama, aplikasi
+// memakai mediasoft_payment_methods (jamak) sebagai satu-satunya sumber data.
+;(function consolidatePaymentMethods() {
+  try {
+    const legacyExists = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mediasoft_payment_method'")
+      .get()
+    if (!legacyExists) return
+
+    const currentExists = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mediasoft_payment_methods'")
+      .get()
+    if (!currentExists) return
+
+    const rows = sqlite
+      .prepare(`SELECT nama_method, jenis, status FROM mediasoft_payment_method`)
+      .all() as Array<{ nama_method?: string; jenis?: string; status?: string }>
+
+    const typeOf: Record<string, string> = {
+      CASH: 'TUNAI',
+      CARD: 'KARTU',
+      EWALLET: 'EWALLET',
+      QRIS: 'QRIS',
+      TRANSFER: 'TRANSFER',
+      CREDIT: 'TUNAI',
+    }
+
+    for (const row of rows) {
+      const type = typeOf[String(row.jenis ?? '').toUpperCase()] ?? 'TUNAI'
+      const exists = sqlite
+        .prepare(`SELECT id FROM mediasoft_payment_methods WHERE type = ? LIMIT 1`)
+        .get(type)
+      if (exists) continue
+
+      sqlite
+        .prepare(
+          `INSERT INTO mediasoft_payment_methods (name, type, is_active, created_at)
+           VALUES (?, ?, ?, datetime('now'))`,
+        )
+        .run(String(row.nama_method ?? type), type, row.status === 'Nonaktif' ? 0 : 1)
+    }
+  } catch (err: any) {
+    console.warn('[Database] Konsolidasi metode pembayaran dilewati:', err?.message)
   }
 })()
 

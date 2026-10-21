@@ -45,6 +45,8 @@ import {
 import { formatRupiah } from './format'
 import { collectAuthDeviceInfo } from './authDevice'
 import { secureStorage } from './secureStorage'
+import { createMutation } from '../../shared/sync/queue'
+import { pushMutations } from '../../shared/supabase/sync'
 import { getPersistentItem, setPersistentItem } from './sqlitePersistence'
 
 type AnyRecord = Record<string, any>
@@ -128,12 +130,16 @@ interface MobileStore {
   accounts?: AnyRecord[]
   journalEntries?: AnyRecord[]
   dailyNotes?: AnyRecord[]
+  syncQueue?: {
+    mutations: AnyRecord[]
+    conflicts: Record<string, string>
+  }
 }
 
 const STORAGE_KEY = 'zetass-pos-android-store-v3'
 const AI_API_KEY_STORAGE_KEY = 'integrations.ai_api_key'
 const STORE_VERSION = 3
-const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
+const DEFAULT_LICENSE_SERVER_URL = ''
 const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const REMOTE_READ_FALLBACK_CHANNELS = new Set([
@@ -336,6 +342,7 @@ function createDefaultStore(): MobileStore {
 
   return {
     version: STORE_VERSION,
+    syncQueue: { mutations: [], conflicts: {} },
     syncClient: {
       enabled: false,
       baseUrl: '',
@@ -606,6 +613,10 @@ function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
     strukSettings: { ...base.strukSettings, ...(value.strukSettings ?? {}) },
     settings: undefined,
     counters: { ...base.counters, ...(value.counters ?? {}) },
+    syncQueue: {
+      mutations: value.syncQueue?.mutations ?? base.syncQueue?.mutations ?? [],
+      conflicts: value.syncQueue?.conflicts ?? base.syncQueue?.conflicts ?? {},
+    },
     penjualanDetails: value.penjualanDetails ?? base.penjualanDetails,
     debtPayments: value.debtPayments ?? base.debtPayments,
     stockOpnameItems: value.stockOpnameItems ?? base.stockOpnameItems,
@@ -1359,7 +1370,7 @@ async function mobileLicenseRequest<T = unknown>(method: string, path: string, b
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 10000)
 
-  const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4'
+  const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || ''
 
   try {
     const response = await fetch(`${endpoint}${path}`, {
@@ -1408,13 +1419,36 @@ async function mobileAdminLicenseRequest<T = unknown>(method: string, path: stri
   return result
 }
 
-function mobileLicenseErrorCode(result: IpcResponse<any>): string {
+function mobileLicenseErrorCode(result: IpcResponse<any> | null | undefined): string {
   return String(
-    result.error_code ||
-    result.data?.error_code ||
-    result.data?.status ||
+    result?.error_code ||
+    result?.data?.error_code ||
+    result?.data?.status ||
     ''
   ).toUpperCase()
+}
+
+/**
+ * Bedakan kegagalan yang berarti server tidak terjangkau dari penolakan
+ * yang memang disengaja. Keduanya tidak boleh diperlakukan sama, trial
+ * lokal harus tetap bisa dipakai saat perangkat offline.
+ */
+export function isRemoteUnavailable(result: IpcResponse<any> | null | undefined): boolean {
+  const code = mobileLicenseErrorCode(result)
+  if (['NO_ENDPOINT', 'OFFLINE', 'TIMEOUT', 'NETWORK_ERROR', 'SERVICE_UNAVAILABLE'].includes(code)) {
+    return true
+  }
+
+  const message = String(result?.message ?? '').toLowerCase()
+  return message.includes('tidak dapat terhubung')
+    || message.includes('tidak dikonfigurasi')
+    || message.includes('timeout')
+    || message.includes('offline')
+    || message.includes('network')
+    || message.includes('failed to fetch')
+    || message.includes('503')
+    || message.includes('502')
+    || message.includes('500')
 }
 
 function dispatchMobileLicensePopup(result: IpcResponse<any>, force = false) {
@@ -3582,7 +3616,12 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       }
 
       if (remoteRegistration && !remoteRegistration.success) {
-        return fail(remoteRegistration.message || 'Pendaftaran ke server lisensi gagal')
+        // Server lisensi tidak terjangkau tidak boleh memblokir trial lokal,
+        // sinkronisasi lisensi bisa menyusul ketika jaringan kembali.
+        if (!isRemoteUnavailable(remoteRegistration)) {
+          return fail(remoteRegistration.message || 'Pendaftaran ke server lisensi gagal')
+        }
+        console.warn('[mobileApi] Server lisensi tidak terjangkau, trial lokal tetap dipakai:', remoteRegistration.message)
       }
 
       let trialPlan = store.plans.find(plan => plan.name === 'Trial 3 Hari')
@@ -5488,6 +5527,89 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         }
       }
       return deleteSimpleRow(store, store.returns, args[0]) as IpcResponse<T>
+    }
+
+    // ─── SYNC (antrean mutasi offline) ──────────────────────────────
+    case 'sync:enqueue': {
+      const data = (args[0] ?? {}) as AnyRecord
+      const queue = store.syncQueue ?? { mutations: [], conflicts: {} }
+      const mutation = createMutation({
+        entity: (data.entity ?? 'barang') as any,
+        entityId: String(data.entityId ?? ''),
+        operation: data.operation as any,
+        payload: (data.payload ?? {}) as Record<string, unknown>,
+        delta: typeof data.delta === 'number' ? data.delta : undefined,
+        deviceId: String(data.deviceId ?? collectAuthDeviceInfo().deviceId),
+        updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : undefined,
+      })
+      queue.mutations = queue.mutations.filter((item: any) => item.id !== mutation.id)
+      queue.mutations.push(mutation as any)
+      store.syncQueue = queue
+      saveStore(store)
+      return ok({ id: mutation.id }) as IpcResponse<T>
+    }
+
+    case 'sync:pending': {
+      const limit = Number(args[0] ?? 100)
+      const queue = store.syncQueue ?? { mutations: [], conflicts: {} }
+      const pending = queue.mutations
+        .filter((item: any) => !queue.conflicts[item.id])
+        .slice(0, limit)
+      return ok(pending) as IpcResponse<T>
+    }
+
+    case 'sync:conflicts': {
+      const queue = store.syncQueue ?? { mutations: [], conflicts: {} }
+      const conflicts = queue.mutations.filter((item: any) => queue.conflicts[item.id])
+      return ok(conflicts) as IpcResponse<T>
+    }
+
+    case 'sync:status': {
+      const queue = store.syncQueue ?? { mutations: [], conflicts: {} }
+      const pending = queue.mutations.filter((item: any) => !queue.conflicts[item.id]).length
+      return ok({ pending }) as IpcResponse<T>
+    }
+
+    case 'sync:run': {
+      const queue = store.syncQueue ?? { mutations: [], conflicts: {} }
+      const pending = queue.mutations.filter((item: any) => !queue.conflicts[item.id])
+      if (pending.length === 0) {
+        return ok({ pushed: 0, pulled: 0, conflicts: 0 }) as IpcResponse<T>
+      }
+
+      try {
+        const pushed = await pushMutations(pending as any)
+        queue.mutations = queue.mutations.filter((item: any) => !pending.some((p: any) => p.id === item.id))
+        store.syncQueue = queue
+        saveStore(store)
+        return ok({ pushed, pulled: 0, conflicts: 0 }) as IpcResponse<T>
+      } catch (err: any) {
+        for (const item of pending as any[]) {
+          item.attempts = (item.attempts ?? 0) + 1
+          item.lastError = err?.message ?? 'Sinkronisasi gagal'
+        }
+        store.syncQueue = queue
+        saveStore(store)
+        return fail(err?.message ?? 'Sinkronisasi gagal') as IpcResponse<T>
+      }
+    }
+
+    case 'sync:resolve': {
+      const id = String(args[0] ?? '')
+      const action = String(args[1] ?? 'retry') as 'retry' | 'keep-local' | 'discard'
+      const queue = store.syncQueue ?? { mutations: [], conflicts: {} }
+      const mutation = queue.mutations.find((item: any) => item.id === id)
+
+      if (action === 'keep-local' && mutation) {
+        mutation.updatedAt = new Date().toISOString()
+      }
+      delete queue.conflicts[id]
+      if (action === 'discard') {
+        queue.mutations = queue.mutations.filter((item: any) => item.id !== id)
+      }
+      store.syncQueue = queue
+      saveStore(store)
+      return ok({ id, action }) as IpcResponse<T>
     }
 
     case 'shift:getCurrent': {

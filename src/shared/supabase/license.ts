@@ -1,5 +1,6 @@
 import { supabase } from './config.js'
 import { logSupabaseQuery, logSupabaseResponse } from './logging.js'
+import { getLicenseServerUrl, getSupabaseAnonKey } from '../config/licenseServer.js'
 
 export const subscribeLicense = (
   { email, customerId }: { email: string; customerId?: string },
@@ -178,10 +179,11 @@ export const registerTrialCustomerInSupabase = async (params: {
 
   // 1. Primary & Recommended: Call Supabase Edge Function with service_role privileges
   try {
-    const edgeUrl = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license/register-trial'
-    const anonKey = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY)
-      || (typeof process !== 'undefined' && (process as any).env?.VITE_SUPABASE_ANON_KEY)
-      || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4'
+    const edgeUrl = `${getLicenseServerUrl()}/register-trial`
+    const anonKey = getSupabaseAnonKey()
+    if (!edgeUrl || edgeUrl === '/register-trial' || !anonKey) {
+      throw new Error('License server belum dikonfigurasi')
+    }
 
     const efRes = await fetch(edgeUrl, {
       method: 'POST',

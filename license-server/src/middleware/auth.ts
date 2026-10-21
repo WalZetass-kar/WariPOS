@@ -7,6 +7,21 @@ export interface AuthedRequest extends Request {
   subscription?: any;
 }
 
+/**
+ * Endpoints that stay reachable while the account still has to replace its
+ * initial password.
+ */
+const ALLOWED_WHILE_PASSWORD_PENDING = [
+  '/api/auth/change-password',
+  '/api/auth/logout',
+  '/api/auth/refresh',
+  '/api/user/account/status',
+];
+
+function isPasswordChangePending(path: string): boolean {
+  return ALLOWED_WHILE_PASSWORD_PENDING.some(allowed => path === allowed || path.startsWith(`${allowed}/`));
+}
+
 export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -15,8 +30,8 @@ export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunc
   try {
     const decoded = verifyAccess(token);
     // pastikan user masih aktif
-    const user = db.prepare(`SELECT id, role, email, status FROM users WHERE id = ?`).get(decoded.sub) as
-      | { id: number; role: string; email: string; status: string }
+    const user = db.prepare(`SELECT id, role, email, status, must_change_pwd FROM users WHERE id = ?`).get(decoded.sub) as
+      | { id: number; role: string; email: string; status: string; must_change_pwd: number }
       | undefined;
     if (!user) return res.status(401).json({ success: false, message: 'User not found' });
     if (user.status !== 'active') {
@@ -25,6 +40,16 @@ export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunc
         error_code: 'ACCOUNT_SUSPENDED',
         message: 'Akun Anda tidak aktif. Hubungi admin.',
       });
+    }
+    if (user.must_change_pwd) {
+      const path = (req.originalUrl || req.url || '').split('?')[0];
+      if (!isPasswordChangePending(path)) {
+        return res.status(403).json({
+          success: false,
+          error_code: 'PASSWORD_CHANGE_REQUIRED',
+          message: 'Kata sandi awal harus diganti sebelum memakai API lain.',
+        });
+      }
     }
     req.user = { ...decoded, id: user.id, role: user.role, email: user.email };
     next();

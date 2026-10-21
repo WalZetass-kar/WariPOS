@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
 import { db } from './db';
 import { config } from './config';
 
@@ -159,7 +160,27 @@ export function seed() {
       `INSERT INTO users (name, email, password_hash, role, status, must_change_pwd)
        VALUES (?, ?, ?, 'super_admin', 'active', 1)`,
     ).run(config.ADMIN_NAME, config.ADMIN_EMAIL, hash);
-    console.log(`[seed] Super admin created → ${config.ADMIN_EMAIL} / ${config.ADMIN_PASSWORD}`);
+
+    if (config.ADMIN_PASSWORD_GENERATED) {
+      // The generated password never reaches the log, it is written to a file
+      // that only the owner can read.
+      try {
+        fs.mkdirSync(config.DATA_DIR, { recursive: true });
+        fs.writeFileSync(
+          config.CREDENTIALS_FILE,
+          `email: ${config.ADMIN_EMAIL}\npassword: ${config.ADMIN_PASSWORD}\n`,
+          { mode: 0o600, flag: 'wx' },
+        );
+        console.warn(
+          `[seed] Super admin dibuat. Kredensial awal disimpan di ${config.CREDENTIALS_FILE} (mode 0600).`,
+        );
+      } catch (err: any) {
+        if (err?.code !== 'EEXIST') throw err;
+        console.warn(`[seed] Super admin dibuat, file kredensial sudah ada: ${config.CREDENTIALS_FILE}`);
+      }
+    } else {
+      console.warn(`[seed] Super admin dibuat untuk ${config.ADMIN_EMAIL}.`);
+    }
   }
 
   // ===== Master features =====

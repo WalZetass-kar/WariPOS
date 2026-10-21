@@ -10,7 +10,7 @@ type LicenseConfig = {
   hasRefreshToken?: boolean
 }
 
-const DEFAULT_LICENSE_URL = import.meta.env.VITE_LICENSE_SERVER_URL || 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
+const DEFAULT_LICENSE_URL = import.meta.env.VITE_LICENSE_SERVER_URL || ''
 const DEFAULT_ADMIN_EMAIL = import.meta.env.VITE_LICENSE_ADMIN_EMAIL || 'admin@waripos.local'
 
 export default function LicenseServerConfig() {
@@ -115,7 +115,7 @@ export default function LicenseServerConfig() {
           <button
             type="button"
             onClick={() => {
-              setForm(f => ({ ...f, url: 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license', email: 'admin@waripos.local' }))
+              setForm(f => ({ ...f, url: import.meta.env.VITE_LICENSE_SERVER_URL || '', email: 'admin@waripos.local' }))
               setPingOk(null)
             }}
             className="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 hover:bg-red-100 transition-colors flex items-center gap-1.5"
@@ -222,7 +222,7 @@ export default function LicenseServerConfig() {
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tips</p>
         <ul className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
           <li className="break-all leading-relaxed">
-            • Server aktif: <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded break-all inline-block max-w-full">https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license</code>
+            • Server aktif: <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded break-all inline-block max-w-full">{import.meta.env.VITE_LICENSE_SERVER_URL || 'VITE_LICENSE_SERVER_URL belum diisi'}</code>
           </li>
           <li>• Login admin: gunakan email Supabase Auth yang sudah diverifikasi dan punya role <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">super_admin</code></li>
           <li>• Pembeli login memakai email dan password akun yang dibuat admin</li>

@@ -14,7 +14,7 @@
  * } from './license';
  *
  * const client = initLicenseClient({
- *   baseURL: import.meta.env.VITE_LICENSE_SERVER_URL || 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license',
+ *   baseURL: import.meta.env.VITE_LICENSE_SERVER_URL || '',
  *   appPlatform: 'electron-windows',
  *   appVersion: '2.0.0',
  *   onForceLogout: () => location.reload(),
