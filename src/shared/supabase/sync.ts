@@ -1,91 +1,162 @@
 import { supabase } from './config.js'
-import { v4 as uuidv4 } from 'uuid'
-// Assuming there's a local database instance we can access or pass to the sync service
-// For now, this is a skeleton showing offline-first architecture with Queue System.
+import {
+  type RemoteVersion,
+  type SyncEntity,
+  type SyncMutation,
+  resolveConflict,
+} from '../sync/conflict.js'
 
-export interface SyncTask {
+/**
+ * Sinkronisasi mutasi dengan Supabase.
+ *
+ * Server tidak menerima angka stok langsung, dia menerima mutasi. Klien
+ * mengirim perubahan yang belum tersinkron, lalu menarik perubahan dari
+ * perangkat lain. Perubahan yang berhadapan diselesaikan dengan aturan
+ * konflik yang sama di semua perangkat.
+ */
+
+const MUTATION_TABLE = 'sync_mutations'
+
+export interface RemoteMutation {
   id: string
-  table: string
-  action: 'INSERT' | 'UPDATE' | 'DELETE'
-  payload: any
-  status: 'PENDING' | 'SYNCED' | 'FAILED'
-  retry_count: number
-  created_at: string
+  device_id: string
+  entity: SyncEntity
+  entity_id: string
+  operation: string
+  payload: Record<string, unknown>
+  delta: number | null
+  updated_at: string
 }
 
-let isSyncing = false
-
-export const queueSyncTask = async (table: string, action: 'INSERT' | 'UPDATE' | 'DELETE', payload: any) => {
-  // In a real implementation, you would save this task to a local SQLite 'sync_queue' table
-  // Example pseudo-code:
-  // db.insert(syncQueue).values({
-  //   id: uuidv4(),
-  //   table_name: table,
-  //   action: action,
-  //   data: JSON.stringify(payload),
-  //   synced: false,
-  //   created_at: new Date().toISOString()
-  // }).run()
-  
-  // Then trigger background sync
-  void runBackgroundSync()
+export interface SyncResult {
+  pushed: number
+  pulled: number
+  conflicts: number
+  error?: string
 }
 
-export const runBackgroundSync = async () => {
-  if (isSyncing) return
-  isSyncing = true
-  
-  try {
-    // 1. Fetch pending tasks from local SQLite 'sync_queue' table
-    // const pendingTasks = db.select().from(syncQueue).where(eq(syncQueue.synced, false)).all()
-    const pendingTasks: any[] = [] // Placeholder
-    
-    if (pendingTasks.length === 0) {
-      isSyncing = false
-      return
-    }
-
-    // 2. Iterate and push to Supabase
-    for (const task of pendingTasks) {
-      try {
-        let error = null
-        if (task.action === 'INSERT') {
-          const insertData: any = JSON.parse(task.data)
-          const { error: err } = await (supabase.from(task.table_name) as any).insert(insertData)
-          error = err
-        } else if (task.action === 'UPDATE') {
-          const payload: any = JSON.parse(task.data)
-          const { error: err } = await (supabase.from(task.table_name) as any).update(payload).eq('id', payload.id)
-          error = err
-        } else if (task.action === 'DELETE') {
-          const payload: any = JSON.parse(task.data)
-          const { error: err } = await (supabase.from(task.table_name) as any).delete().eq('id', payload.id)
-          error = err
-        }
-
-        if (!error) {
-          // Mark as synced locally
-          // db.update(syncQueue).set({ synced: true }).where(eq(syncQueue.id, task.id)).run()
-        } else {
-          console.error(`Sync failed for task ${task.id}:`, error)
-          // Implement Retry Otomatis / Conflict Resolution here
-        }
-      } catch (e) {
-        console.error('Error processing sync task:', e)
-      }
-    }
-  } finally {
-    isSyncing = false
+function toRemoteMutation(row: any): RemoteMutation {
+  return {
+    id: String(row.id),
+    device_id: String(row.device_id ?? ''),
+    entity: row.entity as SyncEntity,
+    entity_id: String(row.entity_id ?? ''),
+    operation: String(row.operation ?? 'upsert'),
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+    delta: row.delta ?? null,
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
   }
 }
 
-// Set up periodic sync
-setInterval(runBackgroundSync, 30000) // Every 30 seconds
+/** Kirim mutasi lokal ke server. */
+export async function pushMutations(mutations: SyncMutation[]): Promise<number> {
+  if (mutations.length === 0) return 0
 
-// Set up Realtime listener to pull changes from Supabase to local SQLite
-export const setupRealtimeSync = (tableName: string, callback: (payload: any) => void) => {
-  return supabase
-    .channel(`public:${tableName}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, callback)
-    .subscribe()
+  const rows = mutations.map(mutation => ({
+    id: mutation.id,
+    device_id: mutation.deviceId,
+    entity: mutation.entity,
+    entity_id: mutation.entityId,
+    operation: mutation.operation,
+    payload: mutation.payload ?? {},
+    delta: mutation.delta ?? null,
+    updated_at: mutation.updatedAt,
+  }))
+
+  const { error } = await (supabase.from(MUTATION_TABLE) as any).upsert(rows, { onConflict: 'id' })
+  if (error) throw new Error(error.message)
+
+  return rows.length
+}
+
+/** Tarik mutasi dari perangkat lain yang lebih baru dari kursor. */
+export async function pullMutations(since?: string, limit = 200): Promise<RemoteMutation[]> {
+  let query = (supabase.from(MUTATION_TABLE) as any)
+    .select('*')
+    .order('received_at', { ascending: true })
+    .limit(limit)
+
+  if (since) query = query.gt('received_at', since)
+
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+
+  return (data ?? []).map(toRemoteMutation)
+}
+
+/**
+ * Bandingkan mutasi yang datang dari perangkat lain dengan mutasi lokal yang
+ * masih tertunda. Hasilnya menentukan apakah perubahan lokal tetap dikirim,
+ * dibatalkan, atau ditandai sebagai konflik.
+ */
+export function classifyRemoteMutations(
+  remote: RemoteMutation[],
+  pending: SyncMutation[],
+): { send: SyncMutation[]; drop: SyncMutation[]; conflicts: Array<{ local: SyncMutation; reason: string }> } {
+  const send: SyncMutation[] = []
+  const drop: SyncMutation[] = []
+  const conflicts: Array<{ local: SyncMutation; reason: string }> = []
+
+  for (const local of pending) {
+    const counterpart = remote.find(
+      item => item.entity === local.entity && item.entity_id === local.entityId && item.device_id !== local.deviceId,
+    )
+
+    if (!counterpart) {
+      send.push(local)
+      continue
+    }
+
+    const remoteVersion: RemoteVersion = {
+      updatedAt: counterpart.updated_at,
+      deviceId: counterpart.device_id,
+      payload: counterpart.payload,
+    }
+    const resolution = resolveConflict(local.entity, local, remoteVersion)
+
+    if (resolution.outcome === 'apply-local') {
+      send.push(local)
+    } else if (resolution.outcome === 'apply-remote') {
+      drop.push(local)
+    } else if (resolution.outcome === 'merge-delta') {
+      send.push(local)
+    } else {
+      conflicts.push({ local, reason: resolution.reason })
+    }
+  }
+
+  return { send, drop, conflicts }
+}
+
+export interface SyncCallbacks {
+  getPending: () => SyncMutation[]
+  markSynced: (id: string) => void
+  markFailed: (id: string, error: string) => void
+  markConflict: (id: string, reason: string) => void
+  onRemoteMutations?: (mutations: RemoteMutation[]) => void
+}
+
+/** Jalankan satu siklus sinkronisasi. */
+export async function runSync(callbacks: SyncCallbacks): Promise<SyncResult> {
+  const pending = callbacks.getPending()
+  if (pending.length === 0) return { pushed: 0, pulled: 0, conflicts: 0 }
+
+  try {
+    const remote = await pullMutations()
+    const { send, drop, conflicts } = classifyRemoteMutations(remote, pending)
+
+    for (const mutation of drop) callbacks.markSynced(mutation.id)
+    for (const conflict of conflicts) callbacks.markConflict(conflict.local.id, conflict.reason)
+
+    const pushed = await pushMutations(send)
+    for (const mutation of send) callbacks.markSynced(mutation.id)
+
+    callbacks.onRemoteMutations?.(remote)
+
+    return { pushed, pulled: remote.length, conflicts: conflicts.length }
+  } catch (error: any) {
+    const message = error?.message || 'Sinkronisasi gagal'
+    for (const mutation of pending) callbacks.markFailed(mutation.id, message)
+    return { pushed: 0, pulled: 0, conflicts: 0, error: message }
+  }
 }

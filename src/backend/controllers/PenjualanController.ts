@@ -2,6 +2,7 @@ import { PenjualanModel } from '../models/PenjualanModel.js'
 import { CustomerModel } from '../models/CustomerModel.js'
 import { IdentitasModel } from '../models/IdentitasModel.js'
 import { sqlite } from '../../database/connection.js'
+import { SyncController } from './SyncController.js'
 import { requireAuth } from '../utils/authGuard.js'
 import { withTransaction } from '../utils/transaction.js'
 import { WhatsAppController } from './WhatsAppController.js'
@@ -392,11 +393,12 @@ export class PenjualanController {
               `).run(deductQty, ing.kd_barang)
 
               sqlite.prepare(`
-                INSERT INTO mediasoft_stock_history (kd_barang, tipe, qty, stok_sebelum, stok_sesudah, keterangan, user_id, created_at)
-                SELECT ?, 'OUT', ?, stok + ?, stok, ?, ?, datetime('now')
+                INSERT INTO mediasoft_stock_history (kd_barang, nama_barang, jenis, qty, stok_sebelum, stok_sesudah, keterangan, username, created_at)
+                SELECT ?, ?, 'OUT', ?, stok + ?, stok, ?, ?, datetime('now')
                 FROM mediasoft_barang WHERE kd_barang = ?
               `).run(
                 ing.kd_barang,
+                ing.nama_bahan || ing.kd_barang,
                 deductQty,
                 deductQty,
                 `BOM Resep: ${item.nama_barang} (Trx ${kd_transaksi})`,
@@ -456,6 +458,41 @@ export class PenjualanController {
     }
 
     void PenjualanController.sendWhatsAppAfterSale({ ...payload, username, items: trustedItems }, kd_transaksi, total_bayar)
+
+    // Masukkan ke antrean sinkronisasi. Transaksi bersifat append-only dan
+    // stok dikirim sebagai delta, jadi dua kasir yang offline tidak saling
+    // menimpa stok.
+    try {
+      SyncController.enqueue({
+        entity: 'penjualan',
+        entityId: kd_transaksi,
+        payload: {
+          kd_tansaksi_jual: kd_transaksi,
+          username_transaksi: username,
+          total_qty: trustedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+          sub_total,
+          total_bayar,
+          jenis_pembayaran: payload.jenis_pembayaran || 'TUNAI',
+          tgl_wkt_transaksi: now.toISOString(),
+        },
+      })
+
+      for (const item of trustedItems) {
+        SyncController.enqueue({
+          entity: 'stock_mutation',
+          entityId: `${kd_transaksi}:${item.kd_barang}`,
+          delta: -Number(item.qty),
+          payload: {
+            kd_barang: item.kd_barang,
+            kd_transaksi: kd_transaksi,
+            qty: item.qty,
+            tipe: 'OUT',
+          },
+        })
+      }
+    } catch (syncError: any) {
+      console.warn('[Sync] Gagal mengantrekan transaksi:', syncError?.message)
+    }
 
     return { success: true, message: 'Transaksi berhasil disimpan', kd_transaksi: result.data }
   }

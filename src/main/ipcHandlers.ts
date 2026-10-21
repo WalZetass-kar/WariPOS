@@ -21,6 +21,7 @@ import { ExportController } from '../backend/controllers/ExportController.js'
 import { SchedulerService } from '../backend/services/scheduler.js'
 import { BarcodeController } from '../backend/controllers/BarcodeController.js'
 import { PaymentMethodController, TaxController, ReturnController, ShiftController, DebtController, StockOpnameController, ProductImageController } from '../backend/controllers/NewFeaturesController.js'
+import { SyncController } from '../backend/controllers/SyncController.js'
 import { UpdateService } from '../backend/services/updateService.js'
 import { ErrorLogService } from '../backend/services/errorLogService.js'
 import { demoSession } from '../backend/services/demoSessionManager.js'
@@ -71,6 +72,8 @@ const approvedSavePaths = new Set<string>()
 // ─── INPUT VALIDATION HELPERS ─────────────────────────────────────────
 function sanitizeString(value: unknown, maxLength = 500): string {
   if (typeof value !== 'string') return ''
+  // Control characters are stripped on purpose, they are never valid input.
+  // eslint-disable-next-line no-control-regex
   return value.slice(0, maxLength).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
 }
 
@@ -774,6 +777,14 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'return:delete', (id: number) => ReturnController.delete(id))
 
   // ─── SHIFTS ────────────────────────────────────────────────────────
+  // ─── SYNC (mutasi offline ke server) ────────────────────────────────
+  handle(ipcMain, 'sync:enqueue', (data: any) => SyncController.enqueue(data))
+  handle(ipcMain, 'sync:pending', (limit?: number) => SyncController.pending(limit))
+  handle(ipcMain, 'sync:conflicts', (limit?: number) => SyncController.conflicts(limit))
+  handle(ipcMain, 'sync:status', () => SyncController.status())
+  handle(ipcMain, 'sync:run', () => SyncController.run())
+  handle(ipcMain, 'sync:resolve', (id: string, action: 'retry' | 'keep-local' | 'discard') => SyncController.resolve(id, action))
+
   handle(ipcMain, 'shift:open', (data: any) => ShiftController.open(data))
   handle(ipcMain, 'shift:close', (id: number, data: any) => ShiftController.close(id, data))
   handle(ipcMain, 'shift:getCurrent', (userId: string | number) => ShiftController.getCurrent(userId))

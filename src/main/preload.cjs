@@ -253,6 +253,12 @@ const ALLOWED_CHANNELS = new Set([
   'return:delete',
 
   // Shifts
+  'sync:enqueue',
+  'sync:pending',
+  'sync:conflicts',
+  'sync:status',
+  'sync:run',
+  'sync:resolve',
   'shift:open',
   'shift:close',
   'shift:getCurrent',
