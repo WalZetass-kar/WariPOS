@@ -1,5 +1,14 @@
-packages:
-  - 'packages/*'
+# Workspace pnpm
+#
+# Hanya aplikasi utama di root repositori yang dibangun dan rilis.
+# Folder packages/ berisi versi lama dari aplikasi terpisah
+# (shared-lib, developer-panel, user-panel) yang tidak dibangun dari
+# repositori ini dan tidak diimpor oleh kode aplikasi utama.
+#
+# Memberi tahu pnpm bahwa folder ini bukan bagian dari workspace,
+# supaya satu lockfile cukup untuk reproducible build.
+packages: []
+
 allowBuilds:
   '@firebase/util': set this to true or false
   better-sqlite3: true
